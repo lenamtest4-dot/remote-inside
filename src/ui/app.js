@@ -669,7 +669,56 @@ export function mountRemoteInside({
       children.push(el('ul', { className: 'ri-kv-list' }, items));
     }
 
+    if (Array.isArray(res.extraSections) && res.extraSections.length > 0) {
+      for (const sec of res.extraSections) {
+        if (!sec || !Array.isArray(sec.fields) || sec.fields.length === 0) continue;
+        children.push(
+          el('h4', { className: 'ri-sub-section-title', text: sec.title || '' }),
+          el(
+            'ul',
+            { className: 'ri-kv-list' },
+            sec.fields.map((item) =>
+              el('li', { className: 'ri-kv-item' }, [
+                el('span', { className: 'ri-kv-key', text: item.label }),
+                el('span', { className: 'ri-kv-val', text: item.value }),
+              ])
+            )
+          )
+        );
+      }
+    }
+
     const extraBtns = [];
+    if (res.status === 'ok' && Array.isArray(res.summaryFields) && res.summaryFields.length > 0) {
+      const copySummaryBtn = el('button', {
+        type: 'button',
+        className: 'ri-secondary-btn',
+        text: 'Sao chép tóm tắt',
+        onClick: async () => {
+          const lines = [res.title || 'Kết quả tra cứu'];
+          for (const f of res.summaryFields) {
+            lines.push(`${f.label}: ${f.value}`);
+          }
+          if (Array.isArray(res.extraSections)) {
+            for (const sec of res.extraSections) {
+              if (!sec || !Array.isArray(sec.fields) || sec.fields.length === 0) continue;
+              lines.push('', `[${sec.title}]`);
+              for (const f of sec.fields) {
+                lines.push(`${f.label}: ${f.value}`);
+              }
+            }
+          }
+          const ok = await copyTextSafe(lines.join('\n'));
+          if (ok) {
+            copySummaryBtn.textContent = 'Đã sao chép!';
+            setTimeout(() => {
+              copySummaryBtn.textContent = 'Sao chép tóm tắt';
+            }, 1800);
+          }
+        },
+      });
+      extraBtns.push(copySummaryBtn);
+    }
     if (res.status === 'iam_expired' && res.loginUrl) {
       extraBtns.push(
         el('button', {

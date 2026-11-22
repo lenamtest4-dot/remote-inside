@@ -27,6 +27,11 @@ import {
   redactResponseStructure,
   scanPageStructure,
 } from '../src/core/inspector.js';
+import {
+  INSIDE_ENDPOINTS,
+  extractHtmlTablePairs,
+  parseInsideLookupPayload,
+} from '../src/adapters/inside.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,8 +86,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.1.3'),
-    'Userscript must bump @version to 0.1.3'
+    userscriptContent.includes('@version      0.2.0'),
+    'Userscript must bump @version to 0.2.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -378,6 +383,74 @@ function runTests() {
   );
   assert.equal(MockXHR.prototype.send, origSendRef, 'Must restore original XHR.send');
   console.log('   OK: Inspector redaction, Classic ASP scan, XHR recorder & report tests passed.');
+
+  console.log('6. Testing Inside live lookup parsers & HTML partial extraction...');
+  assert.ok(INSIDE_ENDPOINTS.lookup && INSIDE_ENDPOINTS.lookup.detail.includes('/Contract/StatusNew/ViewReportDetail'));
+  assert.equal(INSIDE_ENDPOINTS.reset_mac, null);
+  assert.equal(INSIDE_ENDPOINTS.kill_session, null);
+  assert.equal(INSIDE_ENDPOINTS.clear_osp, null);
+
+  const partialHtml =
+    '<table><tr><th>IP WAN</th><td>118.70.1.2</td></tr><tr><th>IPNAT</th><td>Có</td></tr></table><script>alert(1)</script>';
+  const pairs = extractHtmlTablePairs(partialHtml);
+  assert.equal(pairs.length, 2);
+  assert.deepEqual(pairs[0], { label: 'IP WAN', value: '118.70.1.2' });
+  assert.deepEqual(pairs[1], { label: 'IPNAT', value: 'Có' });
+  assert.equal(JSON.stringify(pairs).includes('alert(1)'), false);
+
+  const parsedLookup = parseInsideLookupPayload({
+    contractId: 'VTH011485',
+    detailJson: {
+      data: [
+        {
+          ID: 9876543,
+          Name: 'vth_demo_user',
+          FullName: 'Nguyen Van Test',
+          StatusName: 'Bình thường',
+          DesPromotion: 'KM 12T + 1',
+          Address: '123 Duong So 1, P. Tan Phong, Q.7',
+          MACAddress: 'AA:BB:CC:DD:EE:01',
+        },
+      ],
+      msg: 'Success',
+    },
+    objectTypeJson: {
+      data: {
+        ObjId: 9876543,
+        Contract: 'VTH011485',
+        LoaiHinhC1: 'Cá nhân',
+        LoaiHinhC2: 'Gia đình',
+        DoiTuongKh: 'Hộ gia đình',
+        GoiDv: 'Giga 300',
+      },
+      msg: 'Success',
+    },
+    deviceJson: { data: 'Modem Online', msg: 'Success' },
+    radiusBool: true,
+    infoJson: {
+      data: {
+        dtMain: [{ Warning: 'Không có cảnh báo', Phone: '0900000001' }],
+        dtHiFPT: [{ Contract: 'VTH011485', Phone: '0900000001' }],
+      },
+    },
+    connPartialHtml: partialHtml,
+    sessionPartialHtml: '<table><tr><th>Phiên PPPoE</th><td>Online 2h</td></tr></table>',
+  });
+
+  assert.equal(parsedLookup.status, 'ok');
+  assert.equal(parsedLookup.mode, 'live');
+  assert.equal(parsedLookup.objID, 9876543);
+  assert.equal(parsedLookup.accountName, 'vth_demo_user');
+  const fieldMap = Object.fromEntries(parsedLookup.summaryFields.map((f) => [f.label, f.value]));
+  assert.equal(fieldMap['Mã hợp đồng'], 'VTH011485');
+  assert.equal(fieldMap['Gói cước'], 'Giga 300');
+  assert.equal(fieldMap['Thiết bị / Modem'], 'Modem Online');
+  assert.equal(fieldMap['Trạng thái Radius'], 'Đang có trên Radius');
+  assert.equal(fieldMap['Địa chỉ lắp đặt'], '123 Duong So 1, P. Tan Phong, Q.7');
+  assert.equal(parsedLookup.extraSections.length, 2);
+  assert.equal(parsedLookup.extraSections[0].title, 'Thông số kết nối (Radius)');
+  assert.equal(parsedLookup.extraSections[1].title, 'Phiên đang online (Radius)');
+  console.log('   OK: Inside live lookup parsers passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

@@ -622,6 +622,15 @@
   word-break: break-word;
 }
 
+.ri-sub-section-title {
+  margin: 12px 0 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-crisp);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
 /* Nhat ky thao tac */
 .ri-log-head {
   display: flex;

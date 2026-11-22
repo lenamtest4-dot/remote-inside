@@ -1,0 +1,898 @@
+:host,
+.ri-root {
+  --bg-canvas: #F2F4F7;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #E9EEF4;
+  --ink-primary: #141B24;
+  --ink-muted: #526072;
+  --accent-signal: #E85D04;
+  --accent-signal-hover: #C94E02;
+  --accent-signal-soft: #FFF3EB;
+  --border-crisp: #D5DCE4;
+  --state-ok: #0F8A5F;
+  --state-ok-soft: #E9F7F1;
+  --state-warn: #B45309;
+  --state-warn-soft: #FEF6E7;
+  --state-danger: #C81E1E;
+  --state-danger-soft: #FDECEC;
+  --state-danger-border: #F5B8B8;
+
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-primary);
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+.ri-root *,
+.ri-root *::before,
+.ri-root *::after {
+  box-sizing: border-box;
+}
+
+.ri-root button,
+.ri-root input {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.ri-root button:focus-visible,
+.ri-root input:focus-visible,
+.ri-root a:focus-visible {
+  outline: 2px solid var(--accent-signal);
+  outline-offset: 2px;
+}
+
+/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */
+.ri-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  background: rgba(20, 27, 36, 0.45);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Khung doc lap khi chay tren preview.html */
+.ri-standalone-wrap {
+  min-height: 100dvh;
+  background: var(--bg-canvas);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+}
+
+.ri-shell {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100dvh;
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 560px) {
+  .ri-overlay,
+  .ri-standalone-wrap {
+    padding: 20px 16px;
+  }
+
+  .ri-shell {
+    min-height: auto;
+    border: 1px solid var(--border-crisp);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);
+  }
+}
+
+/* Thanh top-bar 52px dinh co dinh */
+.ri-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 52px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-crisp);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ri-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ri-brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent-signal);
+  flex-shrink: 0;
+}
+
+.ri-brand-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-primary);
+  white-space: nowrap;
+}
+
+.ri-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ri-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-subtle);
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ri-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ink-muted);
+}
+
+.ri-status-pill[data-state="ok"] {
+  background: var(--state-ok-soft);
+  border-color: #B4E2D0;
+  color: var(--state-ok);
+}
+
+.ri-status-pill[data-state="ok"] .ri-status-dot {
+  background: var(--state-ok);
+}
+
+.ri-status-pill[data-state="iam_expired"] {
+  background: var(--state-warn-soft);
+  border-color: #F3D19E;
+  color: var(--state-warn);
+}
+
+.ri-status-pill[data-state="iam_expired"] .ri-status-dot {
+  background: var(--state-warn);
+}
+
+.ri-status-pill[data-state="offline"] {
+  background: var(--state-danger-soft);
+  border-color: var(--state-danger-border);
+  color: var(--state-danger);
+}
+
+.ri-status-pill[data-state="offline"] .ri-status-dot {
+  background: var(--state-danger);
+}
+
+.ri-icon-btn {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ri-icon-btn:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-icon-btn:active {
+  transform: translateY(1px);
+}
+
+.ri-main {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ri-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-crisp);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* Khu nhap Ma Hop Dong dung chung */
+.ri-contract-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-bottom: 6px;
+}
+
+.ri-contract-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ri-contract-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-crisp);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.ri-contract-input::placeholder {
+  font-weight: 400;
+  color: #7D8B9C;
+}
+
+.ri-contract-input:focus {
+  outline: none;
+  border-color: var(--accent-signal);
+  background: var(--bg-surface);
+}
+
+.ri-input-tool {
+  min-height: 48px;
+  min-width: 56px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ri-input-tool:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-recent-wrap {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ri-recent-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.ri-text-btn {
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.ri-text-btn:hover {
+  background: var(--bg-subtle);
+  color: var(--ink-primary);
+}
+
+.ri-recent-chips {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.ri-chip {
+  min-height: 36px;
+  padding: 6px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ri-chip.is-active {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+}
+
+/* Thanh 5 tab cong cu */
+.ri-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+.ri-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.ri-tab {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.ri-tab.is-active {
+  border-color: var(--accent-signal);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  box-shadow: inset 0 -2.5px 0 var(--accent-signal);
+}
+
+.ri-tab-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
+}
+
+.ri-tab.is-active .ri-tab-badge[data-tier="priority"] {
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+}
+
+/* Bang nut lenh thao tac */
+.ri-portal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ri-portal-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-portal-desc {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.ri-portal-host {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-crisp);
+  border-radius: 6px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.ri-primary-btn {
+  width: 100%;
+  min-height: 50px;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent-signal);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.ri-primary-btn:hover:not(:disabled) {
+  background: var(--accent-signal-hover);
+}
+
+.ri-primary-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ri-primary-btn:disabled,
+.ri-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ri-ops-pad {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-crisp);
+}
+
+.ri-ops-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  margin-bottom: 8px;
+}
+
+.ri-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ri-action-btn {
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ri-action-btn.is-danger {
+  border-color: var(--state-danger-border);
+  color: var(--state-danger);
+}
+
+.ri-action-btn.is-danger:hover:not(:disabled) {
+  background: var(--state-danger-soft);
+  border-color: var(--state-danger);
+}
+
+.ri-action-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.ri-utility-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-crisp);
+  display: flex;
+  gap: 8px;
+}
+
+.ri-secondary-btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.ri-secondary-btn:hover {
+  background: var(--bg-subtle);
+}
+
+/* Khung ket qua tra ve */
+.ri-result-card {
+  border-radius: 12px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  padding: 12px;
+}
+
+.ri-result-card[data-tone="ok"] {
+  border-color: #B4E2D0;
+}
+
+.ri-result-card[data-tone="warn"] {
+  border-color: #F3D19E;
+  background: var(--state-warn-soft);
+}
+
+.ri-result-card[data-tone="error"] {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-soft);
+}
+
+.ri-result-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-result-msg {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--ink-primary);
+}
+
+.ri-result-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.ri-result-actions {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ri-kv-list {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border-crisp);
+}
+
+.ri-kv-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #EEF2F6;
+  font-size: 13px;
+}
+
+.ri-kv-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ri-kv-key {
+  color: var(--ink-muted);
+  flex-shrink: 0;
+}
+
+.ri-kv-val {
+  color: var(--ink-primary);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
+/* Nhat ky thao tac */
+.ri-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.ri-section-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-log-empty {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--ink-muted);
+}
+
+.ri-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ri-log-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid #EEF2F6;
+  font-size: 13px;
+}
+
+.ri-log-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ri-log-main {
+  min-width: 0;
+}
+
+.ri-log-action {
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.ri-log-contract {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+  margin-left: 6px;
+}
+
+.ri-log-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ri-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
+}
+
+.ri-badge[data-status="ok"] {
+  background: var(--state-ok-soft);
+  color: var(--state-ok);
+}
+
+.ri-badge[data-status="warn"] {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+
+.ri-badge[data-status="error"] {
+  background: var(--state-danger-soft);
+  color: var(--state-danger);
+}
+
+.ri-log-time {
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hop thoai xac nhan & Ngan quet cau truc */
+.ri-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  background: rgba(20, 27, 36, 0.52);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.ri-sheet {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88dvh;
+  overflow-y: auto;
+  background: var(--bg-surface);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  border: 1px solid var(--border-crisp);
+  padding: 16px 14px max(18px, env(safe-area-inset-bottom));
+}
+
+@media (min-width: 560px) {
+  .ri-sheet-backdrop {
+    align-items: center;
+    padding: 16px;
+  }
+
+  .ri-sheet {
+    border-radius: 14px;
+    padding: 18px;
+  }
+}
+
+.ri-sheet-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-sheet-sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--ink-muted);
+}
+
+.ri-confirm-contract {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-crisp);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ri-confirm-code {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+.ri-sheet-buttons {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+}
+
+.ri-danger-btn {
+  flex: 1;
+  min-height: 48px;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--state-danger);
+  color: #FFFFFF;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ri-danger-btn:hover {
+  background: #A81818;
+}
+
+.ri-privacy-note {
+  margin: 10px 0;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--state-ok-soft);
+  border: 1px solid #B4E2D0;
+  color: #0B6A49;
+  font-size: 13px;
+}
+
+.ri-scan-stats {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-crisp);
+  font-size: 13px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+
+.ri-scan-stat strong {
+  display: block;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+}
+
+/* Nut noi goc phai duoi trong Userscript mode */
+.ri-fab {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147483642;
+  min-height: 46px;
+  padding: 10px 15px;
+  border-radius: 999px;
+  border: 1.5px solid #FFFFFF;
+  background: var(--accent-signal);
+  color: #FFFFFF;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ri-fab.is-recording {
+  background: var(--state-danger);
+}
+
+.ri-fab-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #FFFFFF;
+}
+
+/* Spinner don gian */
+.ri-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 999px;
+  display: inline-block;
+  animation: ri-spin 0.7s linear infinite;
+}
+
+@keyframes ri-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ri-spinner {
+    animation: none;
+    border-style: dotted;
+  }
+  .ri-icon-btn:active,
+  .ri-primary-btn:active,
+  .ri-action-btn:active {
+    transform: none;
+  }
+}

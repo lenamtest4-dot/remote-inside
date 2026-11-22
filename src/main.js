@@ -1,0 +1,60 @@
+/**
+ * Diem khoi dong cua Remote Inside (tu dong chon che do Userscript tren trang FPT
+ * hoac che do xem thu doc lap khi mo preview.html).
+ */
+
+import { mountRemoteInside } from './ui/app.js';
+
+function bootstrapRemoteInside() {
+  if (typeof document === 'undefined' || !document.body) {
+    return;
+  }
+
+  const cssText =
+    typeof __REMOTE_INSIDE_CSS__ !== 'undefined' ? __REMOTE_INSIDE_CSS__ : '';
+  const standaloneRoot = document.getElementById('remote-inside-standalone');
+
+  if (standaloneRoot) {
+    mountRemoteInside({
+      rootContainer: standaloneRoot,
+      cssText,
+      standalone: true,
+      pageWindow: window,
+      pageDocument: document,
+    });
+    return;
+  }
+
+  if (document.getElementById('remote-inside-host')) {
+    return;
+  }
+
+  const host = document.createElement('div');
+  host.id = 'remote-inside-host';
+  document.body.appendChild(host);
+
+  const shadowRoot = host.attachShadow({ mode: 'open' });
+  const app = mountRemoteInside({
+    rootContainer: shadowRoot,
+    cssText,
+    standalone: false,
+    pageWindow: typeof unsafeWindow !== 'undefined' ? unsafeWindow : window,
+    pageDocument: document,
+  });
+
+  if (typeof GM_registerMenuCommand === 'function') {
+    GM_registerMenuCommand('Mở Remote Inside', () => app.open());
+  }
+
+  if (window.location && window.location.hash === '#remote-inside') {
+    app.open();
+  }
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapRemoteInside, { once: true });
+  } else {
+    bootstrapRemoteInside();
+  }
+}

@@ -25,6 +25,18 @@ function bootstrapRemoteInside() {
     return;
   }
 
+  // Bo qua trang <frameset> goc va cac frame menu/tieu de nho
+  if (document.body.tagName === 'FRAMESET') {
+    return;
+  }
+  try {
+    if (window.top !== window.self && (window.innerWidth < 240 || window.innerHeight < 220)) {
+      return;
+    }
+  } catch {
+    // Bo qua loi cross-origin neu co
+  }
+
   if (document.getElementById('remote-inside-host')) {
     return;
   }

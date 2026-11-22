@@ -24,6 +24,7 @@ import {
   redactHeaders,
   redactPayload,
   redactResponseStructure,
+  scanPageStructure,
 } from '../src/core/inspector.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -77,6 +78,11 @@ function runTests() {
     );
   }
 
+  assert.ok(
+    userscriptContent.includes('@version      0.1.1'),
+    'Userscript must bump @version to 0.1.1'
+  );
+
   // Parse JS syntax inside VM without executing
   new vm.Script(userscriptContent, { filename: 'remote-inside.user.js' });
 
@@ -89,6 +95,10 @@ function runTests() {
   console.log('2. Testing portals & contract ID normalization/validation...');
   assert.deepEqual(PORTAL_ORDER, ['inside', 'port', 'camera', 'recall', 'radius']);
   assert.equal(PORTALS.inside.status, 'priority');
+  assert.ok(
+    PORTALS.inside.url.startsWith('http://inside.fpt.net'),
+    'PORTALS.inside.url must start with http://inside.fpt.net'
+  );
   assert.equal(normalizeContractId('  sgn 123456\n '), 'SGN123456');
   assert.equal(normalizeContractId('hn-9988_1'), 'HN-9988_1');
   assert.equal(validateContractId('').valid, false);
@@ -227,7 +237,67 @@ function runTests() {
   const parsedReport = JSON.parse(reportJson);
   assert.equal(parsedReport.portalId, 'inside');
   assert.equal(parsedReport.reportVersion, 'remote-inside-scan-v1');
-  console.log('   OK: Inspector redaction & report tests passed.');
+
+  // Verify Classic ASP javascript: href preservation + contract redaction + frame metadata
+  const mockControlJs = {
+    tagName: 'A',
+    textContent: 'Reset MAC',
+    id: 'btnReset',
+    className: 'asp-link',
+    attributes: [],
+    getAttribute: (name) =>
+      name === 'href' ? "javascript:resetMac('SGN123456')" : '',
+  };
+  const mockControlImg = {
+    tagName: 'INPUT',
+    textContent: '',
+    id: 'btnSearch',
+    className: '',
+    attributes: [],
+    getAttribute: (name) => (name === 'type' ? 'image' : name === 'title' ? 'Tìm' : ''),
+  };
+  const mockWin = {
+    self: {},
+    top: null,
+  };
+  mockWin.top = {
+    frames: [
+      {
+        name: 'mainFrame',
+        location: {
+          pathname: '/contract.asp',
+          href: 'http://inside.fpt.net/contract.asp?hd=SGN123456',
+        },
+        document: { title: 'Hop dong SGN123456' },
+      },
+    ],
+  };
+  const mockDoc = {
+    title: 'Inside SGN123456',
+    defaultView: mockWin,
+    querySelectorAll: (sel) => {
+      if (sel.includes('input[type="image"]')) return [mockControlJs, mockControlImg];
+      return [];
+    },
+    querySelector: () => null,
+  };
+  const snap = scanPageStructure(
+    mockDoc,
+    { origin: 'http://inside.fpt.net', pathname: '/contract.asp', href: 'http://inside.fpt.net/contract.asp?id=SGN123456' },
+    'SGN123456'
+  );
+  assert.equal(snap.isInFrame, true);
+  assert.equal(snap.frameMap.length, 1);
+  assert.equal(snap.frameMap[0].name, 'mainFrame');
+  assert.equal(snap.frameMap[0].title, 'Hop dong <CONTRACT_ID>');
+  const jsItem = snap.actionControls.find((c) => c.id === 'btnReset');
+  assert.ok(jsItem, 'Must capture javascript: anchor control');
+  assert.equal(jsItem.hrefPath, "javascript:resetMac('<CONTRACT_ID>')");
+  assert.ok(
+    snap.actionControls.some((c) => c.id === 'btnSearch'),
+    'Must capture input[type="image"] control'
+  );
+  console.log('   OK: Inspector redaction, Classic ASP scan & report tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

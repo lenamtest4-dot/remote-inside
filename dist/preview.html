@@ -30,7 +30,7 @@ const PORTALS = {
     id: 'inside',
     label: 'Inside',
     fullName: 'inside.fpt.net',
-    url: 'https://inside.fpt.net/',
+    url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net'],
     status: 'priority',
     statusLabel: 'Ưu tiên v0.1',
@@ -863,7 +863,9 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
   }
 
   const controlNodes = Array.from(
-    doc.querySelectorAll('button, input[type="button"], input[type="submit"], a[href], [onclick]')
+    doc.querySelectorAll(
+      'button, input[type="button"], input[type="submit"], input[type="image"], a[href], [onclick]'
+    )
   );
   const scoredControls = [];
 
@@ -892,6 +894,13 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
       }
     }
 
+    const isJsHref = /^\s*javascript:/i.test(hrefRaw);
+    const hrefPath = hrefRaw
+      ? isJsHref
+        ? replaceContractToken(hrefRaw, contractId)
+        : safeUrlPath(hrefRaw, baseHref)
+      : '';
+
     scoredControls.push({
       priority,
       item: {
@@ -900,7 +909,7 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
         id,
         name,
         classes: truncateStr(typeof el.className === 'string' ? el.className.trim() : '', 60),
-        hrefPath: hrefRaw ? safeUrlPath(hrefRaw, baseHref) : '',
+        hrefPath,
         onclickSnippet: replaceContractToken(onclickRaw, contractId),
         dataAttrs,
       },
@@ -931,12 +940,43 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
     frameworks.push('ASP.NET WebForms');
   }
 
+  let isInFrame = false;
+  const frameMap = [];
+  if (win) {
+    try {
+      isInFrame = win.top !== win.self;
+      const topWin = win.top;
+      if (topWin && topWin.frames) {
+        for (let i = 0; i < Math.min(topWin.frames.length, 20); i += 1) {
+          try {
+            const f = topWin.frames[i];
+            const fLoc = f.location;
+            const fDoc = f.document;
+            frameMap.push({
+              index: i,
+              name: String(f.name || ''),
+              pathname: fLoc ? fLoc.pathname || '' : '',
+              queryParamNames: fLoc && fLoc.href ? getQueryParamNames(fLoc.href, baseHref) : [],
+              title: replaceContractToken((fDoc && fDoc.title) || '', contractId),
+            });
+          } catch {
+            frameMap.push({ index: i, crossOrigin: true });
+          }
+        }
+      }
+    } catch {
+      isInFrame = true;
+    }
+  }
+
   return {
     scannedAt: new Date().toISOString(),
     origin: (loc && loc.origin) || '',
     pathname: (loc && loc.pathname) || '',
     queryParamNames: loc && loc.href ? getQueryParamNames(loc.href, baseHref) : [],
     title: replaceContractToken(doc.title || '', contractId),
+    isInFrame,
+    frameMap,
     forms,
     actionControls,
     scriptHints: {
@@ -2316,6 +2356,18 @@ function bootstrapRemoteInside() {
       pageDocument: document,
     });
     return;
+  }
+
+  // Bo qua trang <frameset> goc va cac frame menu/tieu de nho
+  if (document.body.tagName === 'FRAMESET') {
+    return;
+  }
+  try {
+    if (window.top !== window.self && (window.innerWidth < 240 || window.innerHeight < 220)) {
+      return;
+    }
+  } catch {
+    // Bo qua loi cross-origin neu co
   }
 
   if (document.getElementById('remote-inside-host')) {

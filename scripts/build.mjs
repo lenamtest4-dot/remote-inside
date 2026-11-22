@@ -22,7 +22,7 @@ const MODULE_ORDER = [
 const USERSCRIPT_HEADER = `// ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.1.0
+// @version      0.1.1
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*

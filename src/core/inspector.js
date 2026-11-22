@@ -301,7 +301,9 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
   }
 
   const controlNodes = Array.from(
-    doc.querySelectorAll('button, input[type="button"], input[type="submit"], a[href], [onclick]')
+    doc.querySelectorAll(
+      'button, input[type="button"], input[type="submit"], input[type="image"], a[href], [onclick]'
+    )
   );
   const scoredControls = [];
 
@@ -330,6 +332,13 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
       }
     }
 
+    const isJsHref = /^\s*javascript:/i.test(hrefRaw);
+    const hrefPath = hrefRaw
+      ? isJsHref
+        ? replaceContractToken(hrefRaw, contractId)
+        : safeUrlPath(hrefRaw, baseHref)
+      : '';
+
     scoredControls.push({
       priority,
       item: {
@@ -338,7 +347,7 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
         id,
         name,
         classes: truncateStr(typeof el.className === 'string' ? el.className.trim() : '', 60),
-        hrefPath: hrefRaw ? safeUrlPath(hrefRaw, baseHref) : '',
+        hrefPath,
         onclickSnippet: replaceContractToken(onclickRaw, contractId),
         dataAttrs,
       },
@@ -369,12 +378,43 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
     frameworks.push('ASP.NET WebForms');
   }
 
+  let isInFrame = false;
+  const frameMap = [];
+  if (win) {
+    try {
+      isInFrame = win.top !== win.self;
+      const topWin = win.top;
+      if (topWin && topWin.frames) {
+        for (let i = 0; i < Math.min(topWin.frames.length, 20); i += 1) {
+          try {
+            const f = topWin.frames[i];
+            const fLoc = f.location;
+            const fDoc = f.document;
+            frameMap.push({
+              index: i,
+              name: String(f.name || ''),
+              pathname: fLoc ? fLoc.pathname || '' : '',
+              queryParamNames: fLoc && fLoc.href ? getQueryParamNames(fLoc.href, baseHref) : [],
+              title: replaceContractToken((fDoc && fDoc.title) || '', contractId),
+            });
+          } catch {
+            frameMap.push({ index: i, crossOrigin: true });
+          }
+        }
+      }
+    } catch {
+      isInFrame = true;
+    }
+  }
+
   return {
     scannedAt: new Date().toISOString(),
     origin: (loc && loc.origin) || '',
     pathname: (loc && loc.pathname) || '',
     queryParamNames: loc && loc.href ? getQueryParamNames(loc.href, baseHref) : [],
     title: replaceContractToken(doc.title || '', contractId),
+    isInFrame,
+    frameMap,
     forms,
     actionControls,
     scriptHints: {

@@ -9,7 +9,7 @@ export const PORTALS = {
     id: 'inside',
     label: 'Inside',
     fullName: 'inside.fpt.net',
-    url: 'https://inside.fpt.net/',
+    url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net'],
     status: 'priority',
     statusLabel: 'Ưu tiên v0.1',

@@ -29,6 +29,8 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        http://inside.fpt.net/*
 // @match        https://port.fpt.net/*
 // @match        http://port.fpt.net/*
+// @match        https://mvcport.fpt.net/*
+// @match        http://mvcport.fpt.net/*
 // @match        https://fli-mngt.fcam.vn/*
 // @match        http://fli-mngt.fcam.vn/*
 // @match        https://nextgen.fpt.net/*
@@ -36,6 +38,7 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        https://radius-portal.fpt.net/*
 // @connect      inside.fpt.net
 // @connect      port.fpt.net
+// @connect      mvcport.fpt.net
 // @connect      fli-mngt.fcam.vn
 // @connect      nextgen.fpt.net
 // @connect      radius-portal.fpt.net

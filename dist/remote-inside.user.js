@@ -7,6 +7,8 @@
 // @match        http://inside.fpt.net/*
 // @match        https://port.fpt.net/*
 // @match        http://port.fpt.net/*
+// @match        https://mvcport.fpt.net/*
+// @match        http://mvcport.fpt.net/*
 // @match        https://fli-mngt.fcam.vn/*
 // @match        http://fli-mngt.fcam.vn/*
 // @match        https://nextgen.fpt.net/*
@@ -14,6 +16,7 @@
 // @match        https://radius-portal.fpt.net/*
 // @connect      inside.fpt.net
 // @connect      port.fpt.net
+// @connect      mvcport.fpt.net
 // @connect      fli-mngt.fcam.vn
 // @connect      nextgen.fpt.net
 // @connect      radius-portal.fpt.net
@@ -83,8 +86,8 @@ const PORTALS = {
     id: 'port',
     label: 'Port',
     fullName: 'port.fpt.net',
-    url: 'https://port.fpt.net/',
-    hosts: ['port.fpt.net'],
+    url: 'http://port.fpt.net/',
+    hosts: ['port.fpt.net', 'mvcport.fpt.net'],
     status: 'in_progress',
     statusLabel: 'Đang ghép',
     description: 'Kiểm tra, cấp mới và thu hồi Port cho hợp đồng.',

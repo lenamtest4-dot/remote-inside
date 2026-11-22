@@ -48,6 +48,7 @@ async function runTests() {
   const expectedDomains = [
     'inside.fpt.net',
     'port.fpt.net',
+    'mvcport.fpt.net',
     'fli-mngt.fcam.vn',
     'nextgen.fpt.net',
     'radius-portal.fpt.net',

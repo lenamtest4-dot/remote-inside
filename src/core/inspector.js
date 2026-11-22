@@ -40,7 +40,7 @@ function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function replaceContractToken(str, contractId) {
+function replaceContractToken(str, contractId, maxLen = MAX_STR_LEN) {
   if (typeof str !== 'string') {
     return str;
   }
@@ -51,7 +51,7 @@ function replaceContractToken(str, contractId) {
   }
   // An chuoi co dang Bearer token hoac session dai bat thuong
   out = out.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]');
-  return truncateStr(out);
+  return truncateStr(out, maxLen);
 }
 
 /**
@@ -395,7 +395,7 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
         name,
         classes: truncateStr(typeof el.className === 'string' ? el.className.trim() : '', 60),
         hrefPath,
-        onclickSnippet: replaceContractToken(onclickRaw, contractId),
+        onclickSnippet: replaceContractToken(onclickRaw, contractId, 180),
         dataAttrs,
       },
     });
@@ -454,7 +454,8 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
               const rawLinks = fDoc.querySelectorAll
                 ? Array.from(fDoc.querySelectorAll('a[href], [onclick]'))
                 : [];
-              const menuLinks = [];
+              const scoredLinks = [];
+              const criticalMenuRe = /(osp|clear|reset|kill|session|mac|tình\s*trạng|status)/i;
               for (const link of rawLinks) {
                 const text = (link.textContent || link.getAttribute('title') || '')
                   .replace(/\s+/g, ' ')
@@ -463,19 +464,24 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
                 const onclickRaw = link.getAttribute('onclick') || '';
                 const id = link.id || '';
                 const name = link.getAttribute('name') || '';
-                if (!OPS_KEYWORD_RE.test(`${text} ${id} ${name} ${onclickRaw} ${hrefRaw}`)) {
+                const combinedMenu = `${text} ${id} ${name} ${onclickRaw} ${hrefRaw}`;
+                if (!OPS_KEYWORD_RE.test(combinedMenu)) {
                   continue;
                 }
                 const parsedHref = parseSafeUrlParts(hrefRaw, fBase, contractId);
-                menuLinks.push({
-                  text: replaceContractToken(text, contractId),
-                  hrefOrigin: parsedHref.origin,
-                  hrefPath: parsedHref.pathname,
-                  hrefQueryParamNames: parsedHref.queryParamNames,
-                  onclickSnippet: replaceContractToken(onclickRaw, contractId),
+                scoredLinks.push({
+                  priority: criticalMenuRe.test(combinedMenu) ? 1 : 0,
+                  item: {
+                    text: replaceContractToken(text, contractId),
+                    hrefOrigin: parsedHref.origin,
+                    hrefPath: parsedHref.pathname,
+                    hrefQueryParamNames: parsedHref.queryParamNames,
+                    onclickSnippet: replaceContractToken(onclickRaw, contractId, 180),
+                  },
                 });
-                if (menuLinks.length >= 50) break;
               }
+              scoredLinks.sort((a, b) => b.priority - a.priority);
+              const menuLinks = scoredLinks.slice(0, 200).map((entry) => entry.item);
               sameOriginFrameSummary.push({
                 index: i,
                 name: String(f.name || ''),
@@ -537,6 +543,7 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
   let entries = [];
   let origFetch = null;
   let origXhrOpen = null;
+  let origXhrSetHeader = null;
   let origXhrSend = null;
   const xhrMetaMap = new WeakMap();
 
@@ -601,6 +608,7 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
     if (targetWindow.XMLHttpRequest && targetWindow.XMLHttpRequest.prototype) {
       const proto = targetWindow.XMLHttpRequest.prototype;
       origXhrOpen = proto.open;
+      origXhrSetHeader = proto.setRequestHeader;
       origXhrSend = proto.send;
 
       proto.open = function wrappedOpen(method, url) {
@@ -608,12 +616,27 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
           xhrMetaMap.set(this, {
             method: String(method || 'GET').toUpperCase(),
             url: String(url || ''),
+            rawHeaders: {},
           });
         } catch {
           // ignore
         }
         return origXhrOpen.apply(this, arguments);
       };
+
+      if (typeof origXhrSetHeader === 'function') {
+        proto.setRequestHeader = function wrappedSetRequestHeader(header, value) {
+          try {
+            const meta = xhrMetaMap.get(this);
+            if (meta && header) {
+              meta.rawHeaders[String(header)] = String(value ?? '');
+            }
+          } catch {
+            // ignore
+          }
+          return origXhrSetHeader.apply(this, arguments);
+        };
+      }
 
       proto.send = function wrappedSend(body) {
         const meta = xhrMetaMap.get(this);
@@ -623,6 +646,8 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
             try {
               const contractId = getContractId ? getContractId() : '';
               const u = new URL(meta.url, currentOrigin);
+              const reqHeaders = redactHeaders(meta.rawHeaders || {});
+              const reqCt = reqHeaders['content-type'] || reqHeaders['Content-Type'] || '';
               const resCt = this.getResponseHeader('content-type') || '';
               const bodyText =
                 this.responseType === '' || this.responseType === 'text'
@@ -635,8 +660,8 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
                 origin: u.origin,
                 pathname: u.pathname,
                 queryParamNames: Array.from(new Set(u.searchParams.keys())),
-                requestContentType: '',
-                requestHeaders: {},
+                requestContentType: reqCt,
+                requestHeaders: reqHeaders,
                 requestSchema: redactPayload(body, contractId),
                 status: this.status,
                 responseContentType: resCt,
@@ -669,6 +694,10 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
       if (origXhrOpen) {
         proto.open = origXhrOpen;
         origXhrOpen = null;
+      }
+      if (origXhrSetHeader) {
+        proto.setRequestHeader = origXhrSetHeader;
+        origXhrSetHeader = null;
       }
       if (origXhrSend) {
         proto.send = origXhrSend;

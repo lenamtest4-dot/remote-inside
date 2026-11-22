@@ -109,6 +109,8 @@ export function mountRemoteInside({
   rootContainer,
   cssText = '',
   standalone = false,
+  fabPosition = 'bottom-right',
+  fabLabelDefault = 'Remote Inside',
   pageWindow = typeof window !== 'undefined' ? window : null,
   pageDocument = typeof document !== 'undefined' ? document : null,
 }) {
@@ -884,13 +886,21 @@ export function mountRemoteInside({
     if (!state.isOpen && !standalone) {
       const fabLabel = state.isRecording
         ? `Đang ghi mẫu (${state.recordedEntries.length}) — Bấm để dừng`
-        : 'Remote Inside';
+        : fabLabelDefault;
+
+      const fabClasses = [
+        'ri-fab',
+        state.isRecording ? 'is-recording' : '',
+        fabPosition === 'bottom-left' ? 'is-left' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
 
       const fab = el(
         'button',
         {
           type: 'button',
-          className: `ri-fab${state.isRecording ? ' is-recording' : ''}`,
+          className: fabClasses,
           onClick: () => {
             if (state.isRecording) {
               handleToggleRecording();

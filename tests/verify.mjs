@@ -21,6 +21,7 @@ import {
 import { detectIamRedirect } from '../src/core/transport.js';
 import {
   buildScanReport,
+  createNetworkRecorder,
   redactHeaders,
   redactPayload,
   redactResponseStructure,
@@ -46,6 +47,7 @@ function runTests() {
   // Verify required Userscript metadata headers
   const expectedDomains = [
     'inside.fpt.net',
+    'mvc.inside.fpt.net',
     'port.fpt.net',
     'fli-mngt.fcam.vn',
     'nextgen.fpt.net',
@@ -79,8 +81,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.1.2'),
-    'Userscript must bump @version to 0.1.2'
+    userscriptContent.includes('@version      0.1.3'),
+    'Userscript must bump @version to 0.1.3'
   );
 
   // Parse JS syntax inside VM without executing
@@ -98,6 +100,10 @@ function runTests() {
   assert.ok(
     PORTALS.inside.url.startsWith('http://inside.fpt.net'),
     'PORTALS.inside.url must start with http://inside.fpt.net'
+  );
+  assert.ok(
+    PORTALS.inside.hosts.includes('mvc.inside.fpt.net'),
+    'PORTALS.inside.hosts must include mvc.inside.fpt.net'
   );
   assert.equal(normalizeContractId('  sgn 123456\n '), 'SGN123456');
   assert.equal(normalizeContractId('hn-9988_1'), 'HN-9988_1');
@@ -316,7 +322,62 @@ function runTests() {
     snap.actionControls.some((c) => c.id === 'btnSearch'),
     'Must capture input[type="image"] control'
   );
-  console.log('   OK: Inspector redaction, Classic ASP scan & report tests passed.');
+
+  // Verify XHR network recorder captures setRequestHeader Content-Type while stripping secrets & restores on stop()
+  class MockXHR {
+    constructor() {
+      this._listeners = {};
+      this.status = 200;
+      this.responseType = '';
+      this.responseText = JSON.stringify({ ok: true, macAddress: 'AA:BB:CC:DD:EE:FF' });
+    }
+    addEventListener(evt, fn) {
+      this._listeners[evt] = this._listeners[evt] || [];
+      this._listeners[evt].push(fn);
+    }
+    getResponseHeader(name) {
+      return name.toLowerCase() === 'content-type' ? 'application/json' : '';
+    }
+    open() {}
+    setRequestHeader() {}
+    send() {
+      for (const fn of this._listeners.loadend || []) fn();
+    }
+  }
+  const origOpenRef = MockXHR.prototype.open;
+  const origSetHeaderRef = MockXHR.prototype.setRequestHeader;
+  const origSendRef = MockXHR.prototype.send;
+  const recorderWin = {
+    location: { origin: 'http://mvc.inside.fpt.net' },
+    XMLHttpRequest: MockXHR,
+  };
+  const rec = createNetworkRecorder(recorderWin, () => 'SGN123456');
+  assert.equal(rec.start(), true);
+  const xhr = new recorderWin.XMLHttpRequest();
+  xhr.open('POST', '/contract/GetStatus?hd=SGN123456');
+  xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+  xhr.setRequestHeader('Authorization', 'Bearer top-secret-jwt');
+  xhr.setRequestHeader('Cookie', 'ASP.NET_SessionId=xyz');
+  xhr.send('contract=SGN123456&password=123');
+
+  const captured = rec.getEntries();
+  assert.equal(captured.length, 1);
+  assert.equal(captured[0].transport, 'xhr');
+  assert.equal(captured[0].requestContentType, 'application/x-www-form-urlencoded');
+  assert.equal('Authorization' in captured[0].requestHeaders, false);
+  assert.equal('Cookie' in captured[0].requestHeaders, false);
+  assert.equal(captured[0].requestSchema.contract, '<CONTRACT_ID>');
+  assert.equal(captured[0].requestSchema.password, '[REDACTED]');
+
+  assert.equal(rec.stop(), true);
+  assert.equal(MockXHR.prototype.open, origOpenRef, 'Must restore original XHR.open');
+  assert.equal(
+    MockXHR.prototype.setRequestHeader,
+    origSetHeaderRef,
+    'Must restore original XHR.setRequestHeader'
+  );
+  assert.equal(MockXHR.prototype.send, origSendRef, 'Must restore original XHR.send');
+  console.log('   OK: Inspector redaction, Classic ASP scan, XHR recorder & report tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

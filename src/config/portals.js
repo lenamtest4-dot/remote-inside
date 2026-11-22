@@ -10,7 +10,7 @@ export const PORTALS = {
     label: 'Inside',
     fullName: 'inside.fpt.net',
     url: 'http://inside.fpt.net/default.asp',
-    hosts: ['inside.fpt.net'],
+    hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
     status: 'priority',
     statusLabel: 'Ưu tiên v0.1',
     description: 'Tra thông tin HĐ, Reset MAC, Kill Session, Clear OSP.',

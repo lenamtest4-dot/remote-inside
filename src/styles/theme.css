@@ -861,6 +861,12 @@
   background: var(--state-danger);
 }
 
+.ri-fab.is-left {
+  right: auto;
+  left: 16px;
+  background: #334155;
+}
+
 .ri-fab-dot {
   width: 8px;
   height: 8px;

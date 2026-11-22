@@ -45,11 +45,18 @@ function bootstrapRemoteInside() {
   host.id = 'remote-inside-host';
   document.body.appendChild(host);
 
+  const isOuterShell =
+    window.location &&
+    window.location.hostname === 'inside.fpt.net' &&
+    window.location.pathname.toLowerCase() === '/default.asp';
+
   const shadowRoot = host.attachShadow({ mode: 'open' });
   const app = mountRemoteInside({
     rootContainer: shadowRoot,
     cssText,
     standalone: false,
+    fabPosition: isOuterShell ? 'bottom-left' : 'bottom-right',
+    fabLabelDefault: isOuterShell ? 'Remote Inside (Khung ngoài)' : 'Remote Inside',
     pageWindow: typeof unsafeWindow !== 'undefined' ? unsafeWindow : window,
     pageDocument: document,
   });

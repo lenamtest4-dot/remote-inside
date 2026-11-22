@@ -30,8 +30,16 @@ function bootstrapRemoteInside() {
     return;
   }
   try {
-    if (window.top !== window.self && (window.innerWidth < 240 || window.innerHeight < 220)) {
-      return;
+    if (window.top !== window.self) {
+      const pathLower = ((window.location && window.location.pathname) || '').toLowerCase();
+      if (
+        window.innerWidth < 240 ||
+        window.innerHeight < 220 ||
+        pathLower.startsWith('/public/partial/') ||
+        pathLower.startsWith('/iptvinfo/')
+      ) {
+        return;
+      }
     }
   } catch {
     // Bo qua loi cross-origin neu co

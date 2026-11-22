@@ -22,6 +22,8 @@ import { detectIamRedirect } from '../src/core/transport.js';
 import {
   buildScanReport,
   createNetworkRecorder,
+  extractApiHintsFromHtml,
+  extractApiHintsFromJs,
   redactHeaders,
   redactPayload,
   redactResponseStructure,
@@ -86,8 +88,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.2.0'),
-    'Userscript must bump @version to 0.2.0'
+    userscriptContent.includes('@version      0.2.1'),
+    'Userscript must bump @version to 0.2.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -445,12 +447,60 @@ function runTests() {
   assert.equal(fieldMap['Mã hợp đồng'], 'VTH011485');
   assert.equal(fieldMap['Gói cước'], 'Giga 300');
   assert.equal(fieldMap['Thiết bị / Modem'], 'Modem Online');
-  assert.equal(fieldMap['Trạng thái Radius'], 'Đang có trên Radius');
+  assert.equal(fieldMap['Trạng thái Radius'], 'Có trên Radius');
   assert.equal(fieldMap['Địa chỉ lắp đặt'], '123 Duong So 1, P. Tan Phong, Q.7');
   assert.equal(parsedLookup.extraSections.length, 2);
   assert.equal(parsedLookup.extraSections[0].title, 'Thông số kết nối (Radius)');
   assert.equal(parsedLookup.extraSections[1].title, 'Phiên đang online (Radius)');
+
+  const numericAndFalseRadius = parseInsideLookupPayload({
+    contractId: 'VTAAR2393',
+    detailJson: { data: [{ ID: 123, Status: 1 }] },
+    radiusBool: false,
+  });
+  const numMap = Object.fromEntries(numericAndFalseRadius.summaryFields.map((f) => [f.label, f.value]));
+  assert.equal(numMap['Tình trạng HĐ'], 'Bình thường (1)');
+  assert.equal('Trạng thái Radius' in numMap, false, 'Must omit misleading Offline label when radiusBool is false');
   console.log('   OK: Inside live lookup parsers passed.');
+
+  console.log('7. Testing HTML & JS deep API hint extractors...');
+  const sampleHtml = `
+    <script src="/assets/jquery.min.js"></script>
+    <script src="/static/js/app-radius.js?v=2"></script>
+    <form method="POST" action="/DSLLLine/ResetMAC/Submit?token=secret123">
+      <input type="text" id="txtContract" name="txtContract" value="VTAAR2393" />
+      <button id="btnReset" onclick="resetNow('VTAAR2393')">Reset MAC</button>
+    </form>
+    <script>
+      const ds = { transport: { read: { url: "/iptvinfo/GetListBox?token=secret123&objid=99" } } };
+      $.post("/DSLLLine/ResetMAC/Execute", { contract: "VTAAR2393" });
+    </script>
+  `;
+  const htmlHints = extractApiHintsFromHtml(sampleHtml, 'http://mvc.inside.fpt.net/iptvinfo/infobox', 'VTAAR2393');
+  assert.deepEqual(htmlHints.scriptUrls, ['http://mvc.inside.fpt.net/static/js/app-radius.js']);
+  assert.ok(
+    htmlHints.apiHints.includes('/iptvinfo/GetListBox?token&objid'),
+    'Must capture Kendo read URL with query param names only'
+  );
+  assert.ok(
+    htmlHints.apiHints.includes('/DSLLLine/ResetMAC/Execute'),
+    'Must capture $.post URL'
+  );
+  assert.equal(htmlHints.forms.length, 1);
+  assert.equal(htmlHints.forms[0].actionPath, '/DSLLLine/ResetMAC/Submit');
+  assert.equal(htmlHints.fields.length, 1);
+  assert.equal(htmlHints.fields[0].name, 'txtContract');
+  assert.equal(JSON.stringify(htmlHints).includes('secret123'), false, 'Must strip secret query values');
+  assert.equal(JSON.stringify(htmlHints).includes('VTAAR2393'), false, 'Must redact contract ID & skip .value');
+
+  const jsHints = extractApiHintsFromJs(
+    'fetch("/api/v1/connection-parameters?ObjID=123&token=secret123"); axios.get("/api/v1/online-session");',
+    'VTAAR2393'
+  );
+  assert.ok(jsHints.includes('/api/v1/connection-parameters?ObjID&token'));
+  assert.ok(jsHints.includes('/api/v1/online-session'));
+  assert.equal(JSON.stringify(jsHints).includes('secret123'), false);
+  console.log('   OK: HTML & JS API hint extractors passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

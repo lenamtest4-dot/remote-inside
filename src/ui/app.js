@@ -17,12 +17,20 @@ import {
   getState,
   setState,
 } from '../core/storage.js';
-import { checkPortalSession, isUserscriptEnv } from '../core/transport.js';
+import {
+  checkPortalSession,
+  detectIamRedirect,
+  isUserscriptEnv,
+  requestPortal,
+} from '../core/transport.js';
 import {
   buildScanReport,
   createNetworkRecorder,
+  extractApiHintsFromHtml,
+  extractApiHintsFromJs,
   scanPageStructure,
 } from '../core/inspector.js';
+import { getCachedInsideContract, runInsideAction } from '../adapters/inside.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function el(tag, attrs = {}, children = []) {
@@ -137,6 +145,8 @@ export function mountRemoteInside({
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
+    deepScan: null,
+    isDeepScanning: false,
     isRecording: false,
     copyNotice: '',
   };
@@ -377,10 +387,194 @@ export function mountRemoteInside({
     }
   }
 
+  async function handleDeepScan() {
+    if (state.isDeepScanning) return;
+    if (!isUserscriptEnv()) {
+      state.copyNotice =
+        'Tính năng Quét API phụ chỉ chạy khi bạn đang mở trang FPT qua Tampermonkey.';
+      render();
+      return;
+    }
+
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang đọc cấu trúc 5 mục phụ + Reset MAC / Kill Session (chỉ đọc, không tác động dữ liệu)…';
+    render();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      let cached = contractId ? getCachedInsideContract(contractId) : null;
+      if (contractId && !cached) {
+        await runInsideAction('lookup', contractId);
+        cached = getCachedInsideContract(contractId);
+      }
+
+      const objID = cached && cached.objID ? String(cached.objID) : '';
+      const accountQuery = (cached && cached.accountName) || contractId || '';
+
+      const targets = [
+        {
+          key: 'radius_params',
+          url: `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
+            objID
+          )}`,
+        },
+        {
+          key: 'radius_online',
+          url: `http://radius-portal.fpt.net/public/partial/online-session?query=${encodeURIComponent(
+            accountQuery
+          )}`,
+        },
+        {
+          key: 'radius_errors',
+          url: `http://radius-portal.fpt.net/public/partial/last-access-error?query=${encodeURIComponent(
+            accountQuery
+          )}`,
+        },
+        {
+          key: 'iptv',
+          url: `http://mvc.inside.fpt.net/iptvinfo/infobox?objid=${encodeURIComponent(objID)}`,
+        },
+        {
+          key: 'camera',
+          url: `http://mvc.inside.fpt.net/iptvinfo/infocamera?objid=${encodeURIComponent(objID)}`,
+        },
+        {
+          key: 'reset_mac',
+          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+        },
+        {
+          key: 'kill_session',
+          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
+        },
+      ];
+
+      const settled = await Promise.allSettled(
+        targets.map((t) =>
+          requestPortal({
+            url: t.url,
+            method: 'GET',
+            headers: { Accept: 'text/html, */*' },
+            timeout: 12000,
+          })
+        )
+      );
+
+      const pages = [];
+      const radiusScripts = [];
+      const otherScripts = [];
+      const seenScripts = new Set();
+
+      for (let i = 0; i < targets.length; i += 1) {
+        const t = targets[i];
+        const item = settled[i];
+        const res = item && item.status === 'fulfilled' ? item.value : null;
+        let pathname = '';
+        try {
+          pathname = new URL(t.url).pathname;
+        } catch {
+          pathname = '';
+        }
+
+        if (!res || !res.ok || !res.responseText) {
+          pages.push({
+            key: t.key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          });
+          continue;
+        }
+
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: t.url,
+        });
+        const extracted = extractApiHintsFromHtml(res.responseText, t.url, contractId);
+        pages.push({
+          key: t.key,
+          pathname,
+          status: res.status,
+          iamExpired: iam.expired,
+          ...extracted,
+        });
+
+        for (const sUrl of extracted.scriptUrls || []) {
+          if (seenScripts.has(sUrl)) continue;
+          seenScripts.add(sUrl);
+          if (sUrl.includes('radius-portal.fpt.net')) {
+            radiusScripts.push(sUrl);
+          } else {
+            otherScripts.push(sUrl);
+          }
+        }
+      }
+
+      const candidateScripts = [...radiusScripts, ...otherScripts].slice(0, 3);
+      const scriptBundleHints = [];
+      if (candidateScripts.length > 0) {
+        const jsSettled = await Promise.allSettled(
+          candidateScripts.map((url) =>
+            requestPortal({ url, method: 'GET', timeout: 12000 })
+          )
+        );
+        for (let i = 0; i < candidateScripts.length; i += 1) {
+          const sUrl = candidateScripts[i];
+          const item = jsSettled[i];
+          const res = item && item.status === 'fulfilled' ? item.value : null;
+          if (!res || !res.ok || !res.responseText || res.responseText.length > 2 * 1024 * 1024) {
+            continue;
+          }
+          let sOrigin = '';
+          let sPath = sUrl;
+          try {
+            const parsed = new URL(sUrl);
+            sOrigin = parsed.origin;
+            sPath = parsed.pathname;
+          } catch {
+            // keep string
+          }
+          scriptBundleHints.push({
+            origin: sOrigin,
+            pathname: sPath,
+            apiHints: extractApiHintsFromJs(res.responseText, contractId),
+          });
+        }
+      }
+
+      state.deepScan = {
+        scannedAt: new Date().toISOString(),
+        hasContractContext: Boolean(objID),
+        pages,
+        scriptBundleHints,
+      };
+
+      const okPages = pages.filter((p) => p.status >= 200 && p.status < 400 && !p.iamExpired).length;
+      const uniqueHints = new Set();
+      for (const p of pages) {
+        for (const h of p.apiHints || []) uniqueHints.add(h);
+      }
+      for (const sb of scriptBundleHints) {
+        for (const h of sb.apiHints || []) uniqueHints.add(h);
+      }
+      state.copyNotice = `Đã quét xong ${okPages}/${targets.length} màn hình phụ (tìm thấy ${uniqueHints.size} gợi ý API). Hãy bấm "Sao chép báo cáo gửi AI" bên dưới!`;
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét nhanh API phụ: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      render();
+    }
+  }
+
   async function handleCopyScanReport() {
     const report = buildScanReport({
       domSnapshot: state.domSnapshot,
       networkEntries: state.recordedEntries,
+      deepScan: state.deepScan,
       portalId: state.activePortalId,
     });
     const ok = await copyTextSafe(report);
@@ -394,6 +588,7 @@ export function mountRemoteInside({
     const report = buildScanReport({
       domSnapshot: state.domSnapshot,
       networkEntries: state.recordedEntries,
+      deepScan: state.deepScan,
       portalId: state.activePortalId,
     });
     downloadJsonFile(`remote-inside-scan-${state.activePortalId}.json`, report);
@@ -860,7 +1055,7 @@ export function mountRemoteInside({
     const formCount = state.domSnapshot ? state.domSnapshot.forms.length : 0;
     const controlCount = state.domSnapshot ? state.domSnapshot.actionControls.length : 0;
     const reqCount = state.recordedEntries.length;
-    const hasData = Boolean(state.domSnapshot) || reqCount > 0;
+    const hasData = Boolean(state.domSnapshot) || reqCount > 0 || Boolean(state.deepScan);
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { className: 'ri-sheet' }, [
@@ -899,6 +1094,15 @@ export function mountRemoteInside({
               ? `Dừng ghi thao tác (${reqCount})`
               : '2. Bật ghi thao tác mạng',
             onClick: handleToggleRecording,
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            disabled: state.isDeepScanning,
+            text: state.isDeepScanning
+              ? 'Đang quét 7 trang phụ…'
+              : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
+            onClick: handleDeepScan,
           }),
         ]),
         el('div', { className: 'ri-scan-stats' }, [

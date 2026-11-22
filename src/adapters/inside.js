@@ -32,6 +32,12 @@ export const INSIDE_ENDPOINTS = {
 
 export const INSIDE_CONTRACT_CACHE = new Map();
 
+export function getCachedInsideContract(rawContractId) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) return null;
+  return INSIDE_CONTRACT_CACHE.get(check.value) || null;
+}
+
 const AJAX_HEADERS = {
   Accept: 'application/json, text/plain, */*',
   'X-Requested-With': 'XMLHttpRequest',
@@ -200,8 +206,14 @@ export function parseInsideLookupPayload({
     nonEmptyStr(row.Name1);
   const customerName =
     nonEmptyStr(row.FullName) || nonEmptyStr(objType.FullName) || nonEmptyStr(objType.TenKh);
-  const contractStatus =
+  const rawStatus =
     nonEmptyStr(row.StatusName) || nonEmptyStr(row.Status) || nonEmptyStr(row.Status_Name);
+  const contractStatus =
+    rawStatus === '1'
+      ? 'Bình thường (1)'
+      : rawStatus === '0'
+      ? 'Chưa kích hoạt / Khóa (0)'
+      : rawStatus;
   const suspendReason = nonEmptyStr(row.Suspend_Reason);
   const warning = nonEmptyStr(dtMain.Warning);
   const packageName =
@@ -215,12 +227,7 @@ export function parseInsideLookupPayload({
     .join(' / ');
   const deviceStatus =
     deviceJson && typeof deviceJson.data === 'string' ? deviceJson.data.trim() : '';
-  const radiusText =
-    typeof radiusBool === 'boolean'
-      ? radiusBool
-        ? 'Đang có trên Radius'
-        : 'Chưa kích hoạt / Offline'
-      : '';
+  const radiusText = radiusBool === true ? 'Có trên Radius' : '';
   const macAddress =
     typeof row.MACAddress === 'string' && row.MACAddress.trim() ? row.MACAddress.trim() : '';
   const promotion = nonEmptyStr(row.DesPromotion);

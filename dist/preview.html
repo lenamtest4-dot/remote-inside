@@ -584,6 +584,15 @@ function isSensitiveKey(key) {
 const OPS_KEYWORD_RE =
   /(mac|reset|kill|session|osp|port|ipnat|ipv6|tra|tìm|search|thu\s*hồi|camera|clear|submit|cấp|xem|kiểm\s*tra|cập\s*nhật|hợp\s*đồng|tình\s*trạng|kỹ\s*thuật|contract|inside)/i;
 
+const VENDOR_SCRIPT_RE =
+  /(jquery|bootstrap|kendo|popper|jszip|moment|fontawesome|lodash|polyfill)/i;
+
+const API_PATH_HINT_RE =
+  /(?:\/api\/|\/public\/|\/iptvinfo\/|\/Contract\/|\/DSLLLine\/|\/KillSession\/|\/networkConnection|\/radius)/i;
+
+const JS_ENDPOINT_RE =
+  /(?:\/api\/|\/public\/|\/iptvinfo\/|\/DSLLLine\/|\/KillSession\/|\/networkConnection|\/connection-parameters|\/online-session|\/last-access-error)[a-zA-Z0-9_\/\-${}.?=&]*/g;
+
 const MAX_STR_LEN = 80;
 const MAX_CONTROLS = 80;
 const MAX_RECORDED_REQUESTS = 40;
@@ -1284,23 +1293,238 @@ function createNetworkRecorder(targetWindow, getContractId = () => '') {
   return { start, stop, getEntries, clear, isRecording };
 }
 
+function sanitizeApiHint(rawHint, baseUrl = '', contractId = '') {
+  if (!rawHint || typeof rawHint !== 'string') {
+    return '';
+  }
+  const trimmed = rawHint.trim();
+  if (!trimmed || /^javascript:/i.test(trimmed) || /^data:/i.test(trimmed) || trimmed === '#') {
+    return '';
+  }
+  const parts = parseSafeUrlParts(trimmed, baseUrl || 'http://inside.fpt.net/', contractId);
+  const queryPart =
+    parts.queryParamNames.length > 0 ? `?${parts.queryParamNames.join('&')}` : '';
+  const pathWithQuery = `${parts.pathname}${queryPart}`;
+  if (!pathWithQuery) return '';
+  if (parts.origin && /^https?:\/\//i.test(trimmed)) {
+    return replaceContractToken(`${parts.origin}${pathWithQuery}`, contractId, 160);
+  }
+  return replaceContractToken(pathWithQuery, contractId, 160);
+}
+
+function getAttrValue(attrStr, attrName) {
+  const re = new RegExp(`\\b${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const m = attrStr.match(re);
+  if (!m) return '';
+  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3] || '';
+}
+
+/**
+ * Quet an toan cac goi y API va bieu mau tu chuoi HTML (chi doc cau truc, khong doc PII/value).
+ */
+function extractApiHintsFromHtml(htmlText, baseUrl = '', contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { scriptUrls: [], apiHints: [], forms: [], fields: [], buttons: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const scriptUrls = [];
+  const seenScripts = new Set();
+  const apiHints = [];
+  const seenHints = new Set();
+
+  let baseOrigin = '';
+  if (baseUrl) {
+    try {
+      baseOrigin = new URL(baseUrl).origin;
+    } catch {
+      baseOrigin = '';
+    }
+  }
+
+  function addHint(raw) {
+    const clean = sanitizeApiHint(raw, baseUrl, contractId);
+    if (!clean || seenHints.has(clean) || apiHints.length >= 60) return;
+    seenHints.add(clean);
+    apiHints.push(clean);
+  }
+
+  function scanScriptCode(codeText) {
+    const patterns = [
+      /url\s*:\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+      /fetch\s*\(\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+      /\$\.(?:get|post|getJSON|ajax)\s*\(\s*['"]([^'"\n]{2,200})['"]/gi,
+      /axios\.(?:get|post|put|delete|patch)\s*\(\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+    ];
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(codeText)) !== null) {
+        addHint(m[1]);
+      }
+    }
+    const litRe = /['"`]([^'"`\s<>]{4,200})['"`]/g;
+    let lm;
+    while ((lm = litRe.exec(codeText)) !== null) {
+      if (API_PATH_HINT_RE.test(lm[1])) {
+        addHint(lm[1]);
+      }
+    }
+  }
+
+  const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
+  let sm;
+  while ((sm = scriptRe.exec(withoutStyles)) !== null) {
+    const attrs = sm[1] || '';
+    const body = sm[2] || '';
+    const src = getAttrValue(attrs, 'src');
+    if (src) {
+      if (VENDOR_SCRIPT_RE.test(src)) continue;
+      try {
+        const u = new URL(src, baseUrl || 'http://inside.fpt.net/');
+        if (baseOrigin && u.origin !== baseOrigin) continue;
+        const cleanUrl = `${u.origin}${u.pathname}`;
+        if (!seenScripts.has(cleanUrl) && scriptUrls.length < 20) {
+          seenScripts.add(cleanUrl);
+          scriptUrls.push(cleanUrl);
+        }
+      } catch {
+        // Bo qua URL khong hop le
+      }
+    } else if (body.trim()) {
+      scanScriptCode(body);
+    }
+  }
+
+  const forms = [];
+  const formRe = /<form\b([^>]*)>/gi;
+  let fm;
+  while ((fm = formRe.exec(withoutStyles)) !== null && forms.length < 20) {
+    const attrs = fm[1] || '';
+    const actionRaw = getAttrValue(attrs, 'action');
+    const parsedAction = parseSafeUrlParts(
+      actionRaw,
+      baseUrl || 'http://inside.fpt.net/',
+      contractId
+    );
+    forms.push({
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      method: (getAttrValue(attrs, 'method') || 'GET').toUpperCase(),
+      actionPath: parsedAction.pathname,
+      queryParamNames: parsedAction.queryParamNames,
+    });
+  }
+
+  const fields = [];
+  const fieldRe = /<(input|select|textarea)\b([^>]*)>/gi;
+  let flm;
+  while ((flm = fieldRe.exec(withoutStyles)) !== null && fields.length < 60) {
+    const tag = flm[1].toLowerCase();
+    const attrs = flm[2] || '';
+    fields.push({
+      tag,
+      type: getAttrValue(attrs, 'type').toLowerCase(),
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      placeholder: truncateStr(getAttrValue(attrs, 'placeholder'), 40),
+    });
+  }
+
+  const buttons = [];
+  const btnRe = /<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  let bm;
+  while ((bm = btnRe.exec(withoutStyles)) !== null && buttons.length < 50) {
+    const tag = bm[1].toLowerCase();
+    const attrs = bm[2] || '';
+    const innerText = bm[3].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const id = getAttrValue(attrs, 'id');
+    const name = getAttrValue(attrs, 'name');
+    const onclick = getAttrValue(attrs, 'onclick');
+    const href = getAttrValue(attrs, 'href');
+    if (tag === 'button' || id || onclick || API_PATH_HINT_RE.test(href)) {
+      const parsedHref = parseSafeUrlParts(
+        href,
+        baseUrl || 'http://inside.fpt.net/',
+        contractId
+      );
+      buttons.push({
+        tag,
+        id,
+        name,
+        text: replaceContractToken(innerText, contractId, 60),
+        hrefPath: parsedHref.pathname,
+        onclickSnippet: replaceContractToken(onclick, contractId, 180),
+      });
+    }
+  }
+
+  return { scriptUrls, apiHints, forms, fields, buttons };
+}
+
+/**
+ * Quet an toan cac duong dan API tu file JS rieng (khong doc du lieu nhay cam).
+ */
+function extractApiHintsFromJs(jsText, contractId = '') {
+  if (!jsText || typeof jsText !== 'string') {
+    return [];
+  }
+
+  const hints = [];
+  const seen = new Set();
+
+  function addJsHint(raw) {
+    const clean = sanitizeApiHint(raw, '', contractId);
+    if (!clean || seen.has(clean) || hints.length >= 60) return;
+    seen.add(clean);
+    hints.push(clean);
+  }
+
+  let m;
+  const pathRe = new RegExp(JS_ENDPOINT_RE.source, 'g');
+  while ((m = pathRe.exec(jsText)) !== null) {
+    addJsHint(m[0]);
+  }
+
+  const callPatterns = [
+    /url\s*:\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+    /fetch\s*\(\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+    /axios\.(?:get|post|put|delete|patch)\s*\(\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+  ];
+  for (const re of callPatterns) {
+    while ((m = re.exec(jsText)) !== null) {
+      addJsHint(m[1]);
+    }
+  }
+
+  return hints;
+}
+
 /**
  * Dong goi bao cao JSON sach se de nguoi dung copy hoac tai ve gui AI ghep API.
  */
-function buildScanReport({ domSnapshot = null, networkEntries = [], portalId = 'inside' }) {
-  return JSON.stringify(
-    {
-      reportVersion: 'remote-inside-scan-v1',
-      portalId,
-      generatedAt: new Date().toISOString(),
-      privacyNote:
-        'Mat khau, cookie, token va thong tin ca nhan khach hang da duoc an tu dong.',
-      domSnapshot,
-      networkEntries,
-    },
-    null,
-    2
-  );
+function buildScanReport({
+  domSnapshot = null,
+  networkEntries = [],
+  deepScan = null,
+  portalId = 'inside',
+}) {
+  const payload = {
+    reportVersion: 'remote-inside-scan-v1',
+    portalId,
+    generatedAt: new Date().toISOString(),
+    privacyNote:
+      'Mat khau, cookie, token va thong tin ca nhan khach hang da duoc an tu dong.',
+    domSnapshot,
+    networkEntries,
+  };
+  if (deepScan) {
+    payload.deepScan = deepScan;
+  }
+  return JSON.stringify(payload, null, 2);
 }
 
 // --- adapters/inside.js ---
@@ -1328,6 +1552,11 @@ const INSIDE_ENDPOINTS = {
   clear_osp: null,
 };
 const INSIDE_CONTRACT_CACHE = new Map();
+function getCachedInsideContract(rawContractId) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) return null;
+  return INSIDE_CONTRACT_CACHE.get(check.value) || null;
+}
 
 const AJAX_HEADERS = {
   Accept: 'application/json, text/plain, */*',
@@ -1497,8 +1726,14 @@ function parseInsideLookupPayload({
     nonEmptyStr(row.Name1);
   const customerName =
     nonEmptyStr(row.FullName) || nonEmptyStr(objType.FullName) || nonEmptyStr(objType.TenKh);
-  const contractStatus =
+  const rawStatus =
     nonEmptyStr(row.StatusName) || nonEmptyStr(row.Status) || nonEmptyStr(row.Status_Name);
+  const contractStatus =
+    rawStatus === '1'
+      ? 'Bình thường (1)'
+      : rawStatus === '0'
+      ? 'Chưa kích hoạt / Khóa (0)'
+      : rawStatus;
   const suspendReason = nonEmptyStr(row.Suspend_Reason);
   const warning = nonEmptyStr(dtMain.Warning);
   const packageName =
@@ -1512,12 +1747,7 @@ function parseInsideLookupPayload({
     .join(' / ');
   const deviceStatus =
     deviceJson && typeof deviceJson.data === 'string' ? deviceJson.data.trim() : '';
-  const radiusText =
-    typeof radiusBool === 'boolean'
-      ? radiusBool
-        ? 'Đang có trên Radius'
-        : 'Chưa kích hoạt / Offline'
-      : '';
+  const radiusText = radiusBool === true ? 'Có trên Radius' : '';
   const macAddress =
     typeof row.MACAddress === 'string' && row.MACAddress.trim() ? row.MACAddress.trim() : '';
   const promotion = nonEmptyStr(row.DesPromotion);
@@ -1948,6 +2178,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
 
 
 
+
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -2060,6 +2291,8 @@ function mountRemoteInside({
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
+    deepScan: null,
+    isDeepScanning: false,
     isRecording: false,
     copyNotice: '',
   };
@@ -2300,10 +2533,194 @@ function mountRemoteInside({
     }
   }
 
+  async function handleDeepScan() {
+    if (state.isDeepScanning) return;
+    if (!isUserscriptEnv()) {
+      state.copyNotice =
+        'Tính năng Quét API phụ chỉ chạy khi bạn đang mở trang FPT qua Tampermonkey.';
+      render();
+      return;
+    }
+
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang đọc cấu trúc 5 mục phụ + Reset MAC / Kill Session (chỉ đọc, không tác động dữ liệu)…';
+    render();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      let cached = contractId ? getCachedInsideContract(contractId) : null;
+      if (contractId && !cached) {
+        await runInsideAction('lookup', contractId);
+        cached = getCachedInsideContract(contractId);
+      }
+
+      const objID = cached && cached.objID ? String(cached.objID) : '';
+      const accountQuery = (cached && cached.accountName) || contractId || '';
+
+      const targets = [
+        {
+          key: 'radius_params',
+          url: `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
+            objID
+          )}`,
+        },
+        {
+          key: 'radius_online',
+          url: `http://radius-portal.fpt.net/public/partial/online-session?query=${encodeURIComponent(
+            accountQuery
+          )}`,
+        },
+        {
+          key: 'radius_errors',
+          url: `http://radius-portal.fpt.net/public/partial/last-access-error?query=${encodeURIComponent(
+            accountQuery
+          )}`,
+        },
+        {
+          key: 'iptv',
+          url: `http://mvc.inside.fpt.net/iptvinfo/infobox?objid=${encodeURIComponent(objID)}`,
+        },
+        {
+          key: 'camera',
+          url: `http://mvc.inside.fpt.net/iptvinfo/infocamera?objid=${encodeURIComponent(objID)}`,
+        },
+        {
+          key: 'reset_mac',
+          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+        },
+        {
+          key: 'kill_session',
+          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
+        },
+      ];
+
+      const settled = await Promise.allSettled(
+        targets.map((t) =>
+          requestPortal({
+            url: t.url,
+            method: 'GET',
+            headers: { Accept: 'text/html, */*' },
+            timeout: 12000,
+          })
+        )
+      );
+
+      const pages = [];
+      const radiusScripts = [];
+      const otherScripts = [];
+      const seenScripts = new Set();
+
+      for (let i = 0; i < targets.length; i += 1) {
+        const t = targets[i];
+        const item = settled[i];
+        const res = item && item.status === 'fulfilled' ? item.value : null;
+        let pathname = '';
+        try {
+          pathname = new URL(t.url).pathname;
+        } catch {
+          pathname = '';
+        }
+
+        if (!res || !res.ok || !res.responseText) {
+          pages.push({
+            key: t.key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          });
+          continue;
+        }
+
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: t.url,
+        });
+        const extracted = extractApiHintsFromHtml(res.responseText, t.url, contractId);
+        pages.push({
+          key: t.key,
+          pathname,
+          status: res.status,
+          iamExpired: iam.expired,
+          ...extracted,
+        });
+
+        for (const sUrl of extracted.scriptUrls || []) {
+          if (seenScripts.has(sUrl)) continue;
+          seenScripts.add(sUrl);
+          if (sUrl.includes('radius-portal.fpt.net')) {
+            radiusScripts.push(sUrl);
+          } else {
+            otherScripts.push(sUrl);
+          }
+        }
+      }
+
+      const candidateScripts = [...radiusScripts, ...otherScripts].slice(0, 3);
+      const scriptBundleHints = [];
+      if (candidateScripts.length > 0) {
+        const jsSettled = await Promise.allSettled(
+          candidateScripts.map((url) =>
+            requestPortal({ url, method: 'GET', timeout: 12000 })
+          )
+        );
+        for (let i = 0; i < candidateScripts.length; i += 1) {
+          const sUrl = candidateScripts[i];
+          const item = jsSettled[i];
+          const res = item && item.status === 'fulfilled' ? item.value : null;
+          if (!res || !res.ok || !res.responseText || res.responseText.length > 2 * 1024 * 1024) {
+            continue;
+          }
+          let sOrigin = '';
+          let sPath = sUrl;
+          try {
+            const parsed = new URL(sUrl);
+            sOrigin = parsed.origin;
+            sPath = parsed.pathname;
+          } catch {
+            // keep string
+          }
+          scriptBundleHints.push({
+            origin: sOrigin,
+            pathname: sPath,
+            apiHints: extractApiHintsFromJs(res.responseText, contractId),
+          });
+        }
+      }
+
+      state.deepScan = {
+        scannedAt: new Date().toISOString(),
+        hasContractContext: Boolean(objID),
+        pages,
+        scriptBundleHints,
+      };
+
+      const okPages = pages.filter((p) => p.status >= 200 && p.status < 400 && !p.iamExpired).length;
+      const uniqueHints = new Set();
+      for (const p of pages) {
+        for (const h of p.apiHints || []) uniqueHints.add(h);
+      }
+      for (const sb of scriptBundleHints) {
+        for (const h of sb.apiHints || []) uniqueHints.add(h);
+      }
+      state.copyNotice = `Đã quét xong ${okPages}/${targets.length} màn hình phụ (tìm thấy ${uniqueHints.size} gợi ý API). Hãy bấm "Sao chép báo cáo gửi AI" bên dưới!`;
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét nhanh API phụ: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      render();
+    }
+  }
+
   async function handleCopyScanReport() {
     const report = buildScanReport({
       domSnapshot: state.domSnapshot,
       networkEntries: state.recordedEntries,
+      deepScan: state.deepScan,
       portalId: state.activePortalId,
     });
     const ok = await copyTextSafe(report);
@@ -2317,6 +2734,7 @@ function mountRemoteInside({
     const report = buildScanReport({
       domSnapshot: state.domSnapshot,
       networkEntries: state.recordedEntries,
+      deepScan: state.deepScan,
       portalId: state.activePortalId,
     });
     downloadJsonFile(`remote-inside-scan-${state.activePortalId}.json`, report);
@@ -2783,7 +3201,7 @@ function mountRemoteInside({
     const formCount = state.domSnapshot ? state.domSnapshot.forms.length : 0;
     const controlCount = state.domSnapshot ? state.domSnapshot.actionControls.length : 0;
     const reqCount = state.recordedEntries.length;
-    const hasData = Boolean(state.domSnapshot) || reqCount > 0;
+    const hasData = Boolean(state.domSnapshot) || reqCount > 0 || Boolean(state.deepScan);
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { className: 'ri-sheet' }, [
@@ -2822,6 +3240,15 @@ function mountRemoteInside({
               ? `Dừng ghi thao tác (${reqCount})`
               : '2. Bật ghi thao tác mạng',
             onClick: handleToggleRecording,
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            disabled: state.isDeepScanning,
+            text: state.isDeepScanning
+              ? 'Đang quét 7 trang phụ…'
+              : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
+            onClick: handleDeepScan,
           }),
         ]),
         el('div', { className: 'ri-scan-stats' }, [
@@ -2963,8 +3390,16 @@ function bootstrapRemoteInside() {
     return;
   }
   try {
-    if (window.top !== window.self && (window.innerWidth < 240 || window.innerHeight < 220)) {
-      return;
+    if (window.top !== window.self) {
+      const pathLower = ((window.location && window.location.pathname) || '').toLowerCase();
+      if (
+        window.innerWidth < 240 ||
+        window.innerHeight < 220 ||
+        pathLower.startsWith('/public/partial/') ||
+        pathLower.startsWith('/iptvinfo/')
+      ) {
+        return;
+      }
     }
   } catch {
     // Bo qua loi cross-origin neu co

@@ -22,6 +22,15 @@ function isSensitiveKey(key) {
 const OPS_KEYWORD_RE =
   /(mac|reset|kill|session|osp|port|ipnat|ipv6|tra|tìm|search|thu\s*hồi|camera|clear|submit|cấp|xem|kiểm\s*tra|cập\s*nhật|hợp\s*đồng|tình\s*trạng|kỹ\s*thuật|contract|inside)/i;
 
+const VENDOR_SCRIPT_RE =
+  /(jquery|bootstrap|kendo|popper|jszip|moment|fontawesome|lodash|polyfill)/i;
+
+const API_PATH_HINT_RE =
+  /(?:\/api\/|\/public\/|\/iptvinfo\/|\/Contract\/|\/DSLLLine\/|\/KillSession\/|\/networkConnection|\/radius)/i;
+
+const JS_ENDPOINT_RE =
+  /(?:\/api\/|\/public\/|\/iptvinfo\/|\/DSLLLine\/|\/KillSession\/|\/networkConnection|\/connection-parameters|\/online-session|\/last-access-error)[a-zA-Z0-9_\/\-${}.?=&]*/g;
+
 const MAX_STR_LEN = 80;
 const MAX_CONTROLS = 80;
 const MAX_RECORDED_REQUESTS = 40;
@@ -722,21 +731,236 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
   return { start, stop, getEntries, clear, isRecording };
 }
 
+function sanitizeApiHint(rawHint, baseUrl = '', contractId = '') {
+  if (!rawHint || typeof rawHint !== 'string') {
+    return '';
+  }
+  const trimmed = rawHint.trim();
+  if (!trimmed || /^javascript:/i.test(trimmed) || /^data:/i.test(trimmed) || trimmed === '#') {
+    return '';
+  }
+  const parts = parseSafeUrlParts(trimmed, baseUrl || 'http://inside.fpt.net/', contractId);
+  const queryPart =
+    parts.queryParamNames.length > 0 ? `?${parts.queryParamNames.join('&')}` : '';
+  const pathWithQuery = `${parts.pathname}${queryPart}`;
+  if (!pathWithQuery) return '';
+  if (parts.origin && /^https?:\/\//i.test(trimmed)) {
+    return replaceContractToken(`${parts.origin}${pathWithQuery}`, contractId, 160);
+  }
+  return replaceContractToken(pathWithQuery, contractId, 160);
+}
+
+function getAttrValue(attrStr, attrName) {
+  const re = new RegExp(`\\b${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const m = attrStr.match(re);
+  if (!m) return '';
+  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3] || '';
+}
+
+/**
+ * Quet an toan cac goi y API va bieu mau tu chuoi HTML (chi doc cau truc, khong doc PII/value).
+ */
+export function extractApiHintsFromHtml(htmlText, baseUrl = '', contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { scriptUrls: [], apiHints: [], forms: [], fields: [], buttons: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const scriptUrls = [];
+  const seenScripts = new Set();
+  const apiHints = [];
+  const seenHints = new Set();
+
+  let baseOrigin = '';
+  if (baseUrl) {
+    try {
+      baseOrigin = new URL(baseUrl).origin;
+    } catch {
+      baseOrigin = '';
+    }
+  }
+
+  function addHint(raw) {
+    const clean = sanitizeApiHint(raw, baseUrl, contractId);
+    if (!clean || seenHints.has(clean) || apiHints.length >= 60) return;
+    seenHints.add(clean);
+    apiHints.push(clean);
+  }
+
+  function scanScriptCode(codeText) {
+    const patterns = [
+      /url\s*:\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+      /fetch\s*\(\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+      /\$\.(?:get|post|getJSON|ajax)\s*\(\s*['"]([^'"\n]{2,200})['"]/gi,
+      /axios\.(?:get|post|put|delete|patch)\s*\(\s*['"`]([^'"`\n]{2,200})['"`]/gi,
+    ];
+    for (const re of patterns) {
+      let m;
+      while ((m = re.exec(codeText)) !== null) {
+        addHint(m[1]);
+      }
+    }
+    const litRe = /['"`]([^'"`\s<>]{4,200})['"`]/g;
+    let lm;
+    while ((lm = litRe.exec(codeText)) !== null) {
+      if (API_PATH_HINT_RE.test(lm[1])) {
+        addHint(lm[1]);
+      }
+    }
+  }
+
+  const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
+  let sm;
+  while ((sm = scriptRe.exec(withoutStyles)) !== null) {
+    const attrs = sm[1] || '';
+    const body = sm[2] || '';
+    const src = getAttrValue(attrs, 'src');
+    if (src) {
+      if (VENDOR_SCRIPT_RE.test(src)) continue;
+      try {
+        const u = new URL(src, baseUrl || 'http://inside.fpt.net/');
+        if (baseOrigin && u.origin !== baseOrigin) continue;
+        const cleanUrl = `${u.origin}${u.pathname}`;
+        if (!seenScripts.has(cleanUrl) && scriptUrls.length < 20) {
+          seenScripts.add(cleanUrl);
+          scriptUrls.push(cleanUrl);
+        }
+      } catch {
+        // Bo qua URL khong hop le
+      }
+    } else if (body.trim()) {
+      scanScriptCode(body);
+    }
+  }
+
+  const forms = [];
+  const formRe = /<form\b([^>]*)>/gi;
+  let fm;
+  while ((fm = formRe.exec(withoutStyles)) !== null && forms.length < 20) {
+    const attrs = fm[1] || '';
+    const actionRaw = getAttrValue(attrs, 'action');
+    const parsedAction = parseSafeUrlParts(
+      actionRaw,
+      baseUrl || 'http://inside.fpt.net/',
+      contractId
+    );
+    forms.push({
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      method: (getAttrValue(attrs, 'method') || 'GET').toUpperCase(),
+      actionPath: parsedAction.pathname,
+      queryParamNames: parsedAction.queryParamNames,
+    });
+  }
+
+  const fields = [];
+  const fieldRe = /<(input|select|textarea)\b([^>]*)>/gi;
+  let flm;
+  while ((flm = fieldRe.exec(withoutStyles)) !== null && fields.length < 60) {
+    const tag = flm[1].toLowerCase();
+    const attrs = flm[2] || '';
+    fields.push({
+      tag,
+      type: getAttrValue(attrs, 'type').toLowerCase(),
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      placeholder: truncateStr(getAttrValue(attrs, 'placeholder'), 40),
+    });
+  }
+
+  const buttons = [];
+  const btnRe = /<(button|a)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  let bm;
+  while ((bm = btnRe.exec(withoutStyles)) !== null && buttons.length < 50) {
+    const tag = bm[1].toLowerCase();
+    const attrs = bm[2] || '';
+    const innerText = bm[3].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const id = getAttrValue(attrs, 'id');
+    const name = getAttrValue(attrs, 'name');
+    const onclick = getAttrValue(attrs, 'onclick');
+    const href = getAttrValue(attrs, 'href');
+    if (tag === 'button' || id || onclick || API_PATH_HINT_RE.test(href)) {
+      const parsedHref = parseSafeUrlParts(
+        href,
+        baseUrl || 'http://inside.fpt.net/',
+        contractId
+      );
+      buttons.push({
+        tag,
+        id,
+        name,
+        text: replaceContractToken(innerText, contractId, 60),
+        hrefPath: parsedHref.pathname,
+        onclickSnippet: replaceContractToken(onclick, contractId, 180),
+      });
+    }
+  }
+
+  return { scriptUrls, apiHints, forms, fields, buttons };
+}
+
+/**
+ * Quet an toan cac duong dan API tu file JS rieng (khong doc du lieu nhay cam).
+ */
+export function extractApiHintsFromJs(jsText, contractId = '') {
+  if (!jsText || typeof jsText !== 'string') {
+    return [];
+  }
+
+  const hints = [];
+  const seen = new Set();
+
+  function addJsHint(raw) {
+    const clean = sanitizeApiHint(raw, '', contractId);
+    if (!clean || seen.has(clean) || hints.length >= 60) return;
+    seen.add(clean);
+    hints.push(clean);
+  }
+
+  let m;
+  const pathRe = new RegExp(JS_ENDPOINT_RE.source, 'g');
+  while ((m = pathRe.exec(jsText)) !== null) {
+    addJsHint(m[0]);
+  }
+
+  const callPatterns = [
+    /url\s*:\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+    /fetch\s*\(\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+    /axios\.(?:get|post|put|delete|patch)\s*\(\s*['"`]([^'"`\n]{3,200})['"`]/gi,
+  ];
+  for (const re of callPatterns) {
+    while ((m = re.exec(jsText)) !== null) {
+      addJsHint(m[1]);
+    }
+  }
+
+  return hints;
+}
+
 /**
  * Dong goi bao cao JSON sach se de nguoi dung copy hoac tai ve gui AI ghep API.
  */
-export function buildScanReport({ domSnapshot = null, networkEntries = [], portalId = 'inside' }) {
-  return JSON.stringify(
-    {
-      reportVersion: 'remote-inside-scan-v1',
-      portalId,
-      generatedAt: new Date().toISOString(),
-      privacyNote:
-        'Mat khau, cookie, token va thong tin ca nhan khach hang da duoc an tu dong.',
-      domSnapshot,
-      networkEntries,
-    },
-    null,
-    2
-  );
+export function buildScanReport({
+  domSnapshot = null,
+  networkEntries = [],
+  deepScan = null,
+  portalId = 'inside',
+}) {
+  const payload = {
+    reportVersion: 'remote-inside-scan-v1',
+    portalId,
+    generatedAt: new Date().toISOString(),
+    privacyNote:
+      'Mat khau, cookie, token va thong tin ca nhan khach hang da duoc an tu dong.',
+    domSnapshot,
+    networkEntries,
+  };
+  if (deepScan) {
+    payload.deepScan = deepScan;
+  }
+  return JSON.stringify(payload, null, 2);
 }

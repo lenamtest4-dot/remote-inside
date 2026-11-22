@@ -54,8 +54,8 @@ export const PORTALS = {
     fullName: 'port.fpt.net',
     url: 'https://port.fpt.net/',
     hosts: ['port.fpt.net'],
-    status: 'planned',
-    statusLabel: 'Sắp ghép',
+    status: 'in_progress',
+    statusLabel: 'Đang ghép',
     description: 'Kiểm tra, cấp mới và thu hồi Port cho hợp đồng.',
     actions: [
       {

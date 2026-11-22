@@ -25,13 +25,15 @@ import {
   redactPayload,
   redactResponseStructure,
 } from '../src/core/inspector.js';
+import { runPortAction } from '../src/adapters/port.js';
+import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
-function runTests() {
+async function runTests() {
   console.log('1. Checking built artifacts in dist/...');
   const userscriptPath = path.join(DIST_DIR, 'remote-inside.user.js');
   const previewPath = path.join(DIST_DIR, 'preview.html');
@@ -229,7 +231,33 @@ function runTests() {
   assert.equal(parsedReport.reportVersion, 'remote-inside-scan-v1');
   console.log('   OK: Inspector redaction & report tests passed.');
 
+  console.log('6. Testing port.fpt.net adapter (demo mode)...');
+  const portLookup = await runPortAction('lookup_port', ' sgn123456 ');
+  assert.equal(portLookup.status, 'ok');
+  assert.equal(portLookup.mode, 'demo');
+  assert.ok(
+    portLookup.summaryFields.some(
+      (f) => f.label === 'Mã hợp đồng' && f.value === 'SGN123456'
+    ),
+    'Port lookup demo result must include normalized Mã hợp đồng'
+  );
+  assert.equal((await runPortAction('lookup_port', '')).status, 'validation_error');
+  assert.equal((await runPortAction('unknown', 'SGN123456')).status, 'error');
+  assert.equal((await runPortAction('assign_port', 'SGN123456')).status, 'ok');
+  assert.equal((await runPortAction('release_port', 'SGN123456')).status, 'ok');
+  const routedLookup = await executePortalAction('port', 'lookup_port', 'sgn123456');
+  assert.ok(
+    routedLookup.title.includes('Thông tin Port'),
+    'executePortalAction must route port portal to port adapter'
+  );
+  assert.ok(userscriptContent.includes('runPortAction'), 'Userscript bundle must include runPortAction');
+  assert.equal(PORTALS.port.status, 'in_progress');
+  console.log('   OK: port.fpt.net adapter tests passed.');
+
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }
 
-runTests();
+runTests().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

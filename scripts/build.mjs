@@ -14,6 +14,7 @@ const MODULE_ORDER = [
   'core/transport.js',
   'core/inspector.js',
   'adapters/inside.js',
+  'adapters/port.js',
   'adapters/portals.js',
   'ui/app.js',
   'main.js',

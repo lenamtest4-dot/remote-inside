@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.1.1
+// @version      0.1.2
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -592,7 +592,7 @@ function isSensitiveKey(key) {
 }
 
 const OPS_KEYWORD_RE =
-  /(mac|reset|kill|session|osp|port|ipnat|ipv6|tra|tìm|search|thu\s*hồi|camera|clear|submit|cấp|xem|kiểm\s*tra|cập\s*nhật)/i;
+  /(mac|reset|kill|session|osp|port|ipnat|ipv6|tra|tìm|search|thu\s*hồi|camera|clear|submit|cấp|xem|kiểm\s*tra|cập\s*nhật|hợp\s*đồng|tình\s*trạng|kỹ\s*thuật|contract|inside)/i;
 
 const MAX_STR_LEN = 80;
 const MAX_CONTROLS = 80;
@@ -826,6 +826,53 @@ function getQueryParamNames(rawUrl, baseHref = 'https://inside.fpt.net/') {
   }
 }
 
+function parseSafeUrlParts(rawUrl, baseHref = 'https://inside.fpt.net/', contractId = '') {
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return { origin: '', pathname: '', queryParamNames: [] };
+  }
+  const trimmed = rawUrl.trim();
+  if (/^javascript:/i.test(trimmed)) {
+    return {
+      origin: '',
+      pathname: replaceContractToken(trimmed, contractId),
+      queryParamNames: [],
+    };
+  }
+  try {
+    const u = new URL(trimmed, baseHref);
+    return {
+      origin: u.origin && u.origin !== 'null' ? u.origin : '',
+      pathname: u.pathname || '',
+      queryParamNames: Array.from(new Set(u.searchParams.keys())),
+    };
+  } catch {
+    return {
+      origin: '',
+      pathname: replaceContractToken(trimmed.split('?')[0], contractId),
+      queryParamNames: [],
+    };
+  }
+}
+
+function collectFrameElements(targetDoc, baseHref, contractId) {
+  if (!targetDoc || !targetDoc.querySelectorAll) {
+    return [];
+  }
+  return Array.from(targetDoc.querySelectorAll('iframe, frame'))
+    .slice(0, 20)
+    .map((node) => {
+      const parsed = parseSafeUrlParts(node.getAttribute('src') || '', baseHref, contractId);
+      return {
+        tag: node.tagName.toLowerCase(),
+        id: node.id || '',
+        name: node.getAttribute('name') || '',
+        srcOrigin: parsed.origin,
+        srcPath: parsed.pathname,
+        srcQueryParamNames: parsed.queryParamNames,
+      };
+    });
+}
+
 /**
  * Quet cau truc DOM hien tai (Form, nut bam, script framework) - KHONG doc .value input.
  */
@@ -950,8 +997,11 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
     frameworks.push('ASP.NET WebForms');
   }
 
+  const frameElements = collectFrameElements(doc, baseHref, contractId);
+
   let isInFrame = false;
   const frameMap = [];
+  const sameOriginFrameSummary = [];
   if (win) {
     try {
       isInFrame = win.top !== win.self;
@@ -962,6 +1012,7 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
             const f = topWin.frames[i];
             const fLoc = f.location;
             const fDoc = f.document;
+            const fBase = (fLoc && fLoc.href) || baseHref;
             frameMap.push({
               index: i,
               name: String(f.name || ''),
@@ -969,6 +1020,42 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
               queryParamNames: fLoc && fLoc.href ? getQueryParamNames(fLoc.href, baseHref) : [],
               title: replaceContractToken((fDoc && fDoc.title) || '', contractId),
             });
+
+            if (fDoc && fDoc !== doc && sameOriginFrameSummary.length < 10) {
+              const nestedFrames = collectFrameElements(fDoc, fBase, contractId);
+              const rawLinks = fDoc.querySelectorAll
+                ? Array.from(fDoc.querySelectorAll('a[href], [onclick]'))
+                : [];
+              const menuLinks = [];
+              for (const link of rawLinks) {
+                const text = (link.textContent || link.getAttribute('title') || '')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                const hrefRaw = link.getAttribute('href') || '';
+                const onclickRaw = link.getAttribute('onclick') || '';
+                const id = link.id || '';
+                const name = link.getAttribute('name') || '';
+                if (!OPS_KEYWORD_RE.test(`${text} ${id} ${name} ${onclickRaw} ${hrefRaw}`)) {
+                  continue;
+                }
+                const parsedHref = parseSafeUrlParts(hrefRaw, fBase, contractId);
+                menuLinks.push({
+                  text: replaceContractToken(text, contractId),
+                  hrefOrigin: parsedHref.origin,
+                  hrefPath: parsedHref.pathname,
+                  hrefQueryParamNames: parsedHref.queryParamNames,
+                  onclickSnippet: replaceContractToken(onclickRaw, contractId),
+                });
+                if (menuLinks.length >= 50) break;
+              }
+              sameOriginFrameSummary.push({
+                index: i,
+                name: String(f.name || ''),
+                pathname: fLoc ? fLoc.pathname || '' : '',
+                nestedFrames,
+                menuLinks,
+              });
+            }
           } catch {
             frameMap.push({ index: i, crossOrigin: true });
           }
@@ -987,6 +1074,8 @@ function scanPageStructure(doc = document, loc = window.location, contractId = '
     title: replaceContractToken(doc.title || '', contractId),
     isInFrame,
     frameMap,
+    frameElements,
+    sameOriginFrameSummary,
     forms,
     actionControls,
     scriptHints: {

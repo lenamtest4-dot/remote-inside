@@ -79,8 +79,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.1.1'),
-    'Userscript must bump @version to 0.1.1'
+    userscriptContent.includes('@version      0.1.2'),
+    'Userscript must bump @version to 0.1.2'
   );
 
   // Parse JS syntax inside VM without executing
@@ -272,11 +272,23 @@ function runTests() {
       },
     ],
   };
+  const mockCrossOriginIframe = {
+    tagName: 'IFRAME',
+    id: 'mainContent',
+    getAttribute: (name) => {
+      if (name === 'name') return 'rightPane';
+      if (name === 'src') {
+        return 'https://inside-v5.fpt.net/contract/status?hd=SGN123456&token=secret123';
+      }
+      return '';
+    },
+  };
   const mockDoc = {
     title: 'Inside SGN123456',
     defaultView: mockWin,
     querySelectorAll: (sel) => {
       if (sel.includes('input[type="image"]')) return [mockControlJs, mockControlImg];
+      if (sel === 'iframe, frame') return [mockCrossOriginIframe];
       return [];
     },
     querySelector: () => null,
@@ -290,6 +302,13 @@ function runTests() {
   assert.equal(snap.frameMap.length, 1);
   assert.equal(snap.frameMap[0].name, 'mainFrame');
   assert.equal(snap.frameMap[0].title, 'Hop dong <CONTRACT_ID>');
+  assert.equal(snap.frameElements.length, 1);
+  assert.equal(snap.frameElements[0].srcOrigin, 'https://inside-v5.fpt.net');
+  assert.equal(snap.frameElements[0].srcPath, '/contract/status');
+  assert.deepEqual(snap.frameElements[0].srcQueryParamNames, ['hd', 'token']);
+  const serializedSnap = JSON.stringify(snap);
+  assert.equal(serializedSnap.includes('secret123'), false, 'Snapshot must never leak token param values');
+  assert.equal(serializedSnap.includes('SGN123456'), false, 'Snapshot must redact contract ID');
   const jsItem = snap.actionControls.find((c) => c.id === 'btnReset');
   assert.ok(jsItem, 'Must capture javascript: anchor control');
   assert.equal(jsItem.hrefPath, "javascript:resetMac('<CONTRACT_ID>')");

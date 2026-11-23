@@ -45,7 +45,7 @@
 (function () {
   'use strict';
   const __REMOTE_INSIDE_VERSION__ = "0.11.0";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -5862,7 +5862,15 @@ const DEPLOYMENT_ENDPOINTS = {
   syncOnline: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/sync-online',
   updateDeploymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/ticket/update-deployment-info',
   statusCompleted: 'https://fox-erp.fpt.net/app/tkbt/tk/api/status/completed',
+  getPaymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/payment/get-payment-info',
+  updateCameraPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/update-number-phone-camera',
 };
+const DEPLOYMENT_EQUIPMENT_TYPE = {
+  DEPLOY: 1,
+  REVOKE: 2,
+  EXTRA: 3,
+};
+const DEPLOYMENT_CAMERA_PHONE_TYPE = 96;
 const DEPLOYMENT_CATALOG_KEYS = {
   SUPPORT_STATUS: 'Deloyment_SupportINFStatus',
   REASON_DELAY: 'ReasonCheckInLate',
@@ -6028,6 +6036,35 @@ function mapAssignedEmployee(emp) {
     status: Number(emp.EmpStatus ?? 0),
   };
 }
+
+function formatDeploymentAppointment(ticketObj) {
+  if (!ticketObj || typeof ticketObj !== 'object') return '';
+  const direct = String(ticketObj.AppointmentDate || ticketObj.TimeAppointment || '').trim();
+  if (direct) return direct;
+
+  const info =
+    ticketObj.AppointmentInfo && typeof ticketObj.AppointmentInfo === 'object'
+      ? ticketObj.AppointmentInfo
+      : null;
+  if (!info) return '';
+
+  const pairs = [
+    [info.TimeZoneRed, info.AppointmentDateRed],
+    [info.TimeZoneBlue, info.AppointmentDateBlue],
+    [info.TimeZone, info.AppointmentDate],
+  ];
+  let chosen = '';
+  for (const [tz, dt] of pairs) {
+    const parts = [String(tz || '').trim(), String(dt || '').trim()].filter(Boolean);
+    if (parts.length > 0) {
+      chosen = parts.join(' • ');
+      break;
+    }
+  }
+  if (!chosen) return '';
+  const count = Number(info.Appointment ?? 0);
+  return count > 0 ? `${chosen} (${count} lần)` : chosen;
+}
 function normalizeTicketSummary(contractData, selectedSupId = 0) {
   const src = contractData && typeof contractData === 'object' ? contractData : {};
   const contract = String(src.Contract || '').trim();
@@ -6052,7 +6089,13 @@ function normalizeTicketSummary(contractData, selectedSupId = 0) {
       status,
       statusDesc,
       flag: Number(t.Flag ?? 0),
+      location: String(t.Location || '').trim(),
+      groupPoints: String(t.GroupPoints || '').trim(),
+      odcCableType: String(t.ODCCableType || '').trim(),
       blockDepName: String(t.BlockDepName || t.BlockName || '').trim(),
+      plotsName: String(t.PlotsName || '').trim(),
+      finishDate: String(t.FinishDate || '').trim(),
+      descriptionCs: String(t.DescriptionCs || '').trim(),
       mainEmp: mapAssignedEmployee(mainRaw),
       supportEmps: supportRaws.map(mapAssignedEmployee).filter(Boolean),
       reasonDelay: String(t.ReasonDelay ?? 0),
@@ -6064,8 +6107,8 @@ function normalizeTicketSummary(contractData, selectedSupId = 0) {
       notCompleteWifi: String(t.NotCompleteWifi ?? 0),
       reasonUnuseCapLan: String(t.ReasonUnuseCapLan ?? 0),
       ordersCount: Array.isArray(t.OrdersInfo) ? t.OrdersInfo.length : 0,
-      appointmentDate: String(t.AppointmentDate || t.TimeAppointment || '').trim(),
-      depTypeDesc: String(t.DepTypeDesc || t.TypeDesc || '').trim(),
+      appointmentDate: formatDeploymentAppointment(t),
+      depTypeDesc: String(t.CustypeDesc || t.DepTypeDesc || t.TypeDesc || '').trim(),
     };
   });
 
@@ -6080,9 +6123,10 @@ function normalizeTicketSummary(contractData, selectedSupId = 0) {
     objId: Number(src.ObjId ?? 0),
     contract,
     fullName: String(src.FullName || '').trim(),
-    address: String(src.Address || '').trim(),
+    address: String(src.Address || (ticket && ticket.location) || '').trim(),
     nameObj: String(src.NameObj || '').trim(),
     localTypeName: String(src.LocalTypeName || '').trim(),
+    statusContract: Number(src.StatusContract ?? 0),
     statusContractDesc: String(src.StatusContractDesc || 'Bình thường').trim(),
     customerPhone: String(src.CustomerPhone || '').trim(),
     customerPhoneToken: String(src.CustomerPhoneToken || '').trim(),
@@ -6098,7 +6142,7 @@ function normalizeEquipmentList(rows) {
   const mapped = list.map((r) => {
     const typeId = Number(r.TypeId ?? 0);
     const mac = String(r.Mac || '').trim();
-    const isRevoke = typeId === 3;
+    const isRevoke = typeId === DEPLOYMENT_EQUIPMENT_TYPE.REVOKE;
     const isMac = Number(r.IsMac ?? 0) === 1 || Boolean(mac);
     return {
       efId: Number(r.EfId ?? 0),
@@ -6108,6 +6152,9 @@ function normalizeEquipmentList(rows) {
       quantity: Number(r.Quantity ?? 0),
       typeId,
       isRevoke,
+      isDeploy: Number(r.IsDeploy ?? 0) === 1,
+      returnStatus: Number(r.ReturnStatus ?? 0),
+      causeReturn: Number(r.CauseReturn ?? 0),
       isMac,
       mac,
       functionName: String(r.FunctionName || '').trim(),
@@ -6118,7 +6165,7 @@ function normalizeEquipmentList(rows) {
 
   const importItems = mapped
     .filter((item) => !item.isRevoke)
-    .sort((a, b) => Number(b.isMac) - Number(a.isMac));
+    .sort((a, b) => Number(b.isMac) - Number(a.isMac) || a.typeId - b.typeId);
   const revokeItems = mapped
     .filter((item) => item.isRevoke)
     .sort((a, b) => Number(b.isMac) - Number(a.isMac));
@@ -6192,9 +6239,9 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
     ObjId: 1000001,
     Contract: cleanId,
     FullName: 'NGUYEN VAN MAU',
-    Address: '123 Duong Mau, Phuong Mau, TP.HCM',
     NameObj: 'Giga',
     LocalTypeName: 'Giga - FTTx (Demo)',
+    StatusContract: 1,
     StatusContractDesc: 'Bình thường',
     CustomerPhone: '090****001',
     CustomerPhoneToken: 'demo_phone_token_1',
@@ -6208,14 +6255,23 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
         Status: 0,
         StatusDesc: 'Đang xử lý',
         Flag: 1,
-        BlockDepName: 'Khu vuc Mau 01 (L01)',
+        Location: '123 Duong Mau, Phuong Mau, TP.HCM',
+        GroupPoints: 'HCM-ODC-01/HO',
+        ODCCableType: 'HCM-ODC-01/HO-1/1-G',
+        BlockDepName: 'Khu vuc Mau 01',
+        PlotsName: 'L01',
+        DescriptionCs: 'Ghi chu CS mau',
         ReasonDelay: 0,
         DescriptionRd: '',
         ReasonHiFPT: 0,
         NotCompleteWifi: 0,
         ReasonUnuseCapLan: 0,
-        AppointmentDate: '10:00-12:00 • 26/11/2026',
-        DepTypeDesc: 'Triển khai mới',
+        AppointmentInfo: {
+          Appointment: 1,
+          TimeZoneBlue: '10:00 - 12:00',
+          AppointmentDateBlue: '26/11/2026 12:00:00',
+        },
+        CustypeDesc: 'Triển khai mới',
         ConstrucInfo: { Indoor: '70', Outdoor: '35', OutDoorReUsed: 0 },
         OrdersInfo: [{ OrderId: 1 }, { OrderId: 2 }],
         AssignEmpInfo: [
@@ -6275,7 +6331,7 @@ const DEMO_EQUIPMENTS = [
     Name: 'Dây thuê bao quang đệm chặt 1 core',
     Description: 'Cáp FTTH',
     Quantity: 70,
-    TypeId: 1,
+    TypeId: 3,
     IsMac: 0,
     Mac: '',
     ServiceName: 'Cáp',
@@ -6286,7 +6342,7 @@ const DEMO_EQUIPMENTS = [
     Name: 'Dây rút / Vật tư phụ',
     Description: 'Vật tư phụ khác',
     Quantity: 10,
-    TypeId: 1,
+    TypeId: 3,
     IsMac: 0,
     Mac: '',
     ServiceName: 'Vật tư phụ khác',
@@ -6294,10 +6350,26 @@ const DEMO_EQUIPMENTS = [
 ];
 
 const DEMO_PHONES = [
-  { ObjId: 1000001, Type: 1, Phone: '090****001', PhoneToken: 'demo_tok_main', DescriptionVn: 'Số chính chủ' },
-  { ObjId: 1000001, Type: 2, Phone: '090****001', PhoneToken: 'demo_tok_cmr', DescriptionVn: 'SĐT CMR' },
+  { ObjId: 1000001, Type: 5, Phone: '090****001', PhoneToken: 'demo_tok_main', DescriptionVn: 'Số chính chủ' },
+  { ObjId: 1000001, Type: 96, Phone: '090****001', PhoneToken: 'demo_tok_cmr', DescriptionVn: 'SĐT CMR' },
   { ObjId: 1000001, Type: 3, Phone: '090****001', PhoneToken: 'demo_tok_play', DescriptionVn: 'SĐT FPTPlay' },
 ];
+
+const DEMO_PAYMENT = {
+  SumMoneyPaid: 300000,
+  SumMoneyUnPaid: 0,
+  PaymentStatus: true,
+  PaymentStatusDesc: 'Đã thanh toán',
+  PaymentStatusCode: 1,
+  ServiceFeesDetail: [
+    {
+      ShortNameVN: 'Phí lắp đặt Internet',
+      Money: 300000,
+      Status: 1,
+    },
+  ],
+  TicketFeesDetail: [],
+};
 
 const DEMO_RECORDS = [
   {
@@ -6423,6 +6495,7 @@ async function fetchDeploymentTicket(
       summary,
       dataFilter: summary.dataFilter,
       equipments: normalizeEquipmentList(DEMO_EQUIPMENTS),
+      paymentInfo: normalizePaymentInfo(DEMO_PAYMENT),
       modemMetrics: {
         Ip: '192.0.2.10',
         MacAddress: '00:11:22:33:44:55',
@@ -6509,7 +6582,7 @@ async function fetchDeploymentTicket(
   const grant = summary.grant || '';
   const activeSupId = summary.ticket ? summary.ticket.supId : 0;
 
-  const [cfgSet, eqSet, metricsSet] = await Promise.allSettled([
+  const [cfgSet, eqSet, metricsSet, paySet] = await Promise.allSettled([
     summary.dataFilter.length === 0
       ? postFoxJson(DEPLOYMENT_ENDPOINTS.getConfigByParent, null, { grant })
       : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: summary.dataFilter } }),
@@ -6522,6 +6595,13 @@ async function fetchDeploymentTicket(
       : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: [] } }),
     summary.contract
       ? postFoxJson(DEPLOYMENT_ENDPOINTS.getModemMetrics, { Contract: summary.contract }, { grant })
+      : Promise.resolve({ status: 'ok', json: { Succeeded: false, Data: null } }),
+    summary.objId && activeSupId
+      ? postFoxJson(
+          DEPLOYMENT_ENDPOINTS.getPaymentInfo,
+          { ObjId: summary.objId, SupId: activeSupId },
+          { grant }
+        )
       : Promise.resolve({ status: 'ok', json: { Succeeded: false, Data: null } }),
   ]);
 
@@ -6555,6 +6635,15 @@ async function fetchDeploymentTicket(
       ? metricsSet.value.json.Data || null
       : null;
 
+  const rawPayment =
+    paySet.status === 'fulfilled' &&
+    paySet.value &&
+    paySet.value.status === 'ok' &&
+    paySet.value.json &&
+    paySet.value.json.Succeeded
+      ? paySet.value.json.Data || null
+      : null;
+
   return {
     status: 'ok',
     mode: 'live',
@@ -6564,6 +6653,7 @@ async function fetchDeploymentTicket(
     summary: { ...summary, dataFilter },
     dataFilter,
     equipments: normalizeEquipmentList(rawEquipments),
+    paymentInfo: normalizePaymentInfo(rawPayment),
     modemMetrics,
   };
 }
@@ -6658,6 +6748,106 @@ async function revealDeploymentPhone({ token, objId, supId, grant = '', forceDem
     return { status: 'error', message: res.json.Message || 'Không giải mã được số điện thoại.' };
   }
   return { status: 'ok', mode: 'live', phone: String(res.json.Data) };
+}
+function normalizePaymentInfo(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const rawService = Array.isArray(raw.ServiceFeesDetail) ? raw.ServiceFeesDetail : [];
+  const rawTicket = Array.isArray(raw.TicketFeesDetail) ? raw.TicketFeesDetail : [];
+  return {
+    sumMoneyPaid: Number(raw.SumMoneyPaid ?? 0),
+    sumMoneyUnPaid: Number(raw.SumMoneyUnPaid ?? 0),
+    paymentStatus: Boolean(raw.PaymentStatus),
+    paymentStatusDesc: String(raw.PaymentStatusDesc || 'Không có khoản thu').trim(),
+    serviceFees: rawService.map((f) => ({
+      name: String(f.ShortNameVN || f.ShortName || 'Khoản thu').trim(),
+      money: Number(f.Money ?? 0),
+      status: Number(f.Status ?? 0),
+    })),
+    ticketFees: rawTicket.map((f) => ({
+      description: String(f.PaymentDescription || '').trim(),
+      feePayment: Number(f.FeePayment ?? 0),
+      feePaymentPaid: Number(f.FeePaymentPaid ?? 0),
+      statusPayment: Number(f.StatusPayment ?? 0),
+      paymentQuantity: Number(f.PaymentQuantity ?? 0),
+      unit: String(f.EquipmentUnit || '').trim(),
+    })),
+  };
+}
+async function fetchDeploymentPayment({ objId, supId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', paymentInfo: normalizePaymentInfo(DEMO_PAYMENT) };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getPaymentInfo,
+    { ObjId: Number(objId) || 0, SupId: Number(supId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return { status: 'error', message: res.json.Message || 'Không tải được thông tin Khoản thu.' };
+  }
+  return { status: 'ok', mode: 'live', paymentInfo: normalizePaymentInfo(res.json.Data) };
+}
+function validateCameraPhoneNumber(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) {
+    return { valid: false, value: '', error: 'Vui lòng nhập số điện thoại CMR mới.' };
+  }
+  if (!/^\d+$/.test(value)) {
+    return { valid: false, value, error: 'Số điện thoại CMR chỉ được gồm chữ số.' };
+  }
+  return { valid: true, value, error: '' };
+}
+function canEditDeploymentCameraPhone(phoneItem, summary) {
+  if (!phoneItem || !summary) return false;
+  return (
+    Number(phoneItem.Type) === DEPLOYMENT_CAMERA_PHONE_TYPE &&
+    Boolean(phoneItem.PhoneToken) &&
+    Number(summary.statusContract) === 1 &&
+    Boolean(summary.ticket && summary.ticket.supId)
+  );
+}
+async function updateDeploymentCameraPhone({
+  objId,
+  supId,
+  contract,
+  oldPhoneNumberToken,
+  phoneNumber,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateCameraPhoneNumber(phoneNumber);
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: `Đã cập nhật SĐT CMR sang ${check.value} (mẫu mô phỏng).`,
+    };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.updateCameraPhone,
+    {
+      ObjId: Number(objId) || 0,
+      SupId: Number(supId) || 0,
+      Contract: normalizeContractId(contract),
+      OldPhoneNumberToken: String(oldPhoneNumberToken || ''),
+      PhoneNumber: check.value,
+    },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded
+        ? `Cập nhật SĐT CMR thành công (${check.value}).`
+        : 'Không cập nhật được SĐT CMR.'),
+  };
 }
 async function fetchDeploymentEContracts({ objId, grant = '', forceDemo = false } = {}) {
   if (!isUserscriptEnv() || forceDemo) {
@@ -8686,6 +8876,12 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
 
 
 
+function formatVndAmount(amount) {
+  const num = Number(amount ?? 0);
+  if (!Number.isFinite(num)) return '0 đ';
+  return `${num.toLocaleString('vi-VN')} đ`;
+}
+
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -9140,12 +9336,15 @@ function mountRemoteInside({
     state.deploySummary = null;
     state.deployDataFilter = [];
     state.deployEquipments = { importItems: [], revokeItems: [], macCount: 0 };
+    state.deployPayment = null;
     state.deployModemMetrics = null;
     state.deployPhonesLoading = false;
     state.deployPhonesError = '';
     state.deployPhones = [];
     state.deployRevealedPhones = {};
     state.deployRevealingToken = '';
+    state.deployEditingPhoneToken = '';
+    state.deployEditingPhoneValue = '';
     state.deployEContractsLoading = false;
     state.deployEContractsError = '';
     state.deployEContracts = [];
@@ -9555,6 +9754,23 @@ function mountRemoteInside({
     }
   }
 
+  async function refreshDeployPaymentInModal() {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !summary.objId || !ticket || !ticket.supId) return;
+    const payRes = await fetchDeploymentPayment({
+      objId: summary.objId,
+      supId: ticket.supId,
+      grant: state.deployGrant || '',
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+      return;
+    }
+    if (payRes.status === 'ok') {
+      state.deployPayment = payRes.paymentInfo || null;
+    }
+  }
+
   async function refreshDeployMetricsInModal() {
     const summary = state.deploySummary;
     if (!summary || !summary.contract) return;
@@ -9589,7 +9805,7 @@ function mountRemoteInside({
     state.deployArmedAction = '';
     applyDeployTicketDraftFromSummary(state.deploySummary);
     renderConfirm();
-    await refreshDeployEquipmentsInModal();
+    await Promise.all([refreshDeployEquipmentsInModal(), refreshDeployPaymentInModal()]);
     if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
     renderConfirm();
   }
@@ -9625,6 +9841,7 @@ function mountRemoteInside({
       state.deploySummary = res.summary || null;
       state.deployDataFilter = Array.isArray(res.dataFilter) ? res.dataFilter : [];
       state.deployEquipments = res.equipments || { importItems: [], revokeItems: [], macCount: 0 };
+      state.deployPayment = res.paymentInfo || null;
       state.deployModemMetrics = res.modemMetrics || null;
       applyDeployTicketDraftFromSummary(state.deploySummary);
       if (
@@ -9843,6 +10060,38 @@ function mountRemoteInside({
           grant: state.deployGrant || '',
         }),
       onOk: () => loadDeployExtrasForModal({ forceReload: true }),
+    });
+  }
+
+  async function handleDeployUpdateCameraPhone(item) {
+    if (!item || !item.PhoneToken) return;
+    const check = validateCameraPhoneNumber(state.deployEditingPhoneValue);
+    if (!check.valid) {
+      state.deployArmedAction = '';
+      state.deployNotice = check.error;
+      state.deployNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+    return runDeployMutation({
+      busyKey: 'edit_cmr_phone',
+      pendingText: `Đang cập nhật SĐT CMR sang ${check.value}…`,
+      fallbackErr: 'Không cập nhật được SĐT CMR.',
+      logAction: 'Đổi SĐT CMR phiếu TK',
+      fn: (summary, ticket) =>
+        updateDeploymentCameraPhone({
+          objId: summary.objId,
+          supId: ticket.supId,
+          contract: summary.contract,
+          oldPhoneNumberToken: item.PhoneToken,
+          phoneNumber: check.value,
+          grant: state.deployGrant || '',
+        }),
+      onOk: async () => {
+        state.deployEditingPhoneToken = '';
+        state.deployEditingPhoneValue = '';
+        await loadDeployExtrasForModal({ forceReload: true });
+      },
     });
   }
 
@@ -12605,16 +12854,27 @@ function mountRemoteInside({
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
     const sheetParts = [
-      el('h2', {
-        className: 'ri-sheet-title',
-        text: isInsideKill
-          ? 'Kill Session — Phiên đang chạy'
-          : isInsideDeploy
-          ? 'Phiếu triển khai FOX-ERP'
-          : isInsideBypass
-          ? 'CheckList ByPass'
-          : `Xác nhận ${act.label}?`,
-      }),
+      el('div', { className: 'ri-log-head' }, [
+        el('h2', {
+          className: 'ri-sheet-title',
+          text: isInsideKill
+            ? 'Kill Session — Phiên đang chạy'
+            : isInsideDeploy
+            ? 'Phiếu triển khai FOX-ERP'
+            : isInsideBypass
+            ? 'CheckList ByPass'
+            : `Xác nhận ${act.label}?`,
+        }),
+        el('button', {
+          type: 'button',
+          className: 'ri-icon-btn',
+          text: 'Đóng',
+          onClick: () => {
+            resetConfirmState();
+            render();
+          },
+        }),
+      ]),
       el('p', {
         className: 'ri-sheet-sub',
         text: isInsideKill
@@ -14046,19 +14306,56 @@ function mountRemoteInside({
           const mainEmpText = ticket.mainEmp
             ? [ticket.mainEmp.account, ticket.mainEmp.phone].filter(Boolean).join(' • ')
             : '';
+          const csNoteRaw = String(ticket.descriptionCs || '').replace(/\s+/g, ' ').trim();
+          const csNoteText = csNoteRaw.length > 220 ? `${csNoteRaw.slice(0, 217)}…` : csNoteRaw;
+          const byPassLabel =
+            metrics && metrics.StatusByPass === true
+              ? 'Có (ByPass)'
+              : metrics && metrics.StatusByPass === false
+              ? 'Không'
+              : (metrics && metrics.StatusByPass) || '—';
+
           sheetParts.push(
             buildDeployKvList([
               ['Mã phiếu', ticket.depCode],
               ['Tình trạng', ticket.statusDesc],
+              ['Loại triển khai', ticket.depTypeDesc],
               ['Khách hàng', summary.fullName],
-              ['Địa chỉ', summary.address],
+              ['Địa chỉ', ticket.location || summary.address],
               ['Gói / Dịch vụ', [summary.nameObj, summary.localTypeName].filter(Boolean).join(' • ')],
-              ['Tập điểm / Block', ticket.blockDepName],
+              ['Tập điểm / Port', ticket.odcCableType || ticket.groupPoints],
+              ['Block', [ticket.blockDepName, ticket.plotsName].filter(Boolean).join(' • ')],
               ['KTV chính', mainEmpText || 'Chưa phân công'],
               ['Lịch hẹn', ticket.appointmentDate],
+              ['Ngày hoàn tất', ticket.finishDate],
               ['Cáp khảo sát', `Indoor: ${ticket.indoor || '0'}m • Outdoor: ${ticket.outdoor || '0'}m`],
+              ['Ghi chú CS', csNoteText],
             ])
           );
+
+          const payment = state.deployPayment;
+          if (payment) {
+            const paymentRows = [
+              ['Tình trạng thanh toán', payment.paymentStatusDesc],
+              ['Đã thanh toán', formatVndAmount(payment.sumMoneyPaid)],
+              ['Chưa thanh toán', formatVndAmount(payment.sumMoneyUnPaid)],
+            ];
+            for (const fee of payment.serviceFees || []) {
+              paymentRows.push([fee.name || 'Khoản thu', formatVndAmount(fee.money)]);
+            }
+            for (const tf of payment.ticketFees || []) {
+              if (tf.feePayment > 0 || tf.feePaymentPaid > 0) {
+                const amt = tf.feePayment > 0 ? tf.feePayment : tf.feePaymentPaid;
+                paymentRows.push([tf.description || 'Phí phát sinh', formatVndAmount(amt)]);
+              }
+            }
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Khoản thu' }),
+                buildDeployKvList(paymentRows),
+              ])
+            );
+          }
 
           sheetParts.push(
             el('div', { className: 'ri-confirm-input-wrap' }, [
@@ -14078,7 +14375,7 @@ function mountRemoteInside({
                     ['ONU RX / TX', `${metrics.OnuRxPower ?? '—'} / ${metrics.OnuTxPower ?? '—'}`],
                     ['RX Tập điểm', metrics.RxGroupPoints ?? '—'],
                     ['LastMile', metrics.LastMile != null ? `${metrics.LastMile} m` : '—'],
-                    ['ByPass', metrics.StatusByPass || '—'],
+                    ['ByPass', byPassLabel],
                     ['Online đầu tiên', metrics.FirstOnlineMacDate || '—'],
                   ])
                 : el('div', {
@@ -14334,6 +14631,14 @@ function mountRemoteInside({
               ])
             );
           } else {
+            const allEContractsSigned =
+              state.deployEContracts.length > 0 &&
+              state.deployEContracts.every(
+                (rec) =>
+                  /signed/i.test(String(rec && rec.State ? rec.State : '')) &&
+                  !/pending/i.test(String(rec && rec.State ? rec.State : ''))
+              );
+
             sheetParts.push(
               el(
                 'div',
@@ -14341,34 +14646,116 @@ function mountRemoteInside({
                 state.deployPhones.map((item) => {
                   const revealed = item.PhoneToken ? state.deployRevealedPhones[item.PhoneToken] : '';
                   const isRevealing = item.PhoneToken && state.deployRevealingToken === item.PhoneToken;
+                  const canEditCmr = canEditDeploymentCameraPhone(item, summary);
+                  const isEditingCmr = canEditCmr && state.deployEditingPhoneToken === item.PhoneToken;
+
+                  const phoneActions = [];
+                  if (revealed) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-secondary-btn',
+                        text: 'Sao chép SĐT',
+                        onClick: async () => {
+                          await copyTextSafe(revealed);
+                          state.deployNotice = `Đã sao chép ${revealed} vào bộ nhớ tạm.`;
+                          state.deployNoticeTone = 'ok';
+                          renderConfirm();
+                        },
+                      })
+                    );
+                  } else if (item.PhoneToken) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-primary-btn',
+                        disabled: Boolean(state.deployRevealingToken),
+                        text: isRevealing ? 'Đang hiện…' : 'Hiện SĐT đầy đủ',
+                        onClick: () => handleDeployRevealPhone(item),
+                      })
+                    );
+                  }
+
+                  if (canEditCmr && !isEditingCmr) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-secondary-btn',
+                        disabled: isBusy,
+                        text: 'Sửa SĐT CMR',
+                        onClick: () => {
+                          state.deployEditingPhoneToken = item.PhoneToken;
+                          state.deployEditingPhoneValue = revealed || '';
+                          state.deployArmedAction = '';
+                          state.deployNotice = '';
+                          renderConfirm();
+                        },
+                      })
+                    );
+                  }
+
+                  let editCmrWrap = null;
+                  if (isEditingCmr) {
+                    const cmrInput = el('input', {
+                      type: 'tel',
+                      inputmode: 'numeric',
+                      className: 'ri-confirm-input',
+                      id: 'ri-deploy-cmr-phone',
+                      placeholder: 'Nhập SĐT CMR mới (chỉ gồm chữ số)…',
+                      autocomplete: 'off',
+                      value: state.deployEditingPhoneValue || '',
+                    });
+                    cmrInput.value = state.deployEditingPhoneValue || '';
+                    cmrInput.addEventListener('input', (e) => {
+                      state.deployEditingPhoneValue = e.target.value;
+                    });
+
+                    editCmrWrap = el('div', { className: 'ri-confirm-input-wrap' }, [
+                      el('label', {
+                        className: 'ri-confirm-label',
+                        for: 'ri-deploy-cmr-phone',
+                        text: 'Số điện thoại CMR mới',
+                      }),
+                      cmrInput,
+                      allEContractsSigned
+                        ? el('div', {
+                            className: 'ri-field-hint',
+                            'data-state': 'warn',
+                            text: 'Tất cả BBĐT đã ký — FOX-ERP vẫn mở sửa SĐT CMR khi HĐ bình thường; nếu máy chủ khóa sẽ báo chi tiết.',
+                          })
+                        : null,
+                      el('div', { className: 'ri-result-actions' }, [
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-secondary-btn',
+                          disabled: isBusy,
+                          text: 'Hủy',
+                          onClick: () => {
+                            state.deployEditingPhoneToken = '';
+                            state.deployEditingPhoneValue = '';
+                            state.deployArmedAction = '';
+                            renderConfirm();
+                          },
+                        }),
+                        buildArmedConfirmRow({
+                          armKey: `edit_cmr_phone:${item.PhoneToken}`,
+                          idleLabel: 'Lưu SĐT CMR',
+                          idleClass: 'ri-primary-btn',
+                          confirmLabel: 'Xác nhận đổi SĐT CMR',
+                          busyKey: 'edit_cmr_phone',
+                          onConfirm: () => handleDeployUpdateCameraPhone(item),
+                        }),
+                      ]),
+                    ]);
+                  }
+
                   return el('div', { className: 'ri-session-card' }, [
                     el('div', {
                       className: 'ri-session-ip',
                       text: `${item.DescriptionVn || 'Số điện thoại'}: ${revealed || item.Phone || '—'}`,
                     }),
-                    el('div', { className: 'ri-session-actions' }, [
-                      revealed
-                        ? el('button', {
-                            type: 'button',
-                            className: 'ri-secondary-btn',
-                            text: 'Sao chép SĐT',
-                            onClick: async () => {
-                              await copyTextSafe(revealed);
-                              state.deployNotice = `Đã sao chép ${revealed} vào bộ nhớ tạm.`;
-                              state.deployNoticeTone = 'ok';
-                              renderConfirm();
-                            },
-                          })
-                        : item.PhoneToken
-                        ? el('button', {
-                            type: 'button',
-                            className: 'ri-primary-btn',
-                            disabled: Boolean(state.deployRevealingToken),
-                            text: isRevealing ? 'Đang hiện…' : 'Hiện SĐT đầy đủ',
-                            onClick: () => handleDeployRevealPhone(item),
-                          })
-                        : null,
-                    ]),
+                    el('div', { className: 'ri-session-actions' }, phoneActions),
+                    editCmrWrap,
                   ]);
                 })
               )

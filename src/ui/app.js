@@ -77,11 +77,13 @@ import {
 import {
   DEPLOYMENT_CATALOG_KEYS,
   DEPLOYMENT_ENDPOINTS,
+  canEditDeploymentCameraPhone,
   clearDeploymentTicketMac,
   completeDeploymentTicket,
   fetchDeploymentEContracts,
   fetchDeploymentEquipments,
   fetchDeploymentModemMetrics,
+  fetchDeploymentPayment,
   fetchDeploymentPhones,
   fetchDeploymentTicket,
   normalizeTicketSummary,
@@ -89,9 +91,17 @@ import {
   revealDeploymentPhone,
   signDeploymentEContract,
   syncDeploymentOnline,
+  updateDeploymentCameraPhone,
   updateDeploymentConstruction,
+  validateCameraPhoneNumber,
 } from '../adapters/deployment.js';
 import { executePortalAction } from '../adapters/portals.js';
+
+function formatVndAmount(amount) {
+  const num = Number(amount ?? 0);
+  if (!Number.isFinite(num)) return '0 đ';
+  return `${num.toLocaleString('vi-VN')} đ`;
+}
 
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
@@ -547,12 +557,15 @@ export function mountRemoteInside({
     state.deploySummary = null;
     state.deployDataFilter = [];
     state.deployEquipments = { importItems: [], revokeItems: [], macCount: 0 };
+    state.deployPayment = null;
     state.deployModemMetrics = null;
     state.deployPhonesLoading = false;
     state.deployPhonesError = '';
     state.deployPhones = [];
     state.deployRevealedPhones = {};
     state.deployRevealingToken = '';
+    state.deployEditingPhoneToken = '';
+    state.deployEditingPhoneValue = '';
     state.deployEContractsLoading = false;
     state.deployEContractsError = '';
     state.deployEContracts = [];
@@ -962,6 +975,23 @@ export function mountRemoteInside({
     }
   }
 
+  async function refreshDeployPaymentInModal() {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !summary.objId || !ticket || !ticket.supId) return;
+    const payRes = await fetchDeploymentPayment({
+      objId: summary.objId,
+      supId: ticket.supId,
+      grant: state.deployGrant || '',
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+      return;
+    }
+    if (payRes.status === 'ok') {
+      state.deployPayment = payRes.paymentInfo || null;
+    }
+  }
+
   async function refreshDeployMetricsInModal() {
     const summary = state.deploySummary;
     if (!summary || !summary.contract) return;
@@ -996,7 +1026,7 @@ export function mountRemoteInside({
     state.deployArmedAction = '';
     applyDeployTicketDraftFromSummary(state.deploySummary);
     renderConfirm();
-    await refreshDeployEquipmentsInModal();
+    await Promise.all([refreshDeployEquipmentsInModal(), refreshDeployPaymentInModal()]);
     if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
     renderConfirm();
   }
@@ -1032,6 +1062,7 @@ export function mountRemoteInside({
       state.deploySummary = res.summary || null;
       state.deployDataFilter = Array.isArray(res.dataFilter) ? res.dataFilter : [];
       state.deployEquipments = res.equipments || { importItems: [], revokeItems: [], macCount: 0 };
+      state.deployPayment = res.paymentInfo || null;
       state.deployModemMetrics = res.modemMetrics || null;
       applyDeployTicketDraftFromSummary(state.deploySummary);
       if (
@@ -1250,6 +1281,38 @@ export function mountRemoteInside({
           grant: state.deployGrant || '',
         }),
       onOk: () => loadDeployExtrasForModal({ forceReload: true }),
+    });
+  }
+
+  async function handleDeployUpdateCameraPhone(item) {
+    if (!item || !item.PhoneToken) return;
+    const check = validateCameraPhoneNumber(state.deployEditingPhoneValue);
+    if (!check.valid) {
+      state.deployArmedAction = '';
+      state.deployNotice = check.error;
+      state.deployNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+    return runDeployMutation({
+      busyKey: 'edit_cmr_phone',
+      pendingText: `Đang cập nhật SĐT CMR sang ${check.value}…`,
+      fallbackErr: 'Không cập nhật được SĐT CMR.',
+      logAction: 'Đổi SĐT CMR phiếu TK',
+      fn: (summary, ticket) =>
+        updateDeploymentCameraPhone({
+          objId: summary.objId,
+          supId: ticket.supId,
+          contract: summary.contract,
+          oldPhoneNumberToken: item.PhoneToken,
+          phoneNumber: check.value,
+          grant: state.deployGrant || '',
+        }),
+      onOk: async () => {
+        state.deployEditingPhoneToken = '';
+        state.deployEditingPhoneValue = '';
+        await loadDeployExtrasForModal({ forceReload: true });
+      },
     });
   }
 
@@ -4012,16 +4075,27 @@ export function mountRemoteInside({
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
     const sheetParts = [
-      el('h2', {
-        className: 'ri-sheet-title',
-        text: isInsideKill
-          ? 'Kill Session — Phiên đang chạy'
-          : isInsideDeploy
-          ? 'Phiếu triển khai FOX-ERP'
-          : isInsideBypass
-          ? 'CheckList ByPass'
-          : `Xác nhận ${act.label}?`,
-      }),
+      el('div', { className: 'ri-log-head' }, [
+        el('h2', {
+          className: 'ri-sheet-title',
+          text: isInsideKill
+            ? 'Kill Session — Phiên đang chạy'
+            : isInsideDeploy
+            ? 'Phiếu triển khai FOX-ERP'
+            : isInsideBypass
+            ? 'CheckList ByPass'
+            : `Xác nhận ${act.label}?`,
+        }),
+        el('button', {
+          type: 'button',
+          className: 'ri-icon-btn',
+          text: 'Đóng',
+          onClick: () => {
+            resetConfirmState();
+            render();
+          },
+        }),
+      ]),
       el('p', {
         className: 'ri-sheet-sub',
         text: isInsideKill
@@ -5453,19 +5527,56 @@ export function mountRemoteInside({
           const mainEmpText = ticket.mainEmp
             ? [ticket.mainEmp.account, ticket.mainEmp.phone].filter(Boolean).join(' • ')
             : '';
+          const csNoteRaw = String(ticket.descriptionCs || '').replace(/\s+/g, ' ').trim();
+          const csNoteText = csNoteRaw.length > 220 ? `${csNoteRaw.slice(0, 217)}…` : csNoteRaw;
+          const byPassLabel =
+            metrics && metrics.StatusByPass === true
+              ? 'Có (ByPass)'
+              : metrics && metrics.StatusByPass === false
+              ? 'Không'
+              : (metrics && metrics.StatusByPass) || '—';
+
           sheetParts.push(
             buildDeployKvList([
               ['Mã phiếu', ticket.depCode],
               ['Tình trạng', ticket.statusDesc],
+              ['Loại triển khai', ticket.depTypeDesc],
               ['Khách hàng', summary.fullName],
-              ['Địa chỉ', summary.address],
+              ['Địa chỉ', ticket.location || summary.address],
               ['Gói / Dịch vụ', [summary.nameObj, summary.localTypeName].filter(Boolean).join(' • ')],
-              ['Tập điểm / Block', ticket.blockDepName],
+              ['Tập điểm / Port', ticket.odcCableType || ticket.groupPoints],
+              ['Block', [ticket.blockDepName, ticket.plotsName].filter(Boolean).join(' • ')],
               ['KTV chính', mainEmpText || 'Chưa phân công'],
               ['Lịch hẹn', ticket.appointmentDate],
+              ['Ngày hoàn tất', ticket.finishDate],
               ['Cáp khảo sát', `Indoor: ${ticket.indoor || '0'}m • Outdoor: ${ticket.outdoor || '0'}m`],
+              ['Ghi chú CS', csNoteText],
             ])
           );
+
+          const payment = state.deployPayment;
+          if (payment) {
+            const paymentRows = [
+              ['Tình trạng thanh toán', payment.paymentStatusDesc],
+              ['Đã thanh toán', formatVndAmount(payment.sumMoneyPaid)],
+              ['Chưa thanh toán', formatVndAmount(payment.sumMoneyUnPaid)],
+            ];
+            for (const fee of payment.serviceFees || []) {
+              paymentRows.push([fee.name || 'Khoản thu', formatVndAmount(fee.money)]);
+            }
+            for (const tf of payment.ticketFees || []) {
+              if (tf.feePayment > 0 || tf.feePaymentPaid > 0) {
+                const amt = tf.feePayment > 0 ? tf.feePayment : tf.feePaymentPaid;
+                paymentRows.push([tf.description || 'Phí phát sinh', formatVndAmount(amt)]);
+              }
+            }
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Khoản thu' }),
+                buildDeployKvList(paymentRows),
+              ])
+            );
+          }
 
           sheetParts.push(
             el('div', { className: 'ri-confirm-input-wrap' }, [
@@ -5485,7 +5596,7 @@ export function mountRemoteInside({
                     ['ONU RX / TX', `${metrics.OnuRxPower ?? '—'} / ${metrics.OnuTxPower ?? '—'}`],
                     ['RX Tập điểm', metrics.RxGroupPoints ?? '—'],
                     ['LastMile', metrics.LastMile != null ? `${metrics.LastMile} m` : '—'],
-                    ['ByPass', metrics.StatusByPass || '—'],
+                    ['ByPass', byPassLabel],
                     ['Online đầu tiên', metrics.FirstOnlineMacDate || '—'],
                   ])
                 : el('div', {
@@ -5741,6 +5852,14 @@ export function mountRemoteInside({
               ])
             );
           } else {
+            const allEContractsSigned =
+              state.deployEContracts.length > 0 &&
+              state.deployEContracts.every(
+                (rec) =>
+                  /signed/i.test(String(rec && rec.State ? rec.State : '')) &&
+                  !/pending/i.test(String(rec && rec.State ? rec.State : ''))
+              );
+
             sheetParts.push(
               el(
                 'div',
@@ -5748,34 +5867,116 @@ export function mountRemoteInside({
                 state.deployPhones.map((item) => {
                   const revealed = item.PhoneToken ? state.deployRevealedPhones[item.PhoneToken] : '';
                   const isRevealing = item.PhoneToken && state.deployRevealingToken === item.PhoneToken;
+                  const canEditCmr = canEditDeploymentCameraPhone(item, summary);
+                  const isEditingCmr = canEditCmr && state.deployEditingPhoneToken === item.PhoneToken;
+
+                  const phoneActions = [];
+                  if (revealed) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-secondary-btn',
+                        text: 'Sao chép SĐT',
+                        onClick: async () => {
+                          await copyTextSafe(revealed);
+                          state.deployNotice = `Đã sao chép ${revealed} vào bộ nhớ tạm.`;
+                          state.deployNoticeTone = 'ok';
+                          renderConfirm();
+                        },
+                      })
+                    );
+                  } else if (item.PhoneToken) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-primary-btn',
+                        disabled: Boolean(state.deployRevealingToken),
+                        text: isRevealing ? 'Đang hiện…' : 'Hiện SĐT đầy đủ',
+                        onClick: () => handleDeployRevealPhone(item),
+                      })
+                    );
+                  }
+
+                  if (canEditCmr && !isEditingCmr) {
+                    phoneActions.push(
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-secondary-btn',
+                        disabled: isBusy,
+                        text: 'Sửa SĐT CMR',
+                        onClick: () => {
+                          state.deployEditingPhoneToken = item.PhoneToken;
+                          state.deployEditingPhoneValue = revealed || '';
+                          state.deployArmedAction = '';
+                          state.deployNotice = '';
+                          renderConfirm();
+                        },
+                      })
+                    );
+                  }
+
+                  let editCmrWrap = null;
+                  if (isEditingCmr) {
+                    const cmrInput = el('input', {
+                      type: 'tel',
+                      inputmode: 'numeric',
+                      className: 'ri-confirm-input',
+                      id: 'ri-deploy-cmr-phone',
+                      placeholder: 'Nhập SĐT CMR mới (chỉ gồm chữ số)…',
+                      autocomplete: 'off',
+                      value: state.deployEditingPhoneValue || '',
+                    });
+                    cmrInput.value = state.deployEditingPhoneValue || '';
+                    cmrInput.addEventListener('input', (e) => {
+                      state.deployEditingPhoneValue = e.target.value;
+                    });
+
+                    editCmrWrap = el('div', { className: 'ri-confirm-input-wrap' }, [
+                      el('label', {
+                        className: 'ri-confirm-label',
+                        for: 'ri-deploy-cmr-phone',
+                        text: 'Số điện thoại CMR mới',
+                      }),
+                      cmrInput,
+                      allEContractsSigned
+                        ? el('div', {
+                            className: 'ri-field-hint',
+                            'data-state': 'warn',
+                            text: 'Tất cả BBĐT đã ký — FOX-ERP vẫn mở sửa SĐT CMR khi HĐ bình thường; nếu máy chủ khóa sẽ báo chi tiết.',
+                          })
+                        : null,
+                      el('div', { className: 'ri-result-actions' }, [
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-secondary-btn',
+                          disabled: isBusy,
+                          text: 'Hủy',
+                          onClick: () => {
+                            state.deployEditingPhoneToken = '';
+                            state.deployEditingPhoneValue = '';
+                            state.deployArmedAction = '';
+                            renderConfirm();
+                          },
+                        }),
+                        buildArmedConfirmRow({
+                          armKey: `edit_cmr_phone:${item.PhoneToken}`,
+                          idleLabel: 'Lưu SĐT CMR',
+                          idleClass: 'ri-primary-btn',
+                          confirmLabel: 'Xác nhận đổi SĐT CMR',
+                          busyKey: 'edit_cmr_phone',
+                          onConfirm: () => handleDeployUpdateCameraPhone(item),
+                        }),
+                      ]),
+                    ]);
+                  }
+
                   return el('div', { className: 'ri-session-card' }, [
                     el('div', {
                       className: 'ri-session-ip',
                       text: `${item.DescriptionVn || 'Số điện thoại'}: ${revealed || item.Phone || '—'}`,
                     }),
-                    el('div', { className: 'ri-session-actions' }, [
-                      revealed
-                        ? el('button', {
-                            type: 'button',
-                            className: 'ri-secondary-btn',
-                            text: 'Sao chép SĐT',
-                            onClick: async () => {
-                              await copyTextSafe(revealed);
-                              state.deployNotice = `Đã sao chép ${revealed} vào bộ nhớ tạm.`;
-                              state.deployNoticeTone = 'ok';
-                              renderConfirm();
-                            },
-                          })
-                        : item.PhoneToken
-                        ? el('button', {
-                            type: 'button',
-                            className: 'ri-primary-btn',
-                            disabled: Boolean(state.deployRevealingToken),
-                            text: isRevealing ? 'Đang hiện…' : 'Hiện SĐT đầy đủ',
-                            onClick: () => handleDeployRevealPhone(item),
-                          })
-                        : null,
-                    ]),
+                    el('div', { className: 'ri-session-actions' }, phoneActions),
+                    editCmrWrap,
                   ]);
                 })
               )

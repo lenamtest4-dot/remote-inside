@@ -23,7 +23,17 @@ export const DEPLOYMENT_ENDPOINTS = {
   syncOnline: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/sync-online',
   updateDeploymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/ticket/update-deployment-info',
   statusCompleted: 'https://fox-erp.fpt.net/app/tkbt/tk/api/status/completed',
+  getPaymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/payment/get-payment-info',
+  updateCameraPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/update-number-phone-camera',
 };
+
+export const DEPLOYMENT_EQUIPMENT_TYPE = {
+  DEPLOY: 1,
+  REVOKE: 2,
+  EXTRA: 3,
+};
+
+export const DEPLOYMENT_CAMERA_PHONE_TYPE = 96;
 
 export const DEPLOYMENT_CATALOG_KEYS = {
   SUPPORT_STATUS: 'Deloyment_SupportINFStatus',
@@ -195,6 +205,35 @@ function mapAssignedEmployee(emp) {
   };
 }
 
+function formatDeploymentAppointment(ticketObj) {
+  if (!ticketObj || typeof ticketObj !== 'object') return '';
+  const direct = String(ticketObj.AppointmentDate || ticketObj.TimeAppointment || '').trim();
+  if (direct) return direct;
+
+  const info =
+    ticketObj.AppointmentInfo && typeof ticketObj.AppointmentInfo === 'object'
+      ? ticketObj.AppointmentInfo
+      : null;
+  if (!info) return '';
+
+  const pairs = [
+    [info.TimeZoneRed, info.AppointmentDateRed],
+    [info.TimeZoneBlue, info.AppointmentDateBlue],
+    [info.TimeZone, info.AppointmentDate],
+  ];
+  let chosen = '';
+  for (const [tz, dt] of pairs) {
+    const parts = [String(tz || '').trim(), String(dt || '').trim()].filter(Boolean);
+    if (parts.length > 0) {
+      chosen = parts.join(' • ');
+      break;
+    }
+  }
+  if (!chosen) return '';
+  const count = Number(info.Appointment ?? 0);
+  return count > 0 ? `${chosen} (${count} lần)` : chosen;
+}
+
 export function normalizeTicketSummary(contractData, selectedSupId = 0) {
   const src = contractData && typeof contractData === 'object' ? contractData : {};
   const contract = String(src.Contract || '').trim();
@@ -219,7 +258,13 @@ export function normalizeTicketSummary(contractData, selectedSupId = 0) {
       status,
       statusDesc,
       flag: Number(t.Flag ?? 0),
+      location: String(t.Location || '').trim(),
+      groupPoints: String(t.GroupPoints || '').trim(),
+      odcCableType: String(t.ODCCableType || '').trim(),
       blockDepName: String(t.BlockDepName || t.BlockName || '').trim(),
+      plotsName: String(t.PlotsName || '').trim(),
+      finishDate: String(t.FinishDate || '').trim(),
+      descriptionCs: String(t.DescriptionCs || '').trim(),
       mainEmp: mapAssignedEmployee(mainRaw),
       supportEmps: supportRaws.map(mapAssignedEmployee).filter(Boolean),
       reasonDelay: String(t.ReasonDelay ?? 0),
@@ -231,8 +276,8 @@ export function normalizeTicketSummary(contractData, selectedSupId = 0) {
       notCompleteWifi: String(t.NotCompleteWifi ?? 0),
       reasonUnuseCapLan: String(t.ReasonUnuseCapLan ?? 0),
       ordersCount: Array.isArray(t.OrdersInfo) ? t.OrdersInfo.length : 0,
-      appointmentDate: String(t.AppointmentDate || t.TimeAppointment || '').trim(),
-      depTypeDesc: String(t.DepTypeDesc || t.TypeDesc || '').trim(),
+      appointmentDate: formatDeploymentAppointment(t),
+      depTypeDesc: String(t.CustypeDesc || t.DepTypeDesc || t.TypeDesc || '').trim(),
     };
   });
 
@@ -247,9 +292,10 @@ export function normalizeTicketSummary(contractData, selectedSupId = 0) {
     objId: Number(src.ObjId ?? 0),
     contract,
     fullName: String(src.FullName || '').trim(),
-    address: String(src.Address || '').trim(),
+    address: String(src.Address || (ticket && ticket.location) || '').trim(),
     nameObj: String(src.NameObj || '').trim(),
     localTypeName: String(src.LocalTypeName || '').trim(),
+    statusContract: Number(src.StatusContract ?? 0),
     statusContractDesc: String(src.StatusContractDesc || 'Bình thường').trim(),
     customerPhone: String(src.CustomerPhone || '').trim(),
     customerPhoneToken: String(src.CustomerPhoneToken || '').trim(),
@@ -266,7 +312,7 @@ export function normalizeEquipmentList(rows) {
   const mapped = list.map((r) => {
     const typeId = Number(r.TypeId ?? 0);
     const mac = String(r.Mac || '').trim();
-    const isRevoke = typeId === 3;
+    const isRevoke = typeId === DEPLOYMENT_EQUIPMENT_TYPE.REVOKE;
     const isMac = Number(r.IsMac ?? 0) === 1 || Boolean(mac);
     return {
       efId: Number(r.EfId ?? 0),
@@ -276,6 +322,9 @@ export function normalizeEquipmentList(rows) {
       quantity: Number(r.Quantity ?? 0),
       typeId,
       isRevoke,
+      isDeploy: Number(r.IsDeploy ?? 0) === 1,
+      returnStatus: Number(r.ReturnStatus ?? 0),
+      causeReturn: Number(r.CauseReturn ?? 0),
       isMac,
       mac,
       functionName: String(r.FunctionName || '').trim(),
@@ -286,7 +335,7 @@ export function normalizeEquipmentList(rows) {
 
   const importItems = mapped
     .filter((item) => !item.isRevoke)
-    .sort((a, b) => Number(b.isMac) - Number(a.isMac));
+    .sort((a, b) => Number(b.isMac) - Number(a.isMac) || a.typeId - b.typeId);
   const revokeItems = mapped
     .filter((item) => item.isRevoke)
     .sort((a, b) => Number(b.isMac) - Number(a.isMac));
@@ -362,9 +411,9 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
     ObjId: 1000001,
     Contract: cleanId,
     FullName: 'NGUYEN VAN MAU',
-    Address: '123 Duong Mau, Phuong Mau, TP.HCM',
     NameObj: 'Giga',
     LocalTypeName: 'Giga - FTTx (Demo)',
+    StatusContract: 1,
     StatusContractDesc: 'Bình thường',
     CustomerPhone: '090****001',
     CustomerPhoneToken: 'demo_phone_token_1',
@@ -378,14 +427,23 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
         Status: 0,
         StatusDesc: 'Đang xử lý',
         Flag: 1,
-        BlockDepName: 'Khu vuc Mau 01 (L01)',
+        Location: '123 Duong Mau, Phuong Mau, TP.HCM',
+        GroupPoints: 'HCM-ODC-01/HO',
+        ODCCableType: 'HCM-ODC-01/HO-1/1-G',
+        BlockDepName: 'Khu vuc Mau 01',
+        PlotsName: 'L01',
+        DescriptionCs: 'Ghi chu CS mau',
         ReasonDelay: 0,
         DescriptionRd: '',
         ReasonHiFPT: 0,
         NotCompleteWifi: 0,
         ReasonUnuseCapLan: 0,
-        AppointmentDate: '10:00-12:00 • 26/11/2026',
-        DepTypeDesc: 'Triển khai mới',
+        AppointmentInfo: {
+          Appointment: 1,
+          TimeZoneBlue: '10:00 - 12:00',
+          AppointmentDateBlue: '26/11/2026 12:00:00',
+        },
+        CustypeDesc: 'Triển khai mới',
         ConstrucInfo: { Indoor: '70', Outdoor: '35', OutDoorReUsed: 0 },
         OrdersInfo: [{ OrderId: 1 }, { OrderId: 2 }],
         AssignEmpInfo: [
@@ -445,7 +503,7 @@ const DEMO_EQUIPMENTS = [
     Name: 'Dây thuê bao quang đệm chặt 1 core',
     Description: 'Cáp FTTH',
     Quantity: 70,
-    TypeId: 1,
+    TypeId: 3,
     IsMac: 0,
     Mac: '',
     ServiceName: 'Cáp',
@@ -456,7 +514,7 @@ const DEMO_EQUIPMENTS = [
     Name: 'Dây rút / Vật tư phụ',
     Description: 'Vật tư phụ khác',
     Quantity: 10,
-    TypeId: 1,
+    TypeId: 3,
     IsMac: 0,
     Mac: '',
     ServiceName: 'Vật tư phụ khác',
@@ -464,10 +522,26 @@ const DEMO_EQUIPMENTS = [
 ];
 
 const DEMO_PHONES = [
-  { ObjId: 1000001, Type: 1, Phone: '090****001', PhoneToken: 'demo_tok_main', DescriptionVn: 'Số chính chủ' },
-  { ObjId: 1000001, Type: 2, Phone: '090****001', PhoneToken: 'demo_tok_cmr', DescriptionVn: 'SĐT CMR' },
+  { ObjId: 1000001, Type: 5, Phone: '090****001', PhoneToken: 'demo_tok_main', DescriptionVn: 'Số chính chủ' },
+  { ObjId: 1000001, Type: 96, Phone: '090****001', PhoneToken: 'demo_tok_cmr', DescriptionVn: 'SĐT CMR' },
   { ObjId: 1000001, Type: 3, Phone: '090****001', PhoneToken: 'demo_tok_play', DescriptionVn: 'SĐT FPTPlay' },
 ];
+
+const DEMO_PAYMENT = {
+  SumMoneyPaid: 300000,
+  SumMoneyUnPaid: 0,
+  PaymentStatus: true,
+  PaymentStatusDesc: 'Đã thanh toán',
+  PaymentStatusCode: 1,
+  ServiceFeesDetail: [
+    {
+      ShortNameVN: 'Phí lắp đặt Internet',
+      Money: 300000,
+      Status: 1,
+    },
+  ],
+  TicketFeesDetail: [],
+};
 
 const DEMO_RECORDS = [
   {
@@ -595,6 +669,7 @@ export async function fetchDeploymentTicket(
       summary,
       dataFilter: summary.dataFilter,
       equipments: normalizeEquipmentList(DEMO_EQUIPMENTS),
+      paymentInfo: normalizePaymentInfo(DEMO_PAYMENT),
       modemMetrics: {
         Ip: '192.0.2.10',
         MacAddress: '00:11:22:33:44:55',
@@ -681,7 +756,7 @@ export async function fetchDeploymentTicket(
   const grant = summary.grant || '';
   const activeSupId = summary.ticket ? summary.ticket.supId : 0;
 
-  const [cfgSet, eqSet, metricsSet] = await Promise.allSettled([
+  const [cfgSet, eqSet, metricsSet, paySet] = await Promise.allSettled([
     summary.dataFilter.length === 0
       ? postFoxJson(DEPLOYMENT_ENDPOINTS.getConfigByParent, null, { grant })
       : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: summary.dataFilter } }),
@@ -694,6 +769,13 @@ export async function fetchDeploymentTicket(
       : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: [] } }),
     summary.contract
       ? postFoxJson(DEPLOYMENT_ENDPOINTS.getModemMetrics, { Contract: summary.contract }, { grant })
+      : Promise.resolve({ status: 'ok', json: { Succeeded: false, Data: null } }),
+    summary.objId && activeSupId
+      ? postFoxJson(
+          DEPLOYMENT_ENDPOINTS.getPaymentInfo,
+          { ObjId: summary.objId, SupId: activeSupId },
+          { grant }
+        )
       : Promise.resolve({ status: 'ok', json: { Succeeded: false, Data: null } }),
   ]);
 
@@ -727,6 +809,15 @@ export async function fetchDeploymentTicket(
       ? metricsSet.value.json.Data || null
       : null;
 
+  const rawPayment =
+    paySet.status === 'fulfilled' &&
+    paySet.value &&
+    paySet.value.status === 'ok' &&
+    paySet.value.json &&
+    paySet.value.json.Succeeded
+      ? paySet.value.json.Data || null
+      : null;
+
   return {
     status: 'ok',
     mode: 'live',
@@ -736,6 +827,7 @@ export async function fetchDeploymentTicket(
     summary: { ...summary, dataFilter },
     dataFilter,
     equipments: normalizeEquipmentList(rawEquipments),
+    paymentInfo: normalizePaymentInfo(rawPayment),
     modemMetrics,
   };
 }
@@ -835,6 +927,111 @@ export async function revealDeploymentPhone({ token, objId, supId, grant = '', f
     return { status: 'error', message: res.json.Message || 'Không giải mã được số điện thoại.' };
   }
   return { status: 'ok', mode: 'live', phone: String(res.json.Data) };
+}
+
+export function normalizePaymentInfo(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const rawService = Array.isArray(raw.ServiceFeesDetail) ? raw.ServiceFeesDetail : [];
+  const rawTicket = Array.isArray(raw.TicketFeesDetail) ? raw.TicketFeesDetail : [];
+  return {
+    sumMoneyPaid: Number(raw.SumMoneyPaid ?? 0),
+    sumMoneyUnPaid: Number(raw.SumMoneyUnPaid ?? 0),
+    paymentStatus: Boolean(raw.PaymentStatus),
+    paymentStatusDesc: String(raw.PaymentStatusDesc || 'Không có khoản thu').trim(),
+    serviceFees: rawService.map((f) => ({
+      name: String(f.ShortNameVN || f.ShortName || 'Khoản thu').trim(),
+      money: Number(f.Money ?? 0),
+      status: Number(f.Status ?? 0),
+    })),
+    ticketFees: rawTicket.map((f) => ({
+      description: String(f.PaymentDescription || '').trim(),
+      feePayment: Number(f.FeePayment ?? 0),
+      feePaymentPaid: Number(f.FeePaymentPaid ?? 0),
+      statusPayment: Number(f.StatusPayment ?? 0),
+      paymentQuantity: Number(f.PaymentQuantity ?? 0),
+      unit: String(f.EquipmentUnit || '').trim(),
+    })),
+  };
+}
+
+export async function fetchDeploymentPayment({ objId, supId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', paymentInfo: normalizePaymentInfo(DEMO_PAYMENT) };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getPaymentInfo,
+    { ObjId: Number(objId) || 0, SupId: Number(supId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return { status: 'error', message: res.json.Message || 'Không tải được thông tin Khoản thu.' };
+  }
+  return { status: 'ok', mode: 'live', paymentInfo: normalizePaymentInfo(res.json.Data) };
+}
+
+export function validateCameraPhoneNumber(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) {
+    return { valid: false, value: '', error: 'Vui lòng nhập số điện thoại CMR mới.' };
+  }
+  if (!/^\d+$/.test(value)) {
+    return { valid: false, value, error: 'Số điện thoại CMR chỉ được gồm chữ số.' };
+  }
+  return { valid: true, value, error: '' };
+}
+
+export function canEditDeploymentCameraPhone(phoneItem, summary) {
+  if (!phoneItem || !summary) return false;
+  return (
+    Number(phoneItem.Type) === DEPLOYMENT_CAMERA_PHONE_TYPE &&
+    Boolean(phoneItem.PhoneToken) &&
+    Number(summary.statusContract) === 1 &&
+    Boolean(summary.ticket && summary.ticket.supId)
+  );
+}
+
+export async function updateDeploymentCameraPhone({
+  objId,
+  supId,
+  contract,
+  oldPhoneNumberToken,
+  phoneNumber,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateCameraPhoneNumber(phoneNumber);
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: `Đã cập nhật SĐT CMR sang ${check.value} (mẫu mô phỏng).`,
+    };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.updateCameraPhone,
+    {
+      ObjId: Number(objId) || 0,
+      SupId: Number(supId) || 0,
+      Contract: normalizeContractId(contract),
+      OldPhoneNumberToken: String(oldPhoneNumberToken || ''),
+      PhoneNumber: check.value,
+    },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded
+        ? `Cập nhật SĐT CMR thành công (${check.value}).`
+        : 'Không cập nhật được SĐT CMR.'),
+  };
 }
 
 export async function fetchDeploymentEContracts({ objId, grant = '', forceDemo = false } = {}) {

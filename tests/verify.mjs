@@ -85,14 +85,18 @@ import {
   validateByPassPayload,
 } from '../src/adapters/inside.js';
 import {
+  DEPLOYMENT_CAMERA_PHONE_TYPE,
   DEPLOYMENT_CATALOG_KEYS,
   DEPLOYMENT_ENDPOINTS,
+  DEPLOYMENT_EQUIPMENT_TYPE,
   buildCompletedPayload,
+  canEditDeploymentCameraPhone,
   clearDeploymentTicketMac,
   completeDeploymentTicket,
   extractDeploymentTicketLink,
   extractHashFromLocation,
   fetchDeploymentEContracts,
+  fetchDeploymentPayment,
   fetchDeploymentTicket,
   findDataFilterText,
   normalizeEquipmentList,
@@ -100,7 +104,9 @@ import {
   parseDataFilterOptions,
   revealDeploymentPhone,
   syncDeploymentOnline,
+  updateDeploymentCameraPhone,
   updateDeploymentConstruction,
+  validateCameraPhoneNumber,
   validateConstructionUpdate,
 } from '../src/adapters/deployment.js';
 import {
@@ -2230,15 +2236,85 @@ async function runTests() {
   ]);
   assert.equal(findDataFilterText(sampleFilter, DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT, 2), 'Ly do 2');
 
+  assert.equal(DEPLOYMENT_EQUIPMENT_TYPE.DEPLOY, 1);
+  assert.equal(DEPLOYMENT_EQUIPMENT_TYPE.REVOKE, 2);
+  assert.equal(DEPLOYMENT_EQUIPMENT_TYPE.EXTRA, 3);
+  assert.equal(DEPLOYMENT_CAMERA_PHONE_TYPE, 96);
+
   const eqNorm = normalizeEquipmentList([
-    { EfId: 1, IdCode: 500, Name: 'Day cap', Quantity: 50, TypeId: 1, IsMac: 0 },
+    { EfId: 1, IdCode: 500, Name: 'Day cap', Quantity: 50, TypeId: 3, IsMac: 0 },
     { EfId: 2, IdCode: 100, Name: 'Modem Demo', Quantity: 1, TypeId: 1, IsMac: 1, Mac: '001122334455' },
-    { EfId: 3, IdCode: 900, Name: 'Box Thu hoi', Quantity: 1, TypeId: 3, IsMac: 1, Mac: 'AABBCCDDEEFF' },
+    { EfId: 3, IdCode: 900, Name: 'Box Thu hoi', Quantity: 1, TypeId: 2, IsMac: 1, Mac: 'AABBCCDDEEFF' },
   ]);
-  assert.equal(eqNorm.importItems.length, 2);
+  assert.equal(eqNorm.importItems.length, 2, 'TypeId 1 and 3 must both stay in deployed importItems');
   assert.equal(eqNorm.importItems[0].name, 'Modem Demo', 'MAC equipments must sort first');
+  assert.equal(eqNorm.importItems[1].name, 'Day cap', 'Extra deployed materials (TypeId=3) must not become revoke');
   assert.equal(eqNorm.revokeItems.length, 1);
+  assert.equal(eqNorm.revokeItems[0].name, 'Box Thu hoi');
   assert.equal(eqNorm.macCount, 1);
+
+  const realShapeSummary = normalizeTicketSummary({
+    ObjId: 1000001,
+    Contract: 'SGN123456',
+    FullName: 'NGUYEN VAN MAU',
+    StatusContract: 1,
+    DataFilter: sampleFilter,
+    SupportInfInfo: [
+      {
+        SupId: 900001,
+        DepCode: 'TK.SGN123456.900001',
+        Status: 1,
+        StatusDesc: 'Đã xử lý hoàn tất',
+        Flag: 1,
+        Location: '123 Duong Mau, Quan 1',
+        GroupPoints: 'HCM-ODC-01/HO',
+        ODCCableType: 'HCM-ODC-01/HO-1/1-G',
+        BlockDepName: 'Quan 1-001',
+        PlotsName: 'L01',
+        FinishDate: '23/11/2026 18:43:58',
+        DescriptionCs: 'Ghi chu CS mau',
+        CustypeDesc: 'Trien khai moi',
+        AppointmentInfo: {
+          Appointment: 2,
+          TimeZoneBlue: '15:30 - 17:30',
+          AppointmentDateBlue: '24/11/2026 17:30:00',
+        },
+      },
+    ],
+  });
+  assert.equal(realShapeSummary.statusContract, 1);
+  assert.equal(realShapeSummary.address, '123 Duong Mau, Quan 1');
+  assert.equal(realShapeSummary.ticket.location, '123 Duong Mau, Quan 1');
+  assert.equal(realShapeSummary.ticket.groupPoints, 'HCM-ODC-01/HO');
+  assert.equal(realShapeSummary.ticket.odcCableType, 'HCM-ODC-01/HO-1/1-G');
+  assert.equal(realShapeSummary.ticket.plotsName, 'L01');
+  assert.equal(realShapeSummary.ticket.finishDate, '23/11/2026 18:43:58');
+  assert.equal(realShapeSummary.ticket.descriptionCs, 'Ghi chu CS mau');
+  assert.equal(realShapeSummary.ticket.depTypeDesc, 'Trien khai moi');
+  assert.equal(realShapeSummary.ticket.appointmentDate, '15:30 - 17:30 • 24/11/2026 17:30:00 (2 lần)');
+
+  assert.equal(validateCameraPhoneNumber('').valid, false);
+  assert.equal(validateCameraPhoneNumber('090abc').valid, false);
+  assert.deepEqual(validateCameraPhoneNumber(' 0901234567 '), {
+    valid: true,
+    value: '0901234567',
+    error: '',
+  });
+  assert.equal(
+    canEditDeploymentCameraPhone({ Type: 96, PhoneToken: 'tok_cmr' }, realShapeSummary),
+    true
+  );
+  assert.equal(
+    canEditDeploymentCameraPhone({ Type: 5, PhoneToken: 'tok_main' }, realShapeSummary),
+    false
+  );
+  assert.equal(
+    canEditDeploymentCameraPhone(
+      { Type: 96, PhoneToken: 'tok_cmr' },
+      { ...realShapeSummary, statusContract: 2 }
+    ),
+    false
+  );
 
   assert.equal(validateConstructionUpdate({ outDoorReUsed: -1, descriptionRD: 'ok' }).valid, false);
   assert.equal(
@@ -2279,9 +2355,17 @@ async function runTests() {
   assert.equal(demoTicket.status, 'ok');
   assert.equal(demoTicket.mode, 'demo');
   assert.equal(demoTicket.summary.contract, 'SGN123456');
+  assert.equal(demoTicket.equipments.importItems.length, 5);
+  assert.equal(demoTicket.equipments.revokeItems.length, 0);
   assert.equal(demoTicket.equipments.macCount, 3);
+  assert.equal(demoTicket.paymentInfo.sumMoneyPaid, 300000);
+  assert.equal((await fetchDeploymentPayment({ forceDemo: true })).paymentInfo.sumMoneyPaid, 300000);
   assert.equal((await clearDeploymentTicketMac({ forceDemo: true })).status, 'ok');
   assert.equal((await revealDeploymentPhone({ forceDemo: true })).phone, '0901000001');
+  assert.equal(
+    (await updateDeploymentCameraPhone({ phoneNumber: '0901234567', forceDemo: true })).status,
+    'ok'
+  );
   assert.equal((await fetchDeploymentEContracts({ forceDemo: true })).rows.length, 2);
   assert.equal((await syncDeploymentOnline({ forceDemo: true })).status, 'ok');
   assert.equal((await updateDeploymentConstruction({ outDoorReUsed: 5, forceDemo: true })).status, 'ok');
@@ -2330,11 +2414,18 @@ async function runTests() {
               Data: [{ EfId: 1, IdCode: 33096, Name: 'Modem Demo', Quantity: 1, TypeId: 1, IsMac: 1, Mac: '001122334455' }],
             };
           } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getModemMetrics) {
-            bodyObj = { Succeeded: true, Data: { Ip: '192.0.2.10', MacAddress: '00:11:22:33:44:55' } };
+            bodyObj = { Succeeded: true, Data: { Ip: '192.0.2.10', MacAddress: '00:11:22:33:44:55', StatusByPass: false } };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getPaymentInfo) {
+            bodyObj = {
+              Succeeded: true,
+              Data: { SumMoneyPaid: 300000, SumMoneyUnPaid: 0, PaymentStatus: true, PaymentStatusDesc: 'Đã thanh toán' },
+            };
           } else if (parsed.url === DEPLOYMENT_ENDPOINTS.clearEquipment) {
             bodyObj = { Succeeded: true, Data: 1, Message: 'Clear OK' };
           } else if (parsed.url === DEPLOYMENT_ENDPOINTS.revealPhone) {
             bodyObj = { Succeeded: true, Data: '0901000009' };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.updateCameraPhone) {
+            bodyObj = { Succeeded: true, Message: 'Phone updated OK' };
           } else if (parsed.url === DEPLOYMENT_ENDPOINTS.syncOnline) {
             bodyObj = { Succeeded: true, Message: 'Sync OK' };
           } else if (parsed.url === DEPLOYMENT_ENDPOINTS.statusCompleted) {
@@ -2368,17 +2459,31 @@ async function runTests() {
     assert.equal(liveTicket.status, 'ok');
     assert.equal(liveTicket.mode, 'live');
     assert.equal(liveTicket.grant, 'Fe26.2**demo-grant-token');
+    assert.equal(liveTicket.paymentInfo.sumMoneyPaid, 300000);
 
     await clearDeploymentTicketMac({ objId: 1000001, supId: 900001, grant: liveTicket.grant });
     const revRes = await revealDeploymentPhone({ token: 'tok1', objId: 1000001, supId: 900001, grant: liveTicket.grant });
     assert.equal(revRes.phone, '0901000009');
+    const updPhoneRes = await updateDeploymentCameraPhone({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      oldPhoneNumberToken: 'tok_cmr',
+      phoneNumber: '0901234567',
+      grant: liveTicket.grant,
+    });
+    assert.equal(updPhoneRes.status, 'ok');
+    const payRes = await fetchDeploymentPayment({ objId: 1000001, supId: 900001, grant: liveTicket.grant });
+    assert.equal(payRes.paymentInfo.paymentStatusDesc, 'Đã thanh toán');
     await syncDeploymentOnline({ objId: 1000001, supId: 900001, contract: 'SGN123456', grant: liveTicket.grant });
     await completeDeploymentTicket({ objId: 1000001, supId: 900001, outDoorReUsed: 2, reasonHiFPT: 2, grant: liveTicket.grant });
 
     for (const ep of [
       DEPLOYMENT_ENDPOINTS.getEquipmentOnDep,
+      DEPLOYMENT_ENDPOINTS.getPaymentInfo,
       DEPLOYMENT_ENDPOINTS.clearEquipment,
       DEPLOYMENT_ENDPOINTS.revealPhone,
+      DEPLOYMENT_ENDPOINTS.updateCameraPhone,
       DEPLOYMENT_ENDPOINTS.syncOnline,
       DEPLOYMENT_ENDPOINTS.statusCompleted,
     ]) {
@@ -2386,6 +2491,14 @@ async function runTests() {
       assert.ok(req, `Expected request to ${ep}`);
       assert.equal(req.headers['x-resource-grant'], 'Fe26.2**demo-grant-token', `Expected x-resource-grant on ${ep}`);
     }
+    const camPhoneReq = capturedFoxRequests.find((r) => r.url === DEPLOYMENT_ENDPOINTS.updateCameraPhone);
+    assert.deepEqual(JSON.parse(camPhoneReq.data), {
+      ObjId: 1000001,
+      SupId: 900001,
+      Contract: 'SGN123456',
+      OldPhoneNumberToken: 'tok_cmr',
+      PhoneNumber: '0901234567',
+    });
   } finally {
     if (hadWin18) {
       globalThis.window = prevWin18;
@@ -2401,6 +2514,8 @@ async function runTests() {
     '/api/contract/sync-online',
     '/api/status/completed',
     '/api/contract/reveal-phone',
+    '/api/contract/update-number-phone-camera',
+    '/api/payment/get-payment-info',
     '/api/record/get-e-contract-record',
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);

@@ -1594,9 +1594,9 @@ export function mountRemoteInside({
           const chunkApiHints = extractApiHintsFromJs(res.responseText, contractId);
           const codeContexts = extractCodeContextsFromJs(
             res.responseText,
-            /(?:\/api\/|x-resource-grant|resource-grant|clear[-_]?mac|update[-_]?online|\/status\/|\/equipment\/|\/contract\/|\/record\/|\/ticket|\/deployment|getContract|reveal-phone|ajax|bypass|camera|recall|radius)/i,
+            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract)/i,
             contractId,
-            { maxTotal: 14000, maxContexts: 24, radius: 260 }
+            { maxTotal: 55000, maxContexts: 65, radius: 480 }
           );
           if (chunkApiHints.length > 0 || codeContexts.length > 0) {
             collectedSnippets.push({

@@ -6563,7 +6563,7 @@ export function mountRemoteInside({
                 ])
               : el(
                   'div',
-                  { className: 'ri-session-list' },
+                  { className: 'ri-session-list ri-recall-list' },
                   items.map((item) => {
                     const statusTone = /đã nhập kho/i.test(item.recallStatus)
                       ? 'ok'
@@ -6711,7 +6711,7 @@ export function mountRemoteInside({
               for: 'ri-recall-note-input',
               text: 'Ghi chú phiếu thu hồi',
             }),
-            el('div', { className: 'ri-contract-row' }, [
+            el('div', { className: 'ri-recall-note-row' }, [
               noteInputEl,
               el('button', {
                 type: 'button',

@@ -1455,6 +1455,40 @@
   color: var(--state-warn);
 }
 
+.ri-box-item .ri-tab-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ri-recall-card .ri-session-actions > button {
+  flex: 1 1 0;
+  width: auto;
+  white-space: nowrap;
+}
+
+.ri-recall-list {
+  max-height: 360px;
+}
+
+.ri-recall-note-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ri-recall-note-row .ri-confirm-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ri-recall-note-row > button {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
 .ri-fab.is-left {
   right: auto;
   left: 16px;

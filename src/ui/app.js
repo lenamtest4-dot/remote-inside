@@ -3684,41 +3684,59 @@ export function mountRemoteInside({
   }
 
   function renderTabs() {
-    const tabEls = PORTAL_ORDER.map((id) => {
-      const p = PORTALS[id];
-      const active = state.activePortalId === id;
-      return el(
-        'button',
-        {
-          type: 'button',
-          role: 'tab',
-          'aria-selected': active ? 'true' : 'false',
-          className: `ri-tab${active ? ' is-active' : ''}`,
-          onClick: () => {
-            state.activePortalId = id;
-            state.result = null;
-            setState(STORAGE_KEYS.ACTIVE_PORTAL, id);
-            renderMain();
-            refreshSessionStatus();
-          },
-        },
-        [
-          el('span', { text: p.label }),
-          el('span', {
-            className: 'ri-tab-badge',
-            'data-tier': p.status,
-            text: p.statusLabel,
-          }),
-        ]
-      );
-    });
+    const tabNodes = [];
+    let insertedPlannedSep = false;
+    let sawReadyTab = false;
 
-    return el('nav', { className: 'ri-tabs', role: 'tablist', 'aria-label': 'Chọn công cụ nội bộ' }, tabEls);
+    for (const id of PORTAL_ORDER) {
+      const p = PORTALS[id];
+      if (!p) continue;
+      const isPlanned = p.status === 'planned';
+      if (!isPlanned) {
+        sawReadyTab = true;
+      } else if (sawReadyTab && !insertedPlannedSep) {
+        insertedPlannedSep = true;
+        tabNodes.push(el('span', { className: 'ri-tab-sep', 'aria-hidden': 'true' }));
+      }
+      const active = state.activePortalId === id;
+      const tabClasses = ['ri-tab', active ? 'is-active' : '', isPlanned ? 'is-planned' : '']
+        .filter(Boolean)
+        .join(' ');
+      tabNodes.push(
+        el(
+          'button',
+          {
+            type: 'button',
+            role: 'tab',
+            'aria-selected': active ? 'true' : 'false',
+            className: tabClasses,
+            onClick: () => {
+              state.activePortalId = id;
+              state.result = null;
+              setState(STORAGE_KEYS.ACTIVE_PORTAL, id);
+              renderMain();
+              refreshSessionStatus();
+            },
+          },
+          [
+            el('span', { text: p.label }),
+            el('span', {
+              className: 'ri-tab-badge',
+              'data-tier': p.status,
+              text: p.statusLabel,
+            }),
+          ]
+        )
+      );
+    }
+
+    return el('nav', { className: 'ri-tabs', role: 'tablist', 'aria-label': 'Chọn công cụ nội bộ' }, tabNodes);
   }
 
   function renderActionDeck() {
     const portal = PORTALS[state.activePortalId];
     const [primaryAction, ...secondaryActions] = portal.actions;
+    const isPlannedPortal = portal.status === 'planned';
 
     const primaryContent =
       state.isRunning && state.runningActionId === primaryAction.id
@@ -3738,11 +3756,13 @@ export function mountRemoteInside({
 
     const opsButtons = secondaryActions.map((act) => {
       const runningThis = state.isRunning && state.runningActionId === act.id;
+      const btnKindClass =
+        act.kind === 'danger' ? 'is-danger' : act.kind === 'primary' ? 'is-primary' : '';
       return el(
         'button',
         {
           type: 'button',
-          className: `ri-action-btn${act.kind === 'danger' ? ' is-danger' : ''}`,
+          className: `ri-action-btn${btnKindClass ? ` ${btnKindClass}` : ''}`,
           disabled: state.isRunning,
           onClick: () => triggerAction(act),
         },
@@ -3752,6 +3772,12 @@ export function mountRemoteInside({
       );
     });
 
+    const opsLabelText = isPlannedPortal
+      ? 'Tính năng dự kiến (đang chờ quét ghép)'
+      : secondaryActions.some((a) => a.kind === 'danger')
+      ? 'Lệnh xử lý nhanh (có xác nhận trước khi chạy)'
+      : 'Chức năng mở rộng';
+
     return el('section', { className: 'ri-card' }, [
       el('div', { className: 'ri-portal-head' }, [
         el('div', {}, [
@@ -3760,9 +3786,15 @@ export function mountRemoteInside({
         ]),
         el('span', { className: 'ri-portal-host', text: portal.fullName }),
       ]),
+      isPlannedPortal
+        ? el('div', {
+            className: 'ri-planned-note',
+            text: 'Cổng này đang chờ quét ghép API (hiện chạy mô phỏng thử). Các cổng đã chạy thật nằm ở đầu thanh tab: Inside, Port, Vật tư.',
+          })
+        : null,
       primaryBtn,
       el('div', { className: 'ri-ops-pad' }, [
-        el('div', { className: 'ri-ops-label', text: 'Lệnh xử lý nhanh (có xác nhận trước khi chạy)' }),
+        el('div', { className: 'ri-ops-label', text: opsLabelText }),
         el('div', { className: 'ri-action-grid' }, opsButtons),
       ]),
       el('div', { className: 'ri-utility-row' }, [
@@ -8816,6 +8848,12 @@ export function mountRemoteInside({
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
+              text: 'Vật tư',
+              onClick: () => openLogin(PORTALS.recall.url, 'Mở cổng Vật tư'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
               text: 'FOX-ERP / Partner',
               onClick: () =>
                 openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
@@ -8823,20 +8861,14 @@ export function mountRemoteInside({
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
-              text: 'Vật tư',
-              onClick: () => openLogin(PORTALS.recall.url, 'Mở cổng Vật tư'),
-            }),
-            el('button', {
-              type: 'button',
-              className: 'ri-secondary-btn',
-              text: 'Radius',
-              onClick: () => openLogin(PORTALS.radius.url, 'Mở cổng Radius'),
-            }),
-            el('button', {
-              type: 'button',
-              className: 'ri-secondary-btn',
-              text: 'Camera (đăng nhập riêng)',
+              text: 'Camera (Sắp ghép)',
               onClick: () => openLogin(PORTALS.camera.url, 'Đăng nhập Camera'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Radius (Sắp ghép)',
+              onClick: () => openLogin(PORTALS.radius.url, 'Mở cổng Radius'),
             }),
           ]),
         ]),

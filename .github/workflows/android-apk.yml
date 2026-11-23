@@ -116,10 +116,11 @@ jobs:
 
           - **App Android (.apk):** Tải \`remote-inside-${TAG}.apk\` bên dưới về điện thoại Android để cài đặt trực tiếp.
           - **Bản PC (Userscript 1-link tự cập nhật):** \`dist/remote-inside.user.js\`
-          - **Tính năng đã chạy thật:**
+          - **Tính năng đã chạy thật (đã xếp lên đầu tab):**
             - Đăng nhập IAM (Azure AD) **1 lần duy nhất** và tự đồng bộ phiên SSO sang toàn bộ cổng Inside, Partner/FOX-ERP, Port, Vật tư, Radius
-            - Inside: Tra thông tin HĐ, Reset MAC Modem, Reset MAC Box (+ Lịch sử), Kill Session (từng dòng IP), Clear OSP (tự đọc OLT/Port), ByPass (CheckList ByPass HĐ & Tập điểm), Phiếu triển khai FOX-ERP (Tổng quan, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User/Sửa SĐT CMR, Biên bản ĐT)
+            - Inside: Tra thông tin HĐ, Phiếu triển khai FOX-ERP (Tổng quan, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User/Sửa SĐT CMR, Biên bản ĐT), ByPass, Reset MAC Modem/Box (+ Lịch sử), Kill Session, Clear OSP
             - Port (FTTH NEW): Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
+            - Vật tư (NextGen): Phiếu thu hồi vật tư & Báo cáo tồn nợ vật tư theo KTV
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then

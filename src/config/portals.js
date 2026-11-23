@@ -2,7 +2,7 @@
  * Cau hinh 5 cong noi bo FPT va cac thao tac chuan hoa Ma Hop Dong.
  */
 
-export const PORTAL_ORDER = ['inside', 'port', 'camera', 'recall', 'radius'];
+export const PORTAL_ORDER = ['inside', 'port', 'recall', 'camera', 'radius'];
 
 export const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
@@ -31,6 +31,27 @@ export const PORTALS = {
         description: 'Xem nhanh trạng thái thuê bao, MAC, phiên kết nối và OSP.',
         kind: 'primary',
         requiresConfirm: false,
+      },
+      {
+        id: 'deploy_ticket',
+        label: 'Phiếu triển khai',
+        description:
+          'Mở phiếu triển khai FOX-ERP: Clear MAC vật tư, Hoàn tất phiếu, SĐT User, Biên bản ĐT, Cập nhật Online.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
+      },
+      {
+        id: 'bypass',
+        label: 'ByPass',
+        description: 'Tra cứu, thêm mới hoặc cập nhật tình trạng Gông / Bỏ gông trên CheckList ByPass.',
+        kind: 'danger',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Kiểm tra đúng Số HĐ / Tập điểm, Email NV kỹ thuật, Tình trạng và Lý do ByPass trước khi lưu.',
       },
       {
         id: 'reset_mac',
@@ -64,27 +85,6 @@ export const PORTALS = {
         requiresConfirm: true,
         requiresContract: false,
         confirmNote: 'Chọn đúng POP OLT và Port cần Clear Serial trước khi xác nhận.',
-      },
-      {
-        id: 'bypass',
-        label: 'ByPass',
-        description: 'Tra cứu, thêm mới hoặc cập nhật tình trạng Gông / Bỏ gông trên CheckList ByPass.',
-        kind: 'danger',
-        requiresConfirm: true,
-        requiresContract: false,
-        confirmNote:
-          'Kiểm tra đúng Số HĐ / Tập điểm, Email NV kỹ thuật, Tình trạng và Lý do ByPass trước khi lưu.',
-      },
-      {
-        id: 'deploy_ticket',
-        label: 'Phiếu triển khai',
-        description:
-          'Mở phiếu triển khai FOX-ERP: Clear MAC vật tư, Hoàn tất phiếu, SĐT User, Biên bản ĐT, Cập nhật Online.',
-        kind: 'primary',
-        requiresConfirm: true,
-        requiresContract: false,
-        confirmNote:
-          'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
       },
     ],
   },

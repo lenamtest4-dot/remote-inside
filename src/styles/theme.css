@@ -398,6 +398,24 @@
   box-shadow: inset 0 -2.5px 0 var(--accent-signal);
 }
 
+.ri-tab.is-planned {
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.ri-tab.is-planned.is-active {
+  opacity: 1;
+  border-style: solid;
+}
+
+.ri-tab-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 2px;
+  background: var(--border-crisp);
+  flex-shrink: 0;
+}
+
 .ri-tab-badge {
   font-size: 11px;
   font-weight: 600;
@@ -448,6 +466,18 @@
   border-radius: 6px;
   padding: 3px 8px;
   white-space: nowrap;
+}
+
+.ri-planned-note {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  color: #92400E;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .ri-primary-btn {
@@ -517,6 +547,16 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+}
+
+.ri-action-btn.is-primary {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+}
+
+.ri-action-btn.is-primary:hover:not(:disabled) {
+  background: #FFE8D6;
 }
 
 .ri-action-btn.is-danger {

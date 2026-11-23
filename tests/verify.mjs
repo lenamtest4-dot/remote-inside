@@ -294,7 +294,22 @@ async function runTests() {
   console.log('   OK: Bundle syntax & Userscript headers valid.');
 
   console.log('2. Testing portals & contract ID normalization/validation...');
-  assert.deepEqual(PORTAL_ORDER, ['inside', 'port', 'camera', 'recall', 'radius']);
+  assert.deepEqual(PORTAL_ORDER, ['inside', 'port', 'recall', 'camera', 'radius']);
+  let seenPlannedPortal = false;
+  for (const pid of PORTAL_ORDER) {
+    const isPlanned = PORTALS[pid].status === 'planned';
+    if (isPlanned) {
+      seenPlannedPortal = true;
+    } else {
+      assert.equal(
+        seenPlannedPortal,
+        false,
+        `Ready portal ${pid} must appear before planned portals in PORTAL_ORDER`
+      );
+    }
+  }
+  assert.equal(PORTALS.inside.actions[0].id, 'lookup');
+  assert.equal(PORTALS.inside.actions[1].id, 'deploy_ticket');
   assert.equal(PORTALS.inside.status, 'priority');
   assert.ok(
     PORTALS.inside.url.startsWith('http://inside.fpt.net'),
@@ -3814,6 +3829,10 @@ async function runTests() {
     'DEFAULT_EQUIPMENT_DEBT_FILTER',
     'getEffectiveEquipmentDebtFilter',
     'applyEquipmentDebtFilterToPage',
+    'ri-tab-sep',
+    'is-planned',
+    'is-primary',
+    'ri-planned-note',
     EQUIPMENT_ENDPOINTS.base,
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);

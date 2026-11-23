@@ -37,20 +37,27 @@ import {
   scanPageStructure,
 } from '../core/inspector.js';
 import {
+  BYPASS_CHOICE_OPTIONS,
+  BYPASS_REASON_BY_TYPE,
+  BYPASS_TYPE_OPTIONS,
   fetchInsideBoxMacLogs,
   fetchInsideBoxMacs,
+  fetchInsideByPassMeta,
   fetchInsideModemInfo,
   fetchInsideOltInit,
   fetchInsideOltListByLocation,
   fetchInsideOnlineSessions,
   findMatchingOltOption,
+  getByPassTypeLabel,
   getCachedInsideContract,
   getInsideOltHint,
   isExtendedPortOlt,
   isSameOltDetectedInfo,
   runInsideAction,
+  searchInsideByPass,
   setInsideOltHint,
   validateBoxNewMac,
+  validateByPassPayload,
 } from '../adapters/inside.js';
 import {
   bootstrapMvcPortSession,
@@ -266,6 +273,23 @@ export function mountRemoteInside({
     killLoginUrl: '',
     killSessions: [],
     killArmedObjId: '',
+    bypassTab: 'create',
+    bypassLoading: false,
+    bypassError: '',
+    bypassLoginUrl: '',
+    bypassMeta: null,
+    bypassChoice: 'Hợp đồng',
+    bypassContract: '',
+    bypassAcc: '',
+    bypassType: 'Bo Gong Tam va Phai Xu Ly Gong Lai',
+    bypassContent: '',
+    bypassSearchQuery: '',
+    bypassRows: [],
+    bypassSelectedKey: '',
+    bypassEditAcc: '',
+    bypassEditType: '',
+    bypassEditContent: '',
+    bypassArmedDelete: '',
     portModalLoading: false,
     portModalError: '',
     portModalLoginUrl: '',
@@ -470,6 +494,23 @@ export function mountRemoteInside({
     state.killLoginUrl = '';
     state.killSessions = [];
     state.killArmedObjId = '';
+    state.bypassTab = 'create';
+    state.bypassLoading = false;
+    state.bypassError = '';
+    state.bypassLoginUrl = '';
+    state.bypassMeta = null;
+    state.bypassChoice = 'Hợp đồng';
+    state.bypassContract = '';
+    state.bypassAcc = '';
+    state.bypassType = 'Bo Gong Tam va Phai Xu Ly Gong Lai';
+    state.bypassContent = '';
+    state.bypassSearchQuery = '';
+    state.bypassRows = [];
+    state.bypassSelectedKey = '';
+    state.bypassEditAcc = '';
+    state.bypassEditType = '';
+    state.bypassEditContent = '';
+    state.bypassArmedDelete = '';
     state.portModalLoading = false;
     state.portModalError = '';
     state.portModalLoginUrl = '';
@@ -608,6 +649,118 @@ export function mountRemoteInside({
       }
       state.killLoading = false;
       state.killError = err && err.message ? err.message : 'Lỗi tải danh sách phiên đang online.';
+    }
+    renderConfirm();
+  }
+
+  function getBypassRowKey(row, idx = 0) {
+    return `${(row && row.contract) || ''}|${(row && row.date) || ''}|${idx}`;
+  }
+
+  function selectBypassRow(row, idx = 0) {
+    if (!row) {
+      state.bypassSelectedKey = '';
+      state.bypassEditAcc = '';
+      state.bypassEditType = '';
+      state.bypassEditContent = '';
+      state.bypassArmedDelete = '';
+      return;
+    }
+    state.bypassSelectedKey = getBypassRowKey(row, idx);
+    state.bypassEditAcc = row.accByPass || '';
+    state.bypassEditType = row.flagByPass || 'Bo Gong';
+    state.bypassEditContent = row.content || '';
+    state.bypassArmedDelete = '';
+  }
+
+  async function runByPassSearchInModal(rawQuery) {
+    const clean = String(rawQuery || '').trim();
+    state.bypassSearchQuery = clean;
+    state.bypassError = '';
+    state.bypassArmedDelete = '';
+    if (!clean) {
+      state.bypassRows = [];
+      selectBypassRow(null);
+      renderConfirm();
+      return;
+    }
+    state.bypassLoading = true;
+    renderConfirm();
+    try {
+      const res = await searchInsideByPass(clean);
+      if (!state.confirmAction || state.confirmAction.id !== 'bypass') {
+        return;
+      }
+      state.bypassLoading = false;
+      if (res.status === 'ok') {
+        if (res.meta) state.bypassMeta = res.meta;
+        state.bypassRows = Array.isArray(res.rows) ? res.rows : [];
+        selectBypassRow(state.bypassRows[0] || null, 0);
+      } else {
+        state.bypassError = res.message || 'Không tra cứu được danh sách ByPass.';
+        state.bypassLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'bypass') {
+        return;
+      }
+      state.bypassLoading = false;
+      state.bypassError = err && err.message ? err.message : 'Lỗi tra cứu CheckList ByPass.';
+    }
+    renderConfirm();
+  }
+
+  async function loadInsideByPassModal(contractId) {
+    state.bypassLoading = true;
+    state.bypassError = '';
+    state.bypassLoginUrl = '';
+    state.bypassTab = 'create';
+    state.bypassChoice = 'Hợp đồng';
+    state.bypassContract = contractId || '';
+    state.bypassAcc = '';
+    state.bypassType = 'Bo Gong Tam va Phai Xu Ly Gong Lai';
+    state.bypassContent = '';
+    state.bypassSearchQuery = contractId || '';
+    state.bypassRows = [];
+    selectBypassRow(null);
+    renderConfirm();
+
+    try {
+      const metaRes = await fetchInsideByPassMeta();
+      if (!state.confirmAction || state.confirmAction.id !== 'bypass') {
+        return;
+      }
+      if (metaRes.status !== 'ok') {
+        state.bypassLoading = false;
+        state.bypassError = metaRes.message || 'Không tải được cấu hình CheckList ByPass.';
+        state.bypassLoginUrl = metaRes.loginUrl || '';
+        renderConfirm();
+        return;
+      }
+      state.bypassMeta = metaRes.meta || null;
+
+      if (contractId) {
+        const searchRes = await searchInsideByPass(contractId);
+        if (!state.confirmAction || state.confirmAction.id !== 'bypass') {
+          return;
+        }
+        state.bypassLoading = false;
+        if (searchRes.status === 'ok') {
+          state.bypassRows = Array.isArray(searchRes.rows) ? searchRes.rows : [];
+          selectBypassRow(state.bypassRows[0] || null, 0);
+        } else {
+          state.bypassError = searchRes.message || 'Không tra cứu được tình trạng ByPass hiện tại.';
+          state.bypassLoginUrl = searchRes.loginUrl || '';
+        }
+      } else {
+        state.bypassLoading = false;
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'bypass') {
+        return;
+      }
+      state.bypassLoading = false;
+      state.bypassError = err && err.message ? err.message : 'Lỗi tải CheckList ByPass.';
     }
     renderConfirm();
   }
@@ -1190,6 +1343,8 @@ export function mountRemoteInside({
         if (state.contractInput) {
           loadContractOltContextForModal(state.contractInput);
         }
+      } else if (state.activePortalId === 'inside' && action.id === 'bypass') {
+        loadInsideByPassModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'release_port') {
         loadPortReleaseModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
@@ -1216,6 +1371,7 @@ export function mountRemoteInside({
 
     const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
     const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
+    const isInsideBypassLog = portal.id === 'inside' && action.id === 'bypass';
     const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
     const isPortAssignLog = portal.id === 'port' && action.id === 'assign_port';
     const isPortReleaseLog = portal.id === 'port' && action.id === 'release_port';
@@ -1224,6 +1380,13 @@ export function mountRemoteInside({
     if (isClearOsp && actionCtx.oltName) {
       const baseOlt = portSummary ? `${actionCtx.oltName} (P:${portSummary})` : actionCtx.oltName;
       logTarget = contractId ? `${contractId} • ${baseOlt}` : baseOlt;
+    } else if (isInsideBypassLog) {
+      const bpTarget = actionCtx.contract || contractId;
+      const bpLabel =
+        actionCtx.mode === 'delete'
+          ? 'Xóa ByPass'
+          : getByPassTypeLabel(actionCtx.typeByPass || '');
+      logTarget = [bpTarget, bpLabel].filter(Boolean).join(' • ');
     } else if (isKillSession && actionCtx.ipAddress) {
       logTarget = contractId ? `${contractId} • ${actionCtx.ipAddress}` : actionCtx.ipAddress;
     } else if (isPortAssignLog && actionCtx.deviceName) {
@@ -3300,13 +3463,18 @@ export function mountRemoteInside({
     const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
     const isInsideKill = portal.id === 'inside' && act.id === 'kill_session';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
+    const isInsideBypass = portal.id === 'inside' && act.id === 'bypass';
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
     const sheetParts = [
       el('h2', {
         className: 'ri-sheet-title',
-        text: isInsideKill ? 'Kill Session — Phiên đang chạy' : `Xác nhận ${act.label}?`,
+        text: isInsideKill
+          ? 'Kill Session — Phiên đang chạy'
+          : isInsideBypass
+          ? 'CheckList ByPass'
+          : `Xác nhận ${act.label}?`,
       }),
       el('p', {
         className: 'ri-sheet-sub',
@@ -3355,6 +3523,80 @@ export function mountRemoteInside({
     });
 
     let showConfirmBtn = true;
+
+    function buildByPassStatusAndReasonFields({
+      typeId,
+      reasonId,
+      typeLabel,
+      currentType,
+      currentContent,
+      onTypeChange,
+      onReasonChange,
+    }) {
+      const typeSelect = el('select', { className: 'ri-select', id: typeId });
+      for (const opt of BYPASS_TYPE_OPTIONS) {
+        const o = el('option', { value: opt.value, text: opt.label });
+        if (opt.value === currentType) o.selected = true;
+        typeSelect.appendChild(o);
+      }
+      typeSelect.value = currentType;
+
+      const reasonSelect = el('select', { className: 'ri-select', id: reasonId });
+      const reasonWrap = el('div', { className: 'ri-confirm-input-wrap' }, [
+        el('label', { className: 'ri-confirm-label', for: reasonId, text: 'Lý do ByPass' }),
+        reasonSelect,
+      ]);
+
+      function populateReasons(selType, selReason) {
+        const reasons = BYPASS_REASON_BY_TYPE[selType] || [];
+        reasonSelect.textContent = '';
+        if (reasons.length === 0) {
+          reasonWrap.style.display = 'none';
+          return '';
+        }
+        reasonWrap.style.display = '';
+        reasonSelect.appendChild(el('option', { value: '', text: '-- Chọn lý do ByPass --' }));
+        let matched = '';
+        for (const r of reasons) {
+          const o = el('option', { value: r.value, text: r.label });
+          if (r.value === selReason) {
+            o.selected = true;
+            matched = r.value;
+          }
+          reasonSelect.appendChild(o);
+        }
+        if (!matched && selReason) {
+          const extra = el('option', { value: selReason, text: selReason });
+          extra.selected = true;
+          reasonSelect.appendChild(extra);
+          matched = selReason;
+        }
+        reasonSelect.value = matched;
+        return matched;
+      }
+
+      const resolvedReason = populateReasons(currentType, currentContent);
+      if (resolvedReason !== currentContent) {
+        onReasonChange(resolvedReason, true);
+      }
+
+      typeSelect.addEventListener('change', (e) => {
+        const nextType = e.target.value;
+        const nextReason = populateReasons(nextType, '');
+        onTypeChange(nextType, nextReason);
+      });
+      reasonSelect.addEventListener('change', (e) => {
+        onReasonChange(e.target.value, false);
+      });
+
+      return {
+        typeWrap: el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('label', { className: 'ri-confirm-label', for: typeId, text: typeLabel }),
+          typeSelect,
+        ]),
+        reasonWrap,
+      };
+    }
 
     if (isInsideModem) {
       if (state.modemLoading) {
@@ -3927,6 +4169,500 @@ export function mountRemoteInside({
             })
           )
         );
+      }
+    } else if (isInsideBypass) {
+      const manageCountLabel = state.bypassLoading ? '…' : String(state.bypassRows.length);
+      sheetParts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-mode-row' }, [
+            el('button', {
+              type: 'button',
+              className: `ri-mode-btn${state.bypassTab === 'create' ? ' is-active' : ''}`,
+              text: 'Thêm mới ByPass',
+              onClick: () => {
+                state.bypassTab = 'create';
+                renderConfirm();
+              },
+            }),
+            el('button', {
+              type: 'button',
+              className: `ri-mode-btn${state.bypassTab === 'manage' ? ' is-active' : ''}`,
+              text: `Tra cứu / Sửa (${manageCountLabel})`,
+              onClick: () => {
+                state.bypassTab = 'manage';
+                renderConfirm();
+              },
+            }),
+          ]),
+        ])
+      );
+
+      if (state.bypassMeta && state.bypassMeta.currentUser) {
+        sheetParts.push(
+          el('div', {
+            className: 'ri-confirm-meta',
+            text: `Tài khoản thao tác (AccLeaderByPass): ${state.bypassMeta.currentUser}`,
+          })
+        );
+      }
+
+      if (state.bypassLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: 'Đang tải thông tin CheckList ByPass từ mvc.inside.fpt.net…' }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.bypassError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadInsideByPassModal(contractId),
+          }),
+        ];
+        if (state.bypassLoginUrl && /iam|hết hạn/i.test(state.bypassError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Đăng nhập IAM',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.bypassLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.bypassError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.bypassTab === 'create') {
+        confirmBtn.textContent = 'Lưu ByPass mới';
+
+        if (state.bypassMeta && state.bypassMeta.isInsert === false) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: 'Tài khoản hiện tại có thể không có quyền thêm mới ByPass (isInsert = False).',
+              }),
+            ])
+          );
+        }
+
+        if (state.bypassRows.length > 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: `Tìm thấy ${state.bypassRows.length} bản ghi ByPass trong tháng này cho "${state.bypassSearchQuery}". Bạn có thể xem hoặc cập nhật tại tab Tra cứu / Sửa.`,
+              }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: `Mở Tra cứu / Sửa (${state.bypassRows.length})`,
+                  onClick: () => {
+                    state.bypassTab = 'manage';
+                    renderConfirm();
+                  },
+                }),
+              ]),
+            ])
+          );
+        }
+
+        const choiceSelect = el('select', { className: 'ri-select', id: 'ri-bypass-choice' });
+        for (const opt of BYPASS_CHOICE_OPTIONS) {
+          const o = el('option', { value: opt.value, text: opt.label });
+          if (opt.value === state.bypassChoice) o.selected = true;
+          choiceSelect.appendChild(o);
+        }
+        choiceSelect.value = state.bypassChoice;
+
+        const targetInput = el('input', {
+          type: 'text',
+          className: 'ri-confirm-input',
+          id: 'ri-bypass-contract',
+          placeholder:
+            state.bypassChoice === 'Tập điểm'
+              ? 'Ví dụ: HNIW151.0001/FO'
+              : 'Ví dụ: VTAAR2501',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          value: state.bypassContract,
+        });
+        targetInput.value = state.bypassContract;
+
+        const accInput = el('input', {
+          type: 'email',
+          className: 'ri-confirm-input',
+          id: 'ri-bypass-acc',
+          placeholder: 'Ví dụ: ten.nvkt@fpt.com (bắt buộc có @)',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          value: state.bypassAcc,
+        });
+        accInput.value = state.bypassAcc;
+
+        const accHint = el('div', { className: 'ri-field-hint' });
+        const formHint = el('div', { className: 'ri-field-hint' });
+
+        function syncBypassCreateUi() {
+          const rawAcc = String(state.bypassAcc || '').trim();
+          if (!rawAcc) {
+            accHint.textContent = 'Check NVKT: Bắt buộc nhập email NV kỹ thuật (có ký tự @).';
+            accHint.dataset.state = 'neutral';
+          } else if (rawAcc.includes('@')) {
+            accHint.textContent = `Check NVKT hợp lệ: ${rawAcc}`;
+            accHint.dataset.state = 'ok';
+          } else {
+            accHint.textContent = 'Check NVKT: Định dạng mail chưa đúng (thiếu ký tự @).';
+            accHint.dataset.state = 'error';
+          }
+
+          const v = validateByPassPayload({
+            mode: 'create',
+            choice: state.bypassChoice,
+            contract: state.bypassContract,
+            accByPass: state.bypassAcc,
+            typeByPass: state.bypassType,
+            contentByPass: state.bypassContent,
+          });
+          if (v.valid) {
+            formHint.textContent = `Sẵn sàng lưu (${v.choice}: ${v.contract})`;
+            formHint.dataset.state = 'ok';
+            confirmBtn.disabled = false;
+          } else {
+            formHint.textContent = v.error;
+            formHint.dataset.state = 'warn';
+            confirmBtn.disabled = true;
+          }
+        }
+
+        choiceSelect.addEventListener('change', (e) => {
+          state.bypassChoice = e.target.value;
+          targetInput.placeholder =
+            state.bypassChoice === 'Tập điểm'
+              ? 'Ví dụ: HNIW151.0001/FO'
+              : 'Ví dụ: VTAAR2501';
+          syncBypassCreateUi();
+        });
+        targetInput.addEventListener('input', (e) => {
+          state.bypassContract = e.target.value;
+          syncBypassCreateUi();
+        });
+        accInput.addEventListener('input', (e) => {
+          state.bypassAcc = e.target.value;
+          syncBypassCreateUi();
+        });
+
+        const { typeWrap, reasonWrap } = buildByPassStatusAndReasonFields({
+          typeId: 'ri-bypass-type',
+          reasonId: 'ri-bypass-reason',
+          typeLabel: 'Tình trạng ByPass',
+          currentType: state.bypassType,
+          currentContent: state.bypassContent,
+          onTypeChange: (nextType, nextReason) => {
+            state.bypassType = nextType;
+            state.bypassContent = nextReason;
+            syncBypassCreateUi();
+          },
+          onReasonChange: (nextReason, quiet) => {
+            state.bypassContent = nextReason;
+            if (!quiet) syncBypassCreateUi();
+          },
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', { className: 'ri-confirm-label', for: 'ri-bypass-choice', text: 'Loại' }),
+            choiceSelect,
+          ]),
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-bypass-contract',
+              text: 'Số hợp đồng / Tập điểm',
+            }),
+            targetInput,
+          ]),
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-bypass-acc',
+              text: 'Email nhân viên kỹ thuật',
+            }),
+            accInput,
+            accHint,
+          ]),
+          typeWrap,
+          reasonWrap,
+          formHint
+        );
+
+        syncBypassCreateUi();
+
+        confirmBtn.addEventListener('click', () => {
+          runConfirmedAction(act, {
+            mode: 'create',
+            choice: state.bypassChoice,
+            contract: state.bypassContract,
+            accByPass: state.bypassAcc,
+            typeByPass: state.bypassType,
+            contentByPass: state.bypassContent,
+            accLeaderByPass: (state.bypassMeta && state.bypassMeta.currentUser) || '',
+          });
+        });
+      } else {
+        const searchInput = el('input', {
+          type: 'text',
+          className: 'ri-confirm-input',
+          id: 'ri-bypass-search',
+          placeholder: 'Nhập Số HĐ hoặc Tập điểm để tìm…',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          value: state.bypassSearchQuery,
+        });
+        searchInput.value = state.bypassSearchQuery;
+        searchInput.addEventListener('input', (e) => {
+          state.bypassSearchQuery = e.target.value;
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-bypass-search',
+              text: 'Tìm kiếm CheckList ByPass (trong tháng hiện tại)',
+            }),
+            el('div', { className: 'ri-contract-row' }, [
+              searchInput,
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Tìm',
+                onClick: () => runByPassSearchInModal(state.bypassSearchQuery),
+              }),
+            ]),
+          ])
+        );
+
+        if (state.bypassRows.length === 0) {
+          showConfirmBtn = false;
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: state.bypassSearchQuery
+                  ? `Không tìm thấy bản ghi ByPass nào cho "${state.bypassSearchQuery}" trong tháng này.`
+                  : 'Nhập Số hợp đồng hoặc Tập điểm rồi bấm "Tìm".',
+              }),
+            ])
+          );
+        } else {
+          confirmBtn.textContent = 'Lưu cập nhật ByPass';
+          const listEl = el(
+            'div',
+            { className: 'ri-box-list' },
+            state.bypassRows.map((row, idx) => {
+              const rowKey = getBypassRowKey(row, idx);
+              const isSelected = state.bypassSelectedKey === rowKey;
+              const subLines = [
+                `Loại: ${row.flagByPassLabel || row.flagByPass || '—'}`,
+                row.content ? `Lý do: ${row.content}` : '',
+                `NVKT: ${row.accByPass || '—'}`,
+                [
+                  row.district ? `Quận: ${row.district}` : '',
+                  row.accCreateByPass ? `Tạo: ${row.accCreateByPass}` : '',
+                  row.date ? `Ngày tạo: ${row.date}` : '',
+                  row.updateDate ? `Cập nhật: ${row.updateDate}` : '',
+                ]
+                  .filter(Boolean)
+                  .join(' • '),
+              ].filter(Boolean);
+
+              return el(
+                'button',
+                {
+                  type: 'button',
+                  className: `ri-box-item${isSelected ? ' is-selected' : ''}`,
+                  'aria-pressed': isSelected ? 'true' : 'false',
+                  onClick: () => {
+                    selectBypassRow(row, idx);
+                    renderConfirm();
+                  },
+                },
+                [
+                  el('div', { className: 'ri-box-item-main' }, [
+                    el('div', { className: 'ri-box-mac', text: row.contract || '—' }),
+                    ...subLines.map((line) => el('div', { className: 'ri-box-sub', text: line })),
+                  ]),
+                  el('span', {
+                    className: 'ri-tab-badge',
+                    text: isSelected ? 'Đang sửa' : 'Chọn',
+                  }),
+                ]
+              );
+            })
+          );
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', {
+                  className: 'ri-confirm-label',
+                  text: `Tìm được ${state.bypassRows.length} bản ghi ByPass`,
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  text: 'Tải lại',
+                  onClick: () => runByPassSearchInModal(state.bypassSearchQuery),
+                }),
+              ]),
+              listEl,
+            ])
+          );
+
+          const selectedRow =
+            state.bypassRows.find((r, i) => getBypassRowKey(r, i) === state.bypassSelectedKey) ||
+            state.bypassRows[0];
+
+          const editAccInput = el('input', {
+            type: 'email',
+            className: 'ri-confirm-input',
+            id: 'ri-bypass-edit-acc',
+            placeholder: 'Email nhân viên kỹ thuật (có @)',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.bypassEditAcc,
+          });
+          editAccInput.value = state.bypassEditAcc;
+
+          const editHint = el('div', { className: 'ri-field-hint' });
+
+          function syncBypassUpdateUi() {
+            const v = validateByPassPayload({
+              mode: 'update',
+              contract: selectedRow.contract,
+              accByPass: state.bypassEditAcc,
+              typeByPass: state.bypassEditType,
+              contentByPass: state.bypassEditContent,
+              oldAccByPass: selectedRow.accByPass,
+              oldTypeByPass: selectedRow.flagByPass,
+              oldContentByPass: selectedRow.content,
+            });
+            if (v.valid) {
+              editHint.textContent = `Sẵn sàng cập nhật ${selectedRow.contract}`;
+              editHint.dataset.state = 'ok';
+              confirmBtn.disabled = false;
+            } else {
+              editHint.textContent = v.error;
+              editHint.dataset.state = 'warn';
+              confirmBtn.disabled = true;
+            }
+          }
+
+          editAccInput.addEventListener('input', (e) => {
+            state.bypassEditAcc = e.target.value;
+            syncBypassUpdateUi();
+          });
+
+          const { typeWrap, reasonWrap } = buildByPassStatusAndReasonFields({
+            typeId: 'ri-bypass-edit-type',
+            reasonId: 'ri-bypass-edit-reason',
+            typeLabel: 'Loại ByPass mới',
+            currentType: state.bypassEditType || selectedRow.flagByPass || 'Bo Gong',
+            currentContent: state.bypassEditContent,
+            onTypeChange: (nextType, nextReason) => {
+              state.bypassEditType = nextType;
+              state.bypassEditContent = nextReason;
+              syncBypassUpdateUi();
+            },
+            onReasonChange: (nextReason, quiet) => {
+              state.bypassEditContent = nextReason;
+              if (!quiet) syncBypassUpdateUi();
+            },
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-bypass-edit-acc',
+                text: `Chỉnh sửa dòng: ${selectedRow.contract}`,
+              }),
+              editAccInput,
+            ]),
+            typeWrap,
+            reasonWrap,
+            editHint
+          );
+
+          if (state.bypassMeta && state.bypassMeta.canDelete) {
+            const delKey = getBypassRowKey(
+              selectedRow,
+              state.bypassRows.indexOf(selectedRow)
+            );
+            const isDelArmed = state.bypassArmedDelete === delKey;
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                isDelArmed
+                  ? el('div', { className: 'ri-result-actions' }, [
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-secondary-btn',
+                        text: 'Hủy xóa',
+                        onClick: () => {
+                          state.bypassArmedDelete = '';
+                          renderConfirm();
+                        },
+                      }),
+                      el('button', {
+                        type: 'button',
+                        className: 'ri-danger-btn',
+                        text: `Xác nhận xóa ${selectedRow.contract}`,
+                        onClick: () =>
+                          runConfirmedAction(act, {
+                            mode: 'delete',
+                            contract: selectedRow.contract,
+                          }),
+                      }),
+                    ])
+                  : el('button', {
+                      type: 'button',
+                      className: 'ri-secondary-btn',
+                      text: `Xóa dòng ${selectedRow.contract}`,
+                      onClick: () => {
+                        state.bypassArmedDelete = delKey;
+                        renderConfirm();
+                      },
+                    }),
+              ])
+            );
+          }
+
+          syncBypassUpdateUi();
+
+          confirmBtn.addEventListener('click', () => {
+            runConfirmedAction(act, {
+              mode: 'update',
+              contract: selectedRow.contract,
+              accByPass: state.bypassEditAcc,
+              typeByPass: state.bypassEditType,
+              contentByPass: state.bypassEditContent,
+              oldAccByPass: selectedRow.accByPass,
+              oldTypeByPass: selectedRow.flagByPass,
+              oldContentByPass: selectedRow.content,
+            });
+          });
+        }
       }
     } else if (isPortRelease) {
       confirmBtn.textContent = 'Xác nhận Thu hồi Port';

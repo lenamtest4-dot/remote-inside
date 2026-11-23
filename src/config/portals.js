@@ -12,8 +12,8 @@ export const PORTALS = {
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
     status: 'priority',
-    statusLabel: 'Đủ 5 lệnh',
-    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP.',
+    statusLabel: 'Đủ 6 lệnh',
+    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',
     actions: [
       {
         id: 'lookup',
@@ -54,6 +54,16 @@ export const PORTALS = {
         requiresConfirm: true,
         requiresContract: false,
         confirmNote: 'Chọn đúng POP OLT và Port cần Clear Serial trước khi xác nhận.',
+      },
+      {
+        id: 'bypass',
+        label: 'ByPass',
+        description: 'Tra cứu, thêm mới hoặc cập nhật tình trạng Gông / Bỏ gông trên CheckList ByPass.',
+        kind: 'danger',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Kiểm tra đúng Số HĐ / Tập điểm, Email NV kỹ thuật, Tình trạng và Lý do ByPass trước khi lưu.',
       },
     ],
   },

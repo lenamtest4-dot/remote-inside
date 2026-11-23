@@ -38,10 +38,14 @@ import {
   scanPageStructure,
 } from '../src/core/inspector.js';
 import {
+  BYPASS_CHOICE_OPTIONS,
+  BYPASS_REASON_BY_TYPE,
+  BYPASS_TYPE_OPTIONS,
   INSIDE_ENDPOINTS,
   extractHtmlTablePairs,
   extractJsAlertMessages,
   fetchInsideBoxMacLogs,
+  fetchInsideByPassMeta,
   fetchInsideModemInfo,
   fetchInsideOnlineSessions,
   findMatchingOltOption,
@@ -51,6 +55,11 @@ import {
   isSameOltDetectedInfo,
   normalizeBoxMac,
   parseBoxMacLogItems,
+  parseByPassDeleteResponse,
+  parseByPassInsertResponse,
+  parseByPassListRows,
+  parseByPassPageMeta,
+  parseByPassUpdateResponse,
   parseClearSerialResponse,
   parseInsideLookupPayload,
   parseInsideMutationResponse,
@@ -61,8 +70,10 @@ import {
   parseRadiusOltFromText,
   parseReplaceMacBoxResponse,
   runInsideAction,
+  searchInsideByPass,
   setInsideOltHint,
   validateBoxNewMac,
+  validateByPassPayload,
 } from '../src/adapters/inside.js';
 import {
   PORT_ENDPOINTS,
@@ -144,8 +155,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.8.4'),
-    'Userscript must bump @version to 0.8.4'
+    userscriptContent.includes('@version      0.9.0'),
+    'Userscript must bump @version to 0.9.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1559,6 +1570,182 @@ async function runTests() {
     'Userscript bundle must include current_page_v1 scan kind'
   );
   console.log('   OK: port.fpt.net adapter tests passed.');
+
+  console.log('15. Testing Inside CheckList ByPass parsers, validators, and demo execution...');
+  const bypassActionCfg = PORTALS.inside.actions.find((a) => a.id === 'bypass');
+  assert.ok(bypassActionCfg, 'PORTALS.inside.actions must contain bypass action');
+  assert.equal(bypassActionCfg.label, 'ByPass');
+  assert.equal(bypassActionCfg.requiresContract, false);
+  assert.ok(
+    INSIDE_ENDPOINTS.bypass &&
+      INSIDE_ENDPOINTS.bypass.insert.includes('/CheckListByPass/CLByPass/InsListByPass') &&
+      INSIDE_ENDPOINTS.bypass.update.includes('/CheckListByPass/CLByPass/UpdateRowTableCL'),
+    'INSIDE_ENDPOINTS.bypass must wire live CheckList ByPass endpoints'
+  );
+  assert.equal(BYPASS_CHOICE_OPTIONS.length, 2);
+  assert.equal(BYPASS_TYPE_OPTIONS.length, 3);
+  assert.equal(BYPASS_REASON_BY_TYPE.Gong.length, 0);
+  assert.equal(BYPASS_REASON_BY_TYPE['Bo Gong'].length, 4);
+  assert.equal(BYPASS_REASON_BY_TYPE['Bo Gong Tam va Phai Xu Ly Gong Lai'].length, 4);
+
+  const bypassMetaNormal = parseByPassPageMeta(`
+    <script>
+      var UseCN = 'Phuongnam.namlp';
+      var isInsert = 'True';
+      e["AccLeaderByPass"] = 'Phuongnam.namlp';
+      function LoadType() { $("#drpType").kendoDropDownList({ dataSource: [{ value: '', text: 'Tat ca' }] }); }
+      function LoadTypeView() { $("#drpTypeView").kendoDropDownList({ dataSource: [{ value: 1, text: 'Hop dong' }] }); }
+    </` + `script>
+  `);
+  assert.equal(bypassMetaNormal.currentUser, 'Phuongnam.namlp');
+  assert.equal(bypassMetaNormal.isInsert, true);
+  assert.equal(bypassMetaNormal.canDelete, false);
+  assert.equal(bypassMetaNormal.defaultFlagByPass, '');
+  assert.equal(bypassMetaNormal.contractTypeView, '1');
+
+  const bypassMetaAdmin = parseByPassPageMeta(`var UseCN = 'NgoanHT2'; var isInsert = 'False';`);
+  assert.equal(bypassMetaAdmin.currentUser, 'NgoanHT2');
+  assert.equal(bypassMetaAdmin.isInsert, false);
+  assert.equal(bypassMetaAdmin.canDelete, true);
+
+  assert.equal(
+    validateByPassPayload({
+      mode: 'create',
+      choice: 'Hợp đồng',
+      contract: 'VTAAR2501',
+      accByPass: 'bad_email',
+      typeByPass: 'Gong',
+    }).valid,
+    false,
+    'Missing @ in AccByPass must fail validation'
+  );
+  assert.equal(
+    validateByPassPayload({
+      mode: 'create',
+      choice: 'Hợp đồng',
+      contract: 'VTAAR2501',
+      accByPass: 'nvkt@fpt.com',
+      typeByPass: 'Bo Gong',
+      contentByPass: '',
+    }).valid,
+    false,
+    'Missing ContentByPass for Bo Gong must fail validation'
+  );
+  assert.equal(
+    validateByPassPayload({
+      mode: 'create',
+      choice: 'Hợp đồng',
+      contract: 'VTAAR2501',
+      accByPass: 'nvkt@fpt.com',
+      typeByPass: 'Bo Gong Tam va Phai Xu Ly Gong Lai',
+      contentByPass: '',
+    }).valid,
+    false,
+    'Missing ContentByPass for Bo Gong Tam must fail validation'
+  );
+  const validGong = validateByPassPayload({
+    mode: 'create',
+    choice: 'Tập điểm',
+    contract: 'HNIW151.0001/FO',
+    accByPass: 'nvkt@fpt.com',
+    typeByPass: 'Gong',
+    contentByPass: 'should be cleared',
+  });
+  assert.equal(validGong.valid, true);
+  assert.equal(validGong.contentByPass, '', 'Gong mode must clear ContentByPass');
+
+  assert.equal(
+    validateByPassPayload({
+      mode: 'update',
+      contract: 'VTAAR2501',
+      accByPass: 'nvkt@fpt.com',
+      typeByPass: 'Bo Gong',
+      contentByPass: 'Ha tang doi tac',
+      oldAccByPass: 'nvkt@fpt.com',
+      oldTypeByPass: 'Bo Gong',
+      oldContentByPass: 'Ha tang doi tac',
+    }).valid,
+    false,
+    'Unchanged ByPass update payload must fail validation'
+  );
+
+  const parsedByPassRows = parseByPassListRows(
+    JSON.stringify([
+      {
+        STT: 1,
+        BillTo_District: 'Vung Tau',
+        Contract: 'VTAAR2501',
+        AccCreateByPass: 'namlp',
+        AccLeaderByPass: 'namlp',
+        AccByPass: 'nvkt@fpt.com',
+        FlagByPass: 'Bo Gong',
+        Date: '23/11/2026',
+        UpdateDate: '23/11/2026 16:30',
+        Content: 'Ha tang doi tac',
+      },
+    ])
+  );
+  assert.equal(parsedByPassRows.length, 1);
+  assert.equal(parsedByPassRows[0].contract, 'VTAAR2501');
+  assert.equal(parsedByPassRows[0].flagByPass, 'Bo Gong');
+
+  assert.equal(parseByPassInsertResponse('"Thanh cong 1 dong"', 'VTAAR2501').status, 'ok');
+  assert.equal(
+    parseByPassInsertResponse('"Bạn không có quyền thực hiện thao tác này!"', 'VTAAR2501').status,
+    'error'
+  );
+  assert.equal(parseByPassUpdateResponse('-1', 'VTAAR2501').status, 'error');
+  assert.ok(parseByPassUpdateResponse('-1', 'VTAAR2501').message.includes('RX'));
+  assert.equal(parseByPassUpdateResponse('-2', 'HNIW151.0001/FO').status, 'error');
+  assert.ok(parseByPassUpdateResponse('-2', 'HNIW151.0001/FO').message.includes('tập điểm'));
+  assert.equal(parseByPassUpdateResponse('No permision!', 'VTAAR2501').status, 'error');
+  assert.equal(parseByPassUpdateResponse('[]', 'VTAAR2501').status, 'error');
+  const bpUpdOk = parseByPassUpdateResponse('[{"UpdateDate":"23/11/2026 16:30"}]', 'VTAAR2501');
+  assert.equal(bpUpdOk.status, 'ok');
+  assert.equal(bpUpdOk.updateDate, '23/11/2026 16:30');
+  assert.equal(parseByPassDeleteResponse('1', 'VTAAR2501').status, 'ok');
+  assert.equal(parseByPassDeleteResponse('0', 'VTAAR2501').status, 'error');
+
+  const demoBpMeta = await fetchInsideByPassMeta({ forceDemo: true });
+  assert.equal(demoBpMeta.status, 'ok');
+  const demoBpSearch = await searchInsideByPass('VTAAR2501', { forceDemo: true });
+  assert.equal(demoBpSearch.status, 'ok');
+  assert.equal(demoBpSearch.rows[0].contract, 'VTAAR2501');
+
+  const demoBpCreate = await runInsideAction('bypass', 'VTAAR2501', {
+    mode: 'create',
+    choice: 'Hợp đồng',
+    contract: 'VTAAR2501',
+    accByPass: 'nvkt@fpt.com',
+    typeByPass: 'Bo Gong',
+    contentByPass: 'Ha tang doi tac',
+    forceDemo: true,
+  });
+  assert.equal(demoBpCreate.status, 'ok');
+  assert.equal(demoBpCreate.mode, 'demo');
+
+  const demoBpPointNoTopContract = await runInsideAction('bypass', '', {
+    mode: 'create',
+    choice: 'Tập điểm',
+    contract: 'HNIW151.0001/FO',
+    accByPass: 'nvkt@fpt.com',
+    typeByPass: 'Gong',
+    forceDemo: true,
+  });
+  assert.equal(demoBpPointNoTopContract.status, 'ok');
+  assert.ok(
+    demoBpPointNoTopContract.summaryFields.some((f) => f.value === 'HNIW151.0001/FO'),
+    'ByPass in Tap diem mode must work without top contract input'
+  );
+
+  assert.ok(userscriptContent.includes('InsListByPass'), 'Userscript must include InsListByPass');
+  assert.ok(userscriptContent.includes('UpdateRowTableCL'), 'Userscript must include UpdateRowTableCL');
+  assert.ok(userscriptContent.includes('LoadListContract'), 'Userscript must include LoadListContract');
+  assert.ok(
+    userscriptContent.includes('loadInsideByPassModal'),
+    'Userscript must include loadInsideByPassModal'
+  );
+  console.log('   OK: Inside CheckList ByPass adapter tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

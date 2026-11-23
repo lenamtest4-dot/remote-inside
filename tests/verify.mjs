@@ -47,6 +47,7 @@ import {
   formatInsideTimestamp,
   getInsideOltHint,
   isExtendedPortOlt,
+  isSameOltDetectedInfo,
   normalizeBoxMac,
   parseBoxMacLogItems,
   parseClearSerialResponse,
@@ -120,8 +121,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.6.0'),
-    'Userscript must bump @version to 0.6.0'
+    userscriptContent.includes('@version      0.6.1'),
+    'Userscript must bump @version to 0.6.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1088,6 +1089,44 @@ async function runTests() {
   assert.equal(cachedOltHint.oltPop, 'BRUP00101GC16');
   assert.equal(cachedOltHint.port, '5');
   assert.equal(getInsideOltHint('999999999'), null);
+
+  assert.equal(
+    isSameOltDetectedInfo(
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
+      { objId: '432227490', oltPop: 'brup07501gc16 ', slot: '0', port: '8', onu: '94', ipOlt: ' 11.72.121.74' }
+    ),
+    true
+  );
+  assert.equal(
+    isSameOltDetectedInfo(
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '9', onu: '94', ipOlt: '11.72.121.74' }
+    ),
+    false
+  );
+  assert.equal(
+    isSameOltDetectedInfo(
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '' },
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' }
+    ),
+    false
+  );
+  assert.equal(
+    isSameOltDetectedInfo(
+      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
+      { objId: '432227490', oltPop: 'BRUP00101GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' }
+    ),
+    false
+  );
+  assert.equal(
+    isSameOltDetectedInfo(null, { objId: '432227490', oltPop: 'BRUP07501GC16' }),
+    false
+  );
+
+  assert.ok(userscriptContent.includes('isSameOltDetectedInfo'), 'Bundle must include isSameOltDetectedInfo');
+  assert.ok(userscriptContent.includes('renderConfirm'), 'Bundle must include isolated renderConfirm');
+  assert.ok(userscriptContent.includes('data-ri-slot'), 'Bundle must include persistent Clear OSP slots');
+  assert.ok(userscriptContent.includes('oltConnManualOpen'), 'Bundle must include oltConnManualOpen');
   console.log('   OK: Kill Session rows, Box history schema, and Radius OLT auto-detect passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');

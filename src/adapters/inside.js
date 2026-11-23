@@ -82,6 +82,21 @@ export function getInsideOltHint(objId) {
   return entry;
 }
 
+export function isSameOltDetectedInfo(a, b) {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') {
+    return false;
+  }
+  const norm = (v) => String(v || '').trim();
+  return (
+    norm(a.objId) === norm(b.objId) &&
+    norm(a.oltPop).toUpperCase() === norm(b.oltPop).toUpperCase() &&
+    norm(a.slot) === norm(b.slot) &&
+    norm(a.port) === norm(b.port) &&
+    norm(a.onu) === norm(b.onu) &&
+    norm(a.ipOlt) === norm(b.ipOlt)
+  );
+}
+
 export function getCachedInsideContract(rawContractId) {
   const check = validateContractId(rawContractId);
   if (!check.valid) return null;

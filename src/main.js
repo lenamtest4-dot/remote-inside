@@ -38,6 +38,7 @@ function startRadiusParamsBridge() {
   }
 
   let lastKey = '';
+  let observer = null;
   function tryPost() {
     try {
       const text = document.body.innerText || document.body.textContent || '';
@@ -56,6 +57,10 @@ function startRadiusParamsBridge() {
           '*'
         );
       }
+      if (parsed.oltPop && parsed.ipOlt && observer) {
+        observer.disconnect();
+        observer = null;
+      }
     } catch {
       // Bo qua loi doc/gui thong so tu iframe
     }
@@ -63,8 +68,8 @@ function startRadiusParamsBridge() {
 
   tryPost();
 
-  if (typeof MutationObserver === 'function') {
-    const observer = new MutationObserver(() => {
+  if (typeof MutationObserver === 'function' && !(lastKey && !lastKey.endsWith('|'))) {
+    observer = new MutationObserver(() => {
       tryPost();
     });
     observer.observe(document.body, {
@@ -74,11 +79,14 @@ function startRadiusParamsBridge() {
     });
     setTimeout(() => {
       try {
-        observer.disconnect();
+        if (observer) {
+          observer.disconnect();
+          observer = null;
+        }
       } catch {
         // ignore
       }
-    }, 20000);
+    }, 10000);
   }
 
   return true;

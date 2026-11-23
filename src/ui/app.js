@@ -46,6 +46,7 @@ import {
   getCachedInsideContract,
   getInsideOltHint,
   isExtendedPortOlt,
+  isSameOltDetectedInfo,
   runInsideAction,
   setInsideOltHint,
   validateBoxNewMac,
@@ -194,6 +195,7 @@ export function mountRemoteInside({
     oltContractObjId: '',
     oltContractError: '',
     oltConnOpen: true,
+    oltConnManualOpen: false,
     oltDetectedInfo: null,
     oltAutoMatched: false,
     oltUserTouched: false,
@@ -219,6 +221,12 @@ export function mountRemoteInside({
   let pollTimer = null;
 
   const wrapper = el('div', { className: 'ri-root' });
+  const mainLayer = el('div', { className: 'ri-layer-main' });
+  const confirmLayer = el('div', { className: 'ri-layer-confirm' });
+  const scannerLayer = el('div', { className: 'ri-layer-scanner' });
+  wrapper.appendChild(mainLayer);
+  wrapper.appendChild(confirmLayer);
+  wrapper.appendChild(scannerLayer);
   if (cssText) {
     const styleEl = document.createElement('style');
     styleEl.textContent = cssText;
@@ -239,6 +247,20 @@ export function mountRemoteInside({
     ].slice(0, 20);
   }
 
+  function syncSessionPillOrRenderMain() {
+    const pillEl = mainLayer.querySelector('.ri-status-pill');
+    if (pillEl) {
+      pillEl.setAttribute('data-state', state.sessionStatus.state);
+      pillEl.title = state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM';
+      const labelSpan = pillEl.querySelector('span:last-child');
+      if (labelSpan) {
+        labelSpan.textContent = state.sessionStatus.label;
+      }
+      return;
+    }
+    renderMain();
+  }
+
   async function refreshSessionStatus() {
     const portal = PORTALS[state.activePortalId];
     if (!isUserscriptEnv()) {
@@ -248,7 +270,7 @@ export function mountRemoteInside({
         loginUrl: portal.url,
         detail: 'Đang chạy mô phỏng cục bộ (chưa gắn Tampermonkey).',
       };
-      render();
+      syncSessionPillOrRenderMain();
       return;
     }
 
@@ -258,11 +280,11 @@ export function mountRemoteInside({
       loginUrl: portal.url,
       detail: '',
     };
-    render();
+    syncSessionPillOrRenderMain();
     const checked = await checkPortalSession(portal);
     if (state.activePortalId === portal.id) {
       state.sessionStatus = checked;
-      render();
+      syncSessionPillOrRenderMain();
     }
   }
 
@@ -330,6 +352,7 @@ export function mountRemoteInside({
     state.oltContractObjId = '';
     state.oltContractError = '';
     state.oltConnOpen = true;
+    state.oltConnManualOpen = false;
     state.oltDetectedInfo = null;
     state.oltAutoMatched = false;
     state.oltUserTouched = false;
@@ -400,7 +423,7 @@ export function mountRemoteInside({
         state.activePortalId === 'inside'
       ) {
         if (!data.objId || !state.oltContractObjId || String(data.objId) === String(state.oltContractObjId)) {
-          state.oltDetectedInfo = saved || {
+          const nextInfo = saved || {
             objId: String(data.objId || ''),
             oltPop: String(data.oltPop || ''),
             slot: String(data.slot || ''),
@@ -408,8 +431,15 @@ export function mountRemoteInside({
             onu: String(data.onu || ''),
             ipOlt: String(data.ipOlt || ''),
           };
+          if (isSameOltDetectedInfo(state.oltDetectedInfo, nextInfo)) {
+            return;
+          }
+          state.oltDetectedInfo = nextInfo;
           applyDetectedOltToModal();
-          render();
+          if (!state.oltConnManualOpen) {
+            state.oltConnOpen = false;
+          }
+          renderConfirm();
         }
       }
     });
@@ -421,7 +451,7 @@ export function mountRemoteInside({
     state.killLoginUrl = '';
     state.killSessions = [];
     state.killArmedObjId = '';
-    render();
+    renderConfirm();
 
     try {
       const res = await fetchInsideOnlineSessions(contractId);
@@ -442,7 +472,7 @@ export function mountRemoteInside({
       state.killLoading = false;
       state.killError = err && err.message ? err.message : 'Lỗi tải danh sách phiên đang online.';
     }
-    render();
+    renderConfirm();
   }
 
   async function loadModemInfoForModal(contractId) {
@@ -450,7 +480,7 @@ export function mountRemoteInside({
     state.modemError = '';
     state.modemLoginUrl = '';
     state.modemInfo = null;
-    render();
+    renderConfirm();
 
     try {
       const res = await fetchInsideModemInfo(contractId);
@@ -472,7 +502,7 @@ export function mountRemoteInside({
       state.modemLoading = false;
       state.modemError = err && err.message ? err.message : 'Lỗi tải MAC Modem hiện tại.';
     }
-    render();
+    renderConfirm();
   }
 
   async function loadBoxMacsForModal(contractId) {
@@ -484,7 +514,7 @@ export function mountRemoteInside({
     state.boxItems = [];
     state.boxSelectedMac = '';
     state.boxLogs = [];
-    render();
+    renderConfirm();
 
     try {
       const [macsRes, logsRes] = await Promise.all([
@@ -523,13 +553,13 @@ export function mountRemoteInside({
       state.boxLogLoading = false;
       state.boxError = err && err.message ? err.message : 'Lỗi tải dữ liệu MAC Box.';
     }
-    render();
+    renderConfirm();
   }
 
   async function reloadBoxLogsForModal(contractId) {
     state.boxLogLoading = true;
     state.boxLogError = '';
-    render();
+    renderConfirm();
 
     try {
       const logsRes = await fetchInsideBoxMacLogs(contractId);
@@ -549,7 +579,7 @@ export function mountRemoteInside({
       state.boxLogLoading = false;
       state.boxLogError = err && err.message ? err.message : 'Lỗi tải lịch sử Reset MAC.';
     }
-    render();
+    renderConfirm();
   }
 
   async function loadContractOltContextForModal(contractId) {
@@ -566,12 +596,18 @@ export function mountRemoteInside({
           ipOlt: '11.72.121.17',
         };
         applyDetectedOltToModal();
+        if (!state.oltConnManualOpen) {
+          state.oltConnOpen = false;
+        }
         return;
       }
       const hint = getInsideOltHint(objId);
       if (hint) {
         state.oltDetectedInfo = hint;
         applyDetectedOltToModal();
+        if (!state.oltConnManualOpen) {
+          state.oltConnOpen = false;
+        }
       }
     }
 
@@ -580,14 +616,14 @@ export function mountRemoteInside({
       state.oltContractObjId = String(cached.objID);
       state.oltContractError = '';
       applyCachedHintIfPresent(state.oltContractObjId);
-      render();
+      renderConfirm();
       return;
     }
 
     state.oltContractLoading = true;
     state.oltContractObjId = '';
     state.oltContractError = '';
-    render();
+    renderConfirm();
 
     try {
       const res = await fetchInsideModemInfo(contractId);
@@ -610,14 +646,14 @@ export function mountRemoteInside({
       state.oltContractError =
         err && err.message ? err.message : 'Lỗi tải thông tin hợp đồng để mở Thông số kết nối.';
     }
-    render();
+    renderConfirm();
   }
 
   async function loadOltDataForModal(forceRefresh = false) {
     state.oltLoading = true;
     state.oltError = '';
     state.oltLoginUrl = '';
-    render();
+    renderConfirm();
 
     try {
       const res = await fetchInsideOltInit({ forceRefresh });
@@ -646,7 +682,7 @@ export function mountRemoteInside({
       state.oltLoading = false;
       state.oltError = err && err.message ? err.message : 'Lỗi tải dữ liệu MonitorOLT.';
     }
-    render();
+    renderConfirm();
   }
 
   async function loadOltListForSelectedLocation(locationId) {
@@ -659,7 +695,7 @@ export function mountRemoteInside({
     state.oltLoading = true;
     state.oltError = '';
     state.oltLoginUrl = '';
-    render();
+    renderConfirm();
 
     try {
       const res = await fetchInsideOltListByLocation(locationId, { forceRefresh: true });
@@ -680,7 +716,7 @@ export function mountRemoteInside({
       state.oltLoading = false;
       state.oltError = err && err.message ? err.message : 'Lỗi tải danh sách POP OLT.';
     }
-    render();
+    renderConfirm();
   }
 
   async function triggerAction(action) {
@@ -695,7 +731,7 @@ export function mountRemoteInside({
           title: 'Thiếu Mã hợp đồng',
           message: check.error,
         };
-        render();
+        renderMain();
         return;
       }
       state.contractInput = check.value;
@@ -706,7 +742,7 @@ export function mountRemoteInside({
     if (action.requiresConfirm) {
       resetConfirmState();
       state.confirmAction = action;
-      render();
+      renderConfirm();
       if (state.activePortalId === 'inside' && action.id === 'reset_mac') {
         loadModemInfoForModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'reset_mac_box') {
@@ -824,7 +860,7 @@ export function mountRemoteInside({
       contractId
     );
     state.copyNotice = 'Đã chụp xong cấu trúc trang hiện tại (đã lọc thông tin nhạy cảm).';
-    render();
+    renderScanner();
   }
 
   function handleToggleRecording() {
@@ -878,14 +914,14 @@ export function mountRemoteInside({
     if (!isUserscriptEnv()) {
       state.copyNotice =
         'Tính năng Quét API phụ chỉ chạy khi bạn đang mở trang FPT qua Tampermonkey.';
-      render();
+      renderScanner();
       return;
     }
 
     state.isDeepScanning = true;
     state.copyNotice =
       'Đang đọc cấu trúc 5 mục phụ + Reset MAC / Kill Session (chỉ đọc, không tác động dữ liệu)…';
-    render();
+    renderScanner();
 
     try {
       const contractId = normalizeContractId(state.contractInput);
@@ -1055,7 +1091,7 @@ export function mountRemoteInside({
       }`;
     } finally {
       state.isDeepScanning = false;
-      render();
+      renderScanner();
     }
   }
 
@@ -1064,14 +1100,14 @@ export function mountRemoteInside({
     if (!isUserscriptEnv()) {
       state.copyNotice =
         'Tính năng Quét tham số chỉ chạy khi đang mở trang FPT qua Tampermonkey.';
-      render();
+      renderScanner();
       return;
     }
 
     state.isDeepScanning = true;
     state.copyNotice =
       'Đang đọc mã Kill Session (IP), Reset MAC & chunk Thông số kết nối (chỉ đọc, không tác động dữ liệu)…';
-    render();
+    renderScanner();
 
     try {
       const contractId = normalizeContractId(state.contractInput);
@@ -1257,7 +1293,7 @@ export function mountRemoteInside({
       }`;
     } finally {
       state.isDeepScanning = false;
-      render();
+      renderScanner();
     }
   }
 
@@ -1272,7 +1308,7 @@ export function mountRemoteInside({
     state.copyNotice = ok
       ? 'Đã sao chép báo cáo sạch vào bộ nhớ tạm! Bạn chỉ cần dán vào khung chat.'
       : 'Không sao chép tự động được — bạn bấm nút "Tải file JSON" bên cạnh nhé.';
-    render();
+    renderScanner();
   }
 
   function handleDownloadScanReport() {
@@ -1284,7 +1320,7 @@ export function mountRemoteInside({
     });
     downloadJsonFile(`remote-inside-scan-${state.activePortalId}.json`, report);
     state.copyNotice = `Đã tải file remote-inside-scan-${state.activePortalId}.json.`;
-    render();
+    renderScanner();
   }
 
   function openConsole() {
@@ -1322,7 +1358,11 @@ export function mountRemoteInside({
       text: state.isWide ? 'Thu hẹp' : 'Mở rộng',
       onClick: () => {
         state.isWide = !state.isWide;
-        render();
+        const shellEl = mainLayer.querySelector('.ri-shell');
+        if (shellEl) {
+          shellEl.classList.toggle('is-wide', state.isWide);
+        }
+        wideBtn.textContent = state.isWide ? 'Thu hẹp' : 'Mở rộng';
       },
     });
 
@@ -1332,7 +1372,7 @@ export function mountRemoteInside({
       text: 'Quét cấu trúc',
       onClick: () => {
         state.scannerOpen = true;
-        render();
+        renderScanner();
       },
     });
 
@@ -1637,7 +1677,7 @@ export function mountRemoteInside({
           text: 'Mở Quét cấu trúc',
           onClick: () => {
             state.scannerOpen = true;
-            render();
+            renderScanner();
           },
         }),
         el('button', {
@@ -1668,25 +1708,26 @@ export function mountRemoteInside({
     }
 
     if (Array.isArray(res.embeddedViews) && res.embeddedViews.length > 0) {
+      const cardSyncers = [];
       const embedCards = res.embeddedViews.map((v) => {
-        const isOpen = Boolean(state.openViews[v.id]);
-        const reloadCount = state.viewReloadKeys[v.id] || 0;
-        const headButtons = [];
-
-        if (isOpen && v.url) {
-          headButtons.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-embed-open-link',
-              text: 'Tải lại',
-              onClick: () => {
-                state.viewReloadKeys[v.id] = reloadCount + 1;
-                render();
-              },
-            })
-          );
+        const bodyHost = el('div', { className: 'ri-embed-body-host' });
+        let reloadBtn = null;
+        if (v.url) {
+          reloadBtn = el('button', {
+            type: 'button',
+            className: 'ri-embed-open-link',
+            text: 'Tải lại',
+          });
         }
 
+        const toggleBtn = el('button', {
+          type: 'button',
+          className: 'ri-embed-toggle',
+          text: 'Mở xem',
+        });
+
+        const headButtons = [];
+        if (reloadBtn) headButtons.push(reloadBtn);
         if (v.url) {
           headButtons.push(
             el('button', {
@@ -1701,20 +1742,78 @@ export function mountRemoteInside({
             })
           );
         }
+        headButtons.push(toggleBtn);
 
-        headButtons.push(
-          el('button', {
-            type: 'button',
-            className: `ri-embed-toggle${isOpen ? ' is-open' : ''}`,
-            text: isOpen ? 'Thu gọn' : 'Mở xem',
-            onClick: () => {
-              state.openViews[v.id] = !isOpen;
-              render();
-            },
-          })
-        );
+        let mountedFrameSrc = '';
 
-        const cardParts = [
+        function syncCard({ forceReload = false } = {}) {
+          const isOpen = Boolean(state.openViews[v.id]);
+          toggleBtn.className = `ri-embed-toggle${isOpen ? ' is-open' : ''}`;
+          toggleBtn.textContent = isOpen ? 'Thu gọn' : 'Mở xem';
+          if (reloadBtn) {
+            reloadBtn.style.display = isOpen ? '' : 'none';
+          }
+
+          if (!isOpen) {
+            if (bodyHost.childNodes.length > 0) {
+              bodyHost.textContent = '';
+            }
+            mountedFrameSrc = '';
+            return;
+          }
+
+          if (!v.url) {
+            if (bodyHost.childNodes.length === 0) {
+              bodyHost.appendChild(
+                el('div', { className: 'ri-embed-body' }, [
+                  el('div', {
+                    className: 'ri-embed-demo',
+                    text: v.demoNote || 'Chưa có đường dẫn ở chế độ xem thử.',
+                  }),
+                ])
+              );
+            }
+            return;
+          }
+
+          const reloadCount = state.viewReloadKeys[v.id] || 0;
+          const frameSrc =
+            reloadCount > 0
+              ? `${v.url}${v.url.includes('?') ? '&' : '?'}_ri=${reloadCount}`
+              : v.url;
+
+          if (!forceReload && mountedFrameSrc === frameSrc && bodyHost.childNodes.length > 0) {
+            return;
+          }
+
+          mountedFrameSrc = frameSrc;
+          const iframeEl = el('iframe', {
+            className: 'ri-embed-frame',
+            src: frameSrc,
+            loading: 'lazy',
+            title: v.title,
+          });
+          iframeEl.style.height = `${v.height || 320}px`;
+          bodyHost.textContent = '';
+          bodyHost.appendChild(el('div', { className: 'ri-embed-body' }, [iframeEl]));
+        }
+
+        if (reloadBtn) {
+          reloadBtn.addEventListener('click', () => {
+            state.viewReloadKeys[v.id] = (state.viewReloadKeys[v.id] || 0) + 1;
+            syncCard({ forceReload: true });
+          });
+        }
+
+        toggleBtn.addEventListener('click', () => {
+          state.openViews[v.id] = !Boolean(state.openViews[v.id]);
+          syncCard();
+        });
+
+        syncCard();
+        cardSyncers.push(() => syncCard());
+
+        return el('div', { className: 'ri-embed-card' }, [
           el('div', { className: 'ri-embed-head' }, [
             el('div', { className: 'ri-embed-title-wrap' }, [
               el('span', { className: 'ri-embed-title', text: v.title }),
@@ -1722,35 +1821,8 @@ export function mountRemoteInside({
             ]),
             el('div', { className: 'ri-embed-actions' }, headButtons),
           ]),
-        ];
-
-        if (isOpen) {
-          if (v.url) {
-            const frameSrc =
-              reloadCount > 0
-                ? `${v.url}${v.url.includes('?') ? '&' : '?'}_ri=${reloadCount}`
-                : v.url;
-            const iframeEl = el('iframe', {
-              className: 'ri-embed-frame',
-              src: frameSrc,
-              loading: 'lazy',
-              title: v.title,
-            });
-            iframeEl.style.height = `${v.height || 320}px`;
-            cardParts.push(el('div', { className: 'ri-embed-body' }, [iframeEl]));
-          } else {
-            cardParts.push(
-              el('div', { className: 'ri-embed-body' }, [
-                el('div', {
-                  className: 'ri-embed-demo',
-                  text: v.demoNote || 'Chưa có đường dẫn ở chế độ xem thử.',
-                }),
-              ])
-            );
-          }
-        }
-
-        return el('div', { className: 'ri-embed-card' }, cardParts);
+          bodyHost,
+        ]);
       });
 
       children.push(
@@ -1767,7 +1839,7 @@ export function mountRemoteInside({
                 text: 'Mở tất cả',
                 onClick: () => {
                   for (const v of res.embeddedViews) state.openViews[v.id] = true;
-                  render();
+                  for (const fn of cardSyncers) fn();
                 },
               }),
               el('button', {
@@ -1776,7 +1848,7 @@ export function mountRemoteInside({
                 text: 'Thu gọn tất cả',
                 onClick: () => {
                   for (const v of res.embeddedViews) state.openViews[v.id] = false;
-                  render();
+                  for (const fn of cardSyncers) fn();
                 },
               }),
             ]),
@@ -1845,6 +1917,429 @@ export function mountRemoteInside({
     ]);
   }
 
+  function buildClearOltConnCard(contractId) {
+    if (!contractId) {
+      return { connCardEl: null, connStateKey: 'no-contract' };
+    }
+    const connStateKey = JSON.stringify([
+      contractId,
+      Boolean(state.oltConnOpen),
+      Boolean(state.oltContractLoading),
+      state.oltContractError || '',
+      state.oltContractObjId || '',
+    ]);
+    const connUrl = state.oltContractObjId
+      ? `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
+          state.oltContractObjId
+        )}`
+      : '';
+    const connHeadButtons = [];
+    if (isUserscriptEnv() && connUrl) {
+      connHeadButtons.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-embed-open-link',
+          text: 'Mở riêng',
+          onClick: () => {
+            if (pageWindow && pageWindow.open) {
+              pageWindow.open(connUrl, '_blank', 'noopener');
+            }
+          },
+        })
+      );
+    }
+    if (state.oltContractError) {
+      connHeadButtons.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-embed-open-link',
+          text: 'Thử lại',
+          onClick: () => loadContractOltContextForModal(contractId),
+        })
+      );
+    }
+    connHeadButtons.push(
+      el('button', {
+        type: 'button',
+        className: `ri-embed-toggle${state.oltConnOpen ? ' is-open' : ''}`,
+        text: state.oltConnOpen ? 'Thu gọn' : 'Mở xem',
+        onClick: () => {
+          const nextOpen = !state.oltConnOpen;
+          state.oltConnOpen = nextOpen;
+          state.oltConnManualOpen = nextOpen;
+          renderConfirm();
+        },
+      })
+    );
+
+    const connCardParts = [
+      el('div', { className: 'ri-embed-head' }, [
+        el('div', { className: 'ri-embed-title-wrap' }, [
+          el('span', { className: 'ri-embed-title', text: 'Thông số kết nối (xem OLT / Port)' }),
+          el('span', { className: 'ri-embed-badge', text: contractId }),
+        ]),
+        el('div', { className: 'ri-embed-actions' }, connHeadButtons),
+      ]),
+    ];
+
+    if (state.oltConnOpen) {
+      if (state.oltContractLoading) {
+        connCardParts.push(
+          el('div', { className: 'ri-embed-body' }, [
+            el('div', {
+              className: 'ri-embed-demo',
+              text: `Đang lấy ObjID của ${contractId} để mở Thông số kết nối…`,
+            }),
+          ])
+        );
+      } else if (state.oltContractError) {
+        connCardParts.push(
+          el('div', { className: 'ri-embed-body' }, [
+            el('div', { className: 'ri-embed-demo', text: state.oltContractError }),
+          ])
+        );
+      } else if (!isUserscriptEnv()) {
+        connCardParts.push(
+          el('div', { className: 'ri-embed-body' }, [
+            el('div', {
+              className: 'ri-embed-demo',
+              text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT BRUP00101GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
+            }),
+          ])
+        );
+      } else if (connUrl) {
+        const connIframe = el('iframe', {
+          className: 'ri-embed-frame',
+          src: connUrl,
+          loading: 'lazy',
+          title: `Thông số kết nối ${contractId}`,
+        });
+        connIframe.style.height = '300px';
+        connCardParts.push(el('div', { className: 'ri-embed-body' }, [connIframe]));
+      }
+    }
+
+    return {
+      connCardEl: el('div', { className: 'ri-embed-card ri-conn-box' }, connCardParts),
+      connStateKey,
+    };
+  }
+
+  function buildClearOltFormParts(act, contractId) {
+    const parts = [];
+    const cancelBtn = el('button', {
+      type: 'button',
+      className: 'ri-secondary-btn',
+      text: 'Hủy',
+      onClick: () => {
+        resetConfirmState();
+        renderConfirm();
+      },
+    });
+    const confirmBtn = el('button', {
+      type: 'button',
+      className: 'ri-danger-btn',
+      text: 'Xác nhận Clear Serial',
+    });
+
+    if (state.oltDetectedInfo && state.oltDetectedInfo.oltPop) {
+      const d = state.oltDetectedInfo;
+      const posLabel =
+        d.slot || d.port || d.onu
+          ? ` [S:${d.slot || '-'} / P:${d.port || '-'} / O:${d.onu || '-'}]`
+          : '';
+      const subParts = [];
+      if (d.ipOlt) subParts.push(`IP OLT: ${d.ipOlt}`);
+      subParts.push(
+        state.oltAutoMatched
+          ? 'Đã tự động chọn sẵn POP OLT & Port bên dưới'
+          : 'Chưa khớp tên OLT tự động — hãy lọc chọn POP OLT tương ứng bên dưới'
+      );
+      parts.push(
+        el('div', { className: 'ri-olt-detected' }, [
+          el('div', {
+            className: 'ri-olt-detected-title',
+            text: `Thông số kết nối: ${d.oltPop}${posLabel}`,
+          }),
+          el('div', {
+            className: 'ri-olt-detected-sub',
+            text: subParts.join(' • '),
+          }),
+        ])
+      );
+    }
+
+    if (state.oltLoading) {
+      parts.push(
+        el('div', { className: 'ri-sheet-status is-loading' }, [
+          el('span', { className: 'ri-spinner' }),
+          el('span', { text: 'Đang tải vùng miền & danh sách POP OLT từ MonitorOLT…' }),
+        ])
+      );
+      confirmBtn.disabled = true;
+    } else if (state.oltError) {
+      const errActions = [
+        el('button', {
+          type: 'button',
+          className: 'ri-secondary-btn',
+          text: 'Thử tải lại',
+          onClick: () => loadOltDataForModal(true),
+        }),
+      ];
+      if (state.oltLoginUrl && /iam|hết hạn/i.test(state.oltError)) {
+        errActions.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đăng nhập IAM',
+            onClick: () => {
+              if (pageWindow && pageWindow.open) {
+                pageWindow.open(state.oltLoginUrl, '_blank', 'noopener');
+              }
+            },
+          })
+        );
+      }
+      parts.push(
+        el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+          el('div', { text: state.oltError }),
+          el('div', { className: 'ri-result-actions' }, errActions),
+        ])
+      );
+      confirmBtn.disabled = true;
+    } else {
+      const locHead = el('div', { className: 'ri-inline-head' }, [
+        el('span', { className: 'ri-confirm-label', text: 'Vùng miền' }),
+        el('button', {
+          type: 'button',
+          className: 'ri-text-btn',
+          text: 'Tải lại DS OLT',
+          onClick: () => loadOltDataForModal(true),
+        }),
+      ]);
+
+      if (state.oltLocations.length > 1) {
+        const locSelect = el(
+          'select',
+          { className: 'ri-select', id: 'ri-olt-location' },
+          state.oltLocations.map((loc) => {
+            const opt = el('option', { value: loc.id, text: loc.name });
+            if (loc.id === state.oltLocationId) opt.selected = true;
+            return opt;
+          })
+        );
+        locSelect.value = state.oltLocationId;
+        locSelect.addEventListener('change', (e) => {
+          loadOltListForSelectedLocation(e.target.value);
+        });
+        parts.push(el('div', { className: 'ri-confirm-input-wrap' }, [locHead, locSelect]));
+      } else if (state.oltLocations.length === 1) {
+        parts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            locHead,
+            el('div', {
+              className: 'ri-confirm-meta',
+              text: `Vùng hiện tại: ${state.oltLocations[0].name}`,
+            }),
+          ])
+        );
+      }
+
+      const oltCountSpan = el('span', { className: 'ri-text-btn' });
+      const searchInput = el('input', {
+        type: 'text',
+        className: 'ri-confirm-input',
+        id: 'ri-olt-search',
+        placeholder: 'Lọc nhanh tên OLT (ví dụ: BRUP001, GC16…)',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        value: state.oltSearch,
+      });
+      searchInput.value = state.oltSearch;
+
+      const oltSelect = el('select', { className: 'ri-select', id: 'ri-olt-select' });
+
+      function syncOltConfirmState() {
+        const activeOltId = oltSelect.value || state.oltSelectedId;
+        confirmBtn.disabled =
+          !activeOltId || activeOltId === '0' || state.oltSelectedPorts.length === 0;
+      }
+
+      function populateOltSelect(queryText) {
+        const q = String(queryText || '').trim().toLowerCase();
+        const filtered = q
+          ? state.oltList.filter((o) => o.name.toLowerCase().includes(q))
+          : state.oltList;
+
+        oltCountSpan.textContent = q
+          ? `${filtered.length}/${state.oltList.length} OLT`
+          : `${state.oltList.length} OLT`;
+
+        oltSelect.textContent = '';
+        oltSelect.appendChild(
+          el('option', {
+            value: '',
+            text:
+              filtered.length > 0
+                ? `-- Chọn POP OLT (${filtered.length}) --`
+                : '-- Không có POP OLT khớp từ khóa --',
+          })
+        );
+
+        let hasSelectedInFiltered = false;
+        for (const item of filtered) {
+          const opt = el('option', { value: item.id, text: item.name });
+          if (item.id === state.oltSelectedId) {
+            opt.selected = true;
+            hasSelectedInFiltered = true;
+          }
+          oltSelect.appendChild(opt);
+        }
+
+        if (hasSelectedInFiltered) {
+          oltSelect.value = state.oltSelectedId;
+        } else {
+          oltSelect.value = '';
+        }
+        syncOltConfirmState();
+      }
+
+      populateOltSelect(state.oltSearch);
+
+      searchInput.addEventListener('input', (e) => {
+        state.oltUserTouched = true;
+        state.oltSearch = e.target.value;
+        populateOltSelect(state.oltSearch);
+      });
+
+      oltSelect.addEventListener('change', (e) => {
+        state.oltUserTouched = true;
+        state.oltAutoMatched = false;
+        state.oltSelectedId = e.target.value;
+        state.oltSelectedPorts = [];
+        const picked = state.oltList.find((o) => o.id === state.oltSelectedId);
+        state.oltShowAllPorts = picked ? isExtendedPortOlt(picked.name) : false;
+        renderConfirm();
+      });
+
+      parts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-inline-head' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-olt-search',
+              text: 'POP OLT',
+            }),
+            oltCountSpan,
+          ]),
+          searchInput,
+        ]),
+        el('div', { className: 'ri-confirm-input-wrap' }, [oltSelect])
+      );
+
+      const selectedOltObj = state.oltList.find((o) => o.id === state.oltSelectedId);
+      const isExtOlt = selectedOltObj ? isExtendedPortOlt(selectedOltObj.name) : false;
+      const portsSource =
+        state.oltPorts.length > 0
+          ? state.oltPorts
+          : Array.from({ length: 16 }, (_, idx) => ({
+              value: String(idx + 1),
+              label: `Port ${idx + 1}`,
+              isType2: idx + 1 > 8,
+            }));
+      const hasType2 = portsSource.some((p) => p.isType2);
+      const showAll = isExtOlt || state.oltShowAllPorts;
+      const visiblePorts = showAll ? portsSource : portsSource.filter((p) => !p.isType2);
+
+      const portTools = [];
+      if (!isExtOlt && hasType2) {
+        portTools.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: state.oltShowAllPorts ? 'Ẩn port 9–16' : 'Hiện đủ 16 port',
+            onClick: () => {
+              state.oltShowAllPorts = !state.oltShowAllPorts;
+              renderConfirm();
+            },
+          })
+        );
+      }
+      if (state.oltSelectedPorts.length > 0) {
+        portTools.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Bỏ chọn',
+            onClick: () => {
+              state.oltUserTouched = true;
+              state.oltSelectedPorts = [];
+              renderConfirm();
+            },
+          })
+        );
+      }
+
+      const selectedPortSet = new Set(state.oltSelectedPorts);
+      const portOrder = new Map(portsSource.map((p, idx) => [p.value, idx]));
+
+      const portGrid = el(
+        'div',
+        { className: 'ri-port-grid' },
+        visiblePorts.map((p) => {
+          const active = selectedPortSet.has(p.value);
+          const displayLabel = /^\d+$/.test(p.label) ? `Port ${p.label}` : p.label;
+          return el('button', {
+            type: 'button',
+            className: `ri-port-chip${active ? ' is-selected' : ''}`,
+            'aria-pressed': active ? 'true' : 'false',
+            text: displayLabel,
+            onClick: () => {
+              state.oltUserTouched = true;
+              if (selectedPortSet.has(p.value)) {
+                state.oltSelectedPorts = state.oltSelectedPorts.filter((x) => x !== p.value);
+              } else {
+                const next = [...state.oltSelectedPorts, p.value];
+                next.sort((a, b) => (portOrder.get(a) ?? 999) - (portOrder.get(b) ?? 999));
+                state.oltSelectedPorts = next;
+              }
+              renderConfirm();
+            },
+          });
+        })
+      );
+
+      parts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-inline-head' }, [
+            el('span', {
+              className: 'ri-confirm-label',
+              text: `Chọn Port (${state.oltSelectedPorts.length} đã chọn)`,
+            }),
+            el('div', { className: 'ri-embed-toolbar-btns' }, portTools),
+          ]),
+          portGrid,
+        ])
+      );
+
+      syncOltConfirmState();
+
+      confirmBtn.addEventListener('click', () => {
+        const activeOltId = oltSelect.value || state.oltSelectedId;
+        const activeOlt = state.oltList.find((o) => o.id === activeOltId) || {};
+        runConfirmedAction(act, {
+          locationId: state.oltLocationId,
+          oltId: activeOltId,
+          oltName: activeOlt.name || '',
+          ports: state.oltSelectedPorts.slice(),
+        });
+      });
+    }
+
+    parts.push(el('div', { className: 'ri-sheet-buttons' }, [cancelBtn, confirmBtn]));
+    return parts;
+  }
+
   function renderConfirmSheet() {
     if (!state.confirmAction) return null;
     const act = state.confirmAction;
@@ -1899,7 +2394,7 @@ export function mountRemoteInside({
       text: (isInsideBox && state.boxTab === 'history') || isInsideKill ? 'Đóng' : 'Hủy',
       onClick: () => {
         resetConfirmState();
-        render();
+        renderConfirm();
       },
     });
 
@@ -2067,7 +2562,7 @@ export function mountRemoteInside({
               text: 'Đổi MAC Box',
               onClick: () => {
                 state.boxTab = 'replace';
-                render();
+                renderConfirm();
               },
             }),
             el('button', {
@@ -2076,7 +2571,7 @@ export function mountRemoteInside({
               text: `Lịch sử Reset MAC (${logCountLabel})`,
               onClick: () => {
                 state.boxTab = 'history';
-                render();
+                renderConfirm();
               },
             }),
           ]),
@@ -2251,7 +2746,7 @@ export function mountRemoteInside({
                   'aria-pressed': isSelected ? 'true' : 'false',
                   onClick: () => {
                     state.boxSelectedMac = item.MAC;
-                    render();
+                    renderConfirm();
                   },
                 },
                 [
@@ -2443,7 +2938,7 @@ export function mountRemoteInside({
                       text: 'Hủy',
                       onClick: () => {
                         state.killArmedObjId = '';
-                        render();
+                        renderConfirm();
                       },
                     }),
                     el('button', {
@@ -2466,7 +2961,7 @@ export function mountRemoteInside({
                       text: 'Kill phiên này',
                       onClick: () => {
                         state.killArmedObjId = rowKey;
-                        render();
+                        renderConfirm();
                       },
                     }),
                   ]);
@@ -2482,392 +2977,6 @@ export function mountRemoteInside({
             })
           )
         );
-      }
-    } else if (isInsideOlt) {
-      confirmBtn.textContent = 'Xác nhận Clear Serial';
-
-      if (contractId) {
-        const connUrl = state.oltContractObjId
-          ? `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
-              state.oltContractObjId
-            )}`
-          : '';
-        const connHeadButtons = [];
-        if (isUserscriptEnv() && connUrl) {
-          connHeadButtons.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-embed-open-link',
-              text: 'Mở riêng',
-              onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(connUrl, '_blank', 'noopener');
-                }
-              },
-            })
-          );
-        }
-        if (state.oltContractError) {
-          connHeadButtons.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-embed-open-link',
-              text: 'Thử lại',
-              onClick: () => loadContractOltContextForModal(contractId),
-            })
-          );
-        }
-        connHeadButtons.push(
-          el('button', {
-            type: 'button',
-            className: `ri-embed-toggle${state.oltConnOpen ? ' is-open' : ''}`,
-            text: state.oltConnOpen ? 'Thu gọn' : 'Mở xem',
-            onClick: () => {
-              state.oltConnOpen = !state.oltConnOpen;
-              render();
-            },
-          })
-        );
-
-        const connCardParts = [
-          el('div', { className: 'ri-embed-head' }, [
-            el('div', { className: 'ri-embed-title-wrap' }, [
-              el('span', { className: 'ri-embed-title', text: 'Thông số kết nối (xem OLT / Port)' }),
-              el('span', { className: 'ri-embed-badge', text: contractId }),
-            ]),
-            el('div', { className: 'ri-embed-actions' }, connHeadButtons),
-          ]),
-        ];
-
-        if (state.oltConnOpen) {
-          if (state.oltContractLoading) {
-            connCardParts.push(
-              el('div', { className: 'ri-embed-body' }, [
-                el('div', { className: 'ri-embed-demo', text: `Đang lấy ObjID của ${contractId} để mở Thông số kết nối…` }),
-              ])
-            );
-          } else if (state.oltContractError) {
-            connCardParts.push(
-              el('div', { className: 'ri-embed-body' }, [
-                el('div', { className: 'ri-embed-demo', text: state.oltContractError }),
-              ])
-            );
-          } else if (!isUserscriptEnv()) {
-            connCardParts.push(
-              el('div', { className: 'ri-embed-body' }, [
-                el('div', {
-                  className: 'ri-embed-demo',
-                  text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT BRUP00101GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
-                }),
-              ])
-            );
-          } else if (connUrl) {
-            const connIframe = el('iframe', {
-              className: 'ri-embed-frame',
-              src: connUrl,
-              loading: 'lazy',
-              title: `Thông số kết nối ${contractId}`,
-            });
-            connIframe.style.height = '300px';
-            connCardParts.push(el('div', { className: 'ri-embed-body' }, [connIframe]));
-          }
-        }
-
-        sheetParts.push(el('div', { className: 'ri-embed-card ri-conn-box' }, connCardParts));
-      }
-
-      if (state.oltDetectedInfo && state.oltDetectedInfo.oltPop) {
-        const d = state.oltDetectedInfo;
-        const posLabel =
-          d.slot || d.port || d.onu
-            ? ` [S:${d.slot || '-'} / P:${d.port || '-'} / O:${d.onu || '-'}]`
-            : '';
-        const subParts = [];
-        if (d.ipOlt) subParts.push(`IP OLT: ${d.ipOlt}`);
-        subParts.push(
-          state.oltAutoMatched
-            ? 'Đã tự động chọn sẵn POP OLT & Port bên dưới'
-            : 'Chưa khớp tên OLT tự động — hãy lọc chọn POP OLT tương ứng bên dưới'
-        );
-        sheetParts.push(
-          el('div', { className: 'ri-olt-detected' }, [
-            el('div', {
-              className: 'ri-olt-detected-title',
-              text: `Thông số kết nối: ${d.oltPop}${posLabel}`,
-            }),
-            el('div', {
-              className: 'ri-olt-detected-sub',
-              text: subParts.join(' • '),
-            }),
-          ])
-        );
-      }
-
-      if (state.oltLoading) {
-        sheetParts.push(
-          el('div', { className: 'ri-sheet-status is-loading' }, [
-            el('span', { className: 'ri-spinner' }),
-            el('span', { text: 'Đang tải vùng miền & danh sách POP OLT từ MonitorOLT…' }),
-          ])
-        );
-        confirmBtn.disabled = true;
-      } else if (state.oltError) {
-        const errActions = [
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            text: 'Thử tải lại',
-            onClick: () => loadOltDataForModal(true),
-          }),
-        ];
-        if (state.oltLoginUrl && /iam|hết hạn/i.test(state.oltError)) {
-          errActions.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-secondary-btn',
-              text: 'Đăng nhập IAM',
-              onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.oltLoginUrl, '_blank', 'noopener');
-                }
-              },
-            })
-          );
-        }
-        sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
-            el('div', { text: state.oltError }),
-            el('div', { className: 'ri-result-actions' }, errActions),
-          ])
-        );
-        confirmBtn.disabled = true;
-      } else {
-        const locHead = el('div', { className: 'ri-inline-head' }, [
-          el('span', { className: 'ri-confirm-label', text: 'Vùng miền' }),
-          el('button', {
-            type: 'button',
-            className: 'ri-text-btn',
-            text: 'Tải lại DS OLT',
-            onClick: () => loadOltDataForModal(true),
-          }),
-        ]);
-
-        if (state.oltLocations.length > 1) {
-          const locSelect = el(
-            'select',
-            { className: 'ri-select', id: 'ri-olt-location' },
-            state.oltLocations.map((loc) => {
-              const opt = el('option', { value: loc.id, text: loc.name });
-              if (loc.id === state.oltLocationId) opt.selected = true;
-              return opt;
-            })
-          );
-          locSelect.value = state.oltLocationId;
-          locSelect.addEventListener('change', (e) => {
-            loadOltListForSelectedLocation(e.target.value);
-          });
-          sheetParts.push(el('div', { className: 'ri-confirm-input-wrap' }, [locHead, locSelect]));
-        } else if (state.oltLocations.length === 1) {
-          sheetParts.push(
-            el('div', { className: 'ri-confirm-input-wrap' }, [
-              locHead,
-              el('div', {
-                className: 'ri-confirm-meta',
-                text: `Vùng hiện tại: ${state.oltLocations[0].name}`,
-              }),
-            ])
-          );
-        }
-
-        const oltCountSpan = el('span', { className: 'ri-text-btn' });
-        const searchInput = el('input', {
-          type: 'text',
-          className: 'ri-confirm-input',
-          id: 'ri-olt-search',
-          placeholder: 'Lọc nhanh tên OLT (ví dụ: BRUP001, GC16…)',
-          autocomplete: 'off',
-          spellcheck: 'false',
-          value: state.oltSearch,
-        });
-        searchInput.value = state.oltSearch;
-
-        const oltSelect = el('select', { className: 'ri-select', id: 'ri-olt-select' });
-
-        function syncOltConfirmState() {
-          const activeOltId = oltSelect.value || state.oltSelectedId;
-          confirmBtn.disabled =
-            !activeOltId || activeOltId === '0' || state.oltSelectedPorts.length === 0;
-        }
-
-        function populateOltSelect(queryText) {
-          const q = String(queryText || '').trim().toLowerCase();
-          const filtered = q
-            ? state.oltList.filter((o) => o.name.toLowerCase().includes(q))
-            : state.oltList;
-
-          oltCountSpan.textContent = q
-            ? `${filtered.length}/${state.oltList.length} OLT`
-            : `${state.oltList.length} OLT`;
-
-          oltSelect.textContent = '';
-          oltSelect.appendChild(
-            el('option', {
-              value: '',
-              text:
-                filtered.length > 0
-                  ? `-- Chọn POP OLT (${filtered.length}) --`
-                  : '-- Không có POP OLT khớp từ khóa --',
-            })
-          );
-
-          let hasSelectedInFiltered = false;
-          for (const item of filtered) {
-            const opt = el('option', { value: item.id, text: item.name });
-            if (item.id === state.oltSelectedId) {
-              opt.selected = true;
-              hasSelectedInFiltered = true;
-            }
-            oltSelect.appendChild(opt);
-          }
-
-          if (hasSelectedInFiltered) {
-            oltSelect.value = state.oltSelectedId;
-          } else {
-            oltSelect.value = '';
-          }
-          syncOltConfirmState();
-        }
-
-        populateOltSelect(state.oltSearch);
-
-        searchInput.addEventListener('input', (e) => {
-          state.oltUserTouched = true;
-          state.oltSearch = e.target.value;
-          populateOltSelect(state.oltSearch);
-        });
-
-        oltSelect.addEventListener('change', (e) => {
-          state.oltUserTouched = true;
-          state.oltAutoMatched = false;
-          state.oltSelectedId = e.target.value;
-          state.oltSelectedPorts = [];
-          const picked = state.oltList.find((o) => o.id === state.oltSelectedId);
-          state.oltShowAllPorts = picked ? isExtendedPortOlt(picked.name) : false;
-          render();
-        });
-
-        sheetParts.push(
-          el('div', { className: 'ri-confirm-input-wrap' }, [
-            el('div', { className: 'ri-inline-head' }, [
-              el('label', {
-                className: 'ri-confirm-label',
-                for: 'ri-olt-search',
-                text: 'POP OLT',
-              }),
-              oltCountSpan,
-            ]),
-            searchInput,
-          ]),
-          el('div', { className: 'ri-confirm-input-wrap' }, [oltSelect])
-        );
-
-        const selectedOltObj = state.oltList.find((o) => o.id === state.oltSelectedId);
-        const isExtOlt = selectedOltObj ? isExtendedPortOlt(selectedOltObj.name) : false;
-        const portsSource =
-          state.oltPorts.length > 0
-            ? state.oltPorts
-            : Array.from({ length: 16 }, (_, idx) => ({
-                value: String(idx + 1),
-                label: `Port ${idx + 1}`,
-                isType2: idx + 1 > 8,
-              }));
-        const hasType2 = portsSource.some((p) => p.isType2);
-        const showAll = isExtOlt || state.oltShowAllPorts;
-        const visiblePorts = showAll ? portsSource : portsSource.filter((p) => !p.isType2);
-
-        const portTools = [];
-        if (!isExtOlt && hasType2) {
-          portTools.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-text-btn',
-              text: state.oltShowAllPorts ? 'Ẩn port 9–16' : 'Hiện đủ 16 port',
-              onClick: () => {
-                state.oltShowAllPorts = !state.oltShowAllPorts;
-                render();
-              },
-            })
-          );
-        }
-        if (state.oltSelectedPorts.length > 0) {
-          portTools.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-text-btn',
-              text: 'Bỏ chọn',
-              onClick: () => {
-                state.oltUserTouched = true;
-                state.oltSelectedPorts = [];
-                render();
-              },
-            })
-          );
-        }
-
-        const selectedPortSet = new Set(state.oltSelectedPorts);
-        const portOrder = new Map(portsSource.map((p, idx) => [p.value, idx]));
-
-        const portGrid = el(
-          'div',
-          { className: 'ri-port-grid' },
-          visiblePorts.map((p) => {
-            const active = selectedPortSet.has(p.value);
-            const displayLabel = /^\d+$/.test(p.label) ? `Port ${p.label}` : p.label;
-            return el('button', {
-              type: 'button',
-              className: `ri-port-chip${active ? ' is-selected' : ''}`,
-              'aria-pressed': active ? 'true' : 'false',
-              text: displayLabel,
-              onClick: () => {
-                state.oltUserTouched = true;
-                if (selectedPortSet.has(p.value)) {
-                  state.oltSelectedPorts = state.oltSelectedPorts.filter((x) => x !== p.value);
-                } else {
-                  const next = [...state.oltSelectedPorts, p.value];
-                  next.sort((a, b) => (portOrder.get(a) ?? 999) - (portOrder.get(b) ?? 999));
-                  state.oltSelectedPorts = next;
-                }
-                render();
-              },
-            });
-          })
-        );
-
-        sheetParts.push(
-          el('div', { className: 'ri-confirm-input-wrap' }, [
-            el('div', { className: 'ri-inline-head' }, [
-              el('span', {
-                className: 'ri-confirm-label',
-                text: `Chọn Port (${state.oltSelectedPorts.length} đã chọn)`,
-              }),
-              el('div', { className: 'ri-embed-toolbar-btns' }, portTools),
-            ]),
-            portGrid,
-          ])
-        );
-
-        syncOltConfirmState();
-
-        confirmBtn.addEventListener('click', () => {
-          const activeOltId = oltSelect.value || state.oltSelectedId;
-          const activeOlt = state.oltList.find((o) => o.id === activeOltId) || {};
-          runConfirmedAction(act, {
-            locationId: state.oltLocationId,
-            oltId: activeOltId,
-            oltName: activeOlt.name || '',
-            ports: state.oltSelectedPorts.slice(),
-          });
-        });
       }
     } else {
       confirmBtn.addEventListener('click', () =>
@@ -2904,7 +3013,7 @@ export function mountRemoteInside({
             text: 'Đóng',
             onClick: () => {
               state.scannerOpen = false;
-              render();
+              renderScanner();
             },
           }),
         ]),
@@ -2979,8 +3088,8 @@ export function mountRemoteInside({
     ]);
   }
 
-  function render() {
-    wrapper.textContent = '';
+  function renderMain() {
+    mainLayer.textContent = '';
 
     if (!state.isOpen && !standalone) {
       const fabLabel = state.isRecording
@@ -3010,7 +3119,7 @@ export function mountRemoteInside({
         },
         [el('span', { className: 'ri-fab-dot' }), el('span', { text: fabLabel })]
       );
-      wrapper.appendChild(fab);
+      mainLayer.appendChild(fab);
       return;
     }
 
@@ -3042,13 +3151,119 @@ export function mountRemoteInside({
       });
     }
 
-    wrapper.appendChild(frame);
+    mainLayer.appendChild(frame);
+  }
 
+  function renderConfirm() {
+    if (!state.confirmAction || (!state.isOpen && !standalone)) {
+      if (confirmLayer.childNodes.length > 0) {
+        confirmLayer.textContent = '';
+      }
+      return;
+    }
+
+    const act = state.confirmAction;
+    const portal = PORTALS[state.activePortalId];
+    const contractId = normalizeContractId(state.contractInput);
+    const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
+
+    if (isInsideOlt) {
+      const modalKey = `inside:clear_osp:${contractId}`;
+      const { connCardEl, connStateKey } = buildClearOltConnCard(contractId);
+      const formParts = buildClearOltFormParts(act, contractId);
+
+      const existingSheet = confirmLayer.querySelector('.ri-sheet');
+      if (existingSheet && existingSheet.dataset.riModalKey === modalKey) {
+        const connSlot = existingSheet.querySelector('[data-ri-slot="olt-conn"]');
+        const formSlot = existingSheet.querySelector('[data-ri-slot="olt-form"]');
+        if (connSlot && formSlot) {
+          if (connSlot.dataset.connStateKey !== connStateKey) {
+            connSlot.dataset.connStateKey = connStateKey;
+            connSlot.textContent = '';
+            if (connCardEl) connSlot.appendChild(connCardEl);
+          }
+          formSlot.textContent = '';
+          for (const node of formParts) {
+            if (node) formSlot.appendChild(node);
+          }
+          return;
+        }
+      }
+
+      const headerParts = [
+        el('h2', {
+          className: 'ri-sheet-title',
+          text: `Xác nhận ${act.label}?`,
+        }),
+        el('p', {
+          className: 'ri-sheet-sub',
+          text: act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
+        }),
+        contractId
+          ? el('div', { className: 'ri-confirm-contract' }, [
+              el('span', { text: 'Hợp đồng tham chiếu (không bắt buộc)' }),
+              el('span', { className: 'ri-confirm-code', text: contractId }),
+            ])
+          : el('div', {
+              className: 'ri-confirm-meta',
+              text: 'Chưa nhập Mã hợp đồng — chọn trực tiếp POP OLT & Port bên dưới (nếu nhập Mã HĐ sẽ hiện thêm Thông số kết nối tại đây).',
+            }),
+      ];
+
+      const connSlot = el('div', {
+        'data-ri-slot': 'olt-conn',
+        'data-conn-state-key': connStateKey,
+      });
+      if (connCardEl) connSlot.appendChild(connCardEl);
+
+      const formSlot = el('div', { 'data-ri-slot': 'olt-form' }, formParts);
+
+      const sheetEl = el(
+        'div',
+        { className: 'ri-sheet', 'data-ri-modal-key': modalKey },
+        [...headerParts, connSlot, formSlot]
+      );
+
+      confirmLayer.textContent = '';
+      confirmLayer.appendChild(
+        el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
+          sheetEl,
+        ])
+      );
+      return;
+    }
+
+    const prevSheet = confirmLayer.querySelector('.ri-sheet');
+    const prevScroll = prevSheet ? prevSheet.scrollTop : 0;
     const confirmSheet = renderConfirmSheet();
-    if (confirmSheet) wrapper.appendChild(confirmSheet);
+    confirmLayer.textContent = '';
+    if (confirmSheet) {
+      confirmLayer.appendChild(confirmSheet);
+      const nextSheet = confirmLayer.querySelector('.ri-sheet');
+      if (nextSheet && prevScroll > 0) {
+        nextSheet.scrollTop = prevScroll;
+      }
+    }
+  }
 
+  function renderScanner() {
+    if (!state.scannerOpen || (!state.isOpen && !standalone)) {
+      if (scannerLayer.childNodes.length > 0) {
+        scannerLayer.textContent = '';
+      }
+      return;
+    }
     const scannerSheet = renderScannerSheet();
-    if (scannerSheet) wrapper.appendChild(scannerSheet);
+    scannerLayer.textContent = '';
+    if (scannerSheet) {
+      scannerLayer.appendChild(scannerSheet);
+    }
+  }
+
+  function render() {
+    renderMain();
+    renderConfirm();
+    renderScanner();
   }
 
   render();

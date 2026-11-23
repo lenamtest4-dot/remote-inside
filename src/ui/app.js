@@ -31,6 +31,7 @@ import {
   extractApiHintsFromJs,
   extractCodeContextsFromJs,
   extractFormControlsMeta,
+  extractFramesAndLinksFromHtml,
   extractInlineScriptsSanitized,
   extractNextAppChunkUrls,
   scanPageStructure,
@@ -1300,6 +1301,271 @@ export function mountRemoteInside({
         'Đã quét xong mã Kill Session (IP) & Thông số kết nối! Hãy bấm "Tải file JSON" lưu vào thư mục Remote inside/scans rồi nhắn mình "đã lưu file" nhé.';
     } catch (err) {
       state.copyNotice = `Có lỗi khi quét tham số: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      renderScanner();
+    }
+  }
+
+  async function handlePortDeepScan() {
+    if (state.isDeepScanning) return;
+    if (!isUserscriptEnv()) {
+      state.copyNotice =
+        'Tính năng Quét cổng Port chỉ chạy khi đang mở trang FPT qua Tampermonkey.';
+      renderScanner();
+      return;
+    }
+
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang quét tự động cấu trúc port.fpt.net & mvcport.fpt.net (chỉ đọc, không cần F5 trang Port)…';
+    renderScanner();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      const isPortHost = (origin) => /^https?:\/\/(?:mvc)?port\.fpt\.net$/i.test(String(origin || '').trim());
+      const PORT_JS_KEYWORD_RE =
+        /(?:port|ftth|cap|thuhoi|release|assign|swap|contract|hopdong|olt|pon|splitter|mvcport|ajax|fetch|post|get|search|detail|status|history|save|update|delete|url\s*:)/i;
+      const PORT_LINK_PRIORITY_RE =
+        /(?:ftth|port|cap|cấp|thu\s*h[oồ]i|release|assign|swap|doi|đổi|xem|tra|tim|search|contract|hop\s*dong|hd|olt|pon|splitter|mvcport|status|detail|index|list|menu|left|main)/i;
+      const STATIC_ASSET_RE =
+        /\.(?:css|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|pdf|xlsx?|docx?|zip|rar|mp4|webm)$/i;
+
+      function parseOriginPath(rawUrl) {
+        try {
+          const u = new URL(rawUrl);
+          return {
+            origin: u.origin && u.origin !== 'null' ? u.origin : '',
+            pathname: u.pathname || '/',
+          };
+        } catch {
+          return { origin: '', pathname: '' };
+        }
+      }
+
+      const fetchedPageKeys = new Set();
+
+      async function fetchAndAnalyzePortPage(key, rawUrl) {
+        const reqParts = parseOriginPath(rawUrl);
+        if (reqParts.origin && reqParts.pathname) {
+          fetchedPageKeys.add(`${reqParts.origin.toLowerCase()}${reqParts.pathname}`);
+        }
+
+        const res = await requestPortal({
+          url: rawUrl,
+          method: 'GET',
+          headers: { Accept: 'text/html, */*' },
+          timeout: 15000,
+        });
+
+        const finalParts = parseOriginPath((res && res.finalUrl) || rawUrl);
+        if (finalParts.origin && finalParts.pathname) {
+          fetchedPageKeys.add(`${finalParts.origin.toLowerCase()}${finalParts.pathname}`);
+        }
+
+        const iam = detectIamRedirect({
+          status: (res && res.status) || 0,
+          finalUrl: (res && res.finalUrl) || rawUrl,
+          responseText: (res && res.responseText) || '',
+          requestedUrl: rawUrl,
+        });
+
+        if (!res || !res.ok || !res.responseText) {
+          return {
+            summary: {
+              key,
+              requestedOrigin: reqParts.origin,
+              requestedPath: reqParts.pathname,
+              finalOrigin: finalParts.origin,
+              finalPath: finalParts.pathname,
+              status: (res && res.status) || 0,
+              iamExpired: iam.expired,
+              error:
+                (res && res.error) || (res && res.status ? `HTTP_${res.status}` : 'REQUEST_FAILED'),
+            },
+            scriptUrls: [],
+            nextChunkUrls: [],
+            frames: [],
+            links: [],
+          };
+        }
+
+        const safeBaseUrl =
+          finalParts.origin && finalParts.pathname
+            ? `${finalParts.origin}${finalParts.pathname}`
+            : rawUrl;
+        const hints = extractApiHintsFromHtml(res.responseText, safeBaseUrl, contractId);
+        const navMeta = extractFramesAndLinksFromHtml(res.responseText, safeBaseUrl, contractId);
+        const sigs = extractAjaxSignaturesFromHtml(res.responseText, safeBaseUrl, contractId);
+        const controlsMeta = extractFormControlsMeta(res.responseText, contractId);
+        const inlineScripts = extractInlineScriptsSanitized(res.responseText, contractId, {
+          maxPerScript: 8000,
+          maxTotal: 20000,
+        }).slice(0, 5);
+        const nextChunkUrls = extractNextAppChunkUrls(res.responseText, safeBaseUrl);
+
+        return {
+          summary: {
+            key,
+            requestedOrigin: reqParts.origin,
+            requestedPath: reqParts.pathname,
+            finalOrigin: finalParts.origin,
+            finalPath: finalParts.pathname,
+            title: navMeta.title,
+            status: res.status,
+            iamExpired: iam.expired,
+            frames: navMeta.frames,
+            links: navMeta.links,
+            ajaxCalls: sigs.ajaxCalls,
+            controlsMeta,
+            forms: hints.forms,
+            fields: hints.fields,
+            buttons: hints.buttons,
+            scriptUrls: hints.scriptUrls,
+            nextChunkUrls,
+            apiHints: hints.apiHints,
+            inlineScripts,
+          },
+          scriptUrls: hints.scriptUrls,
+          nextChunkUrls,
+          frames: navMeta.frames,
+          links: navMeta.links,
+        };
+      }
+
+      const pages = [];
+      const phase1Results = await Promise.all([
+        fetchAndAnalyzePortPage('entry_port', 'http://port.fpt.net/'),
+        fetchAndAnalyzePortPage('entry_mvcport', 'http://mvcport.fpt.net/'),
+      ]);
+
+      const discoveredFrames = [];
+      const discoveredLinks = [];
+      for (const item of phase1Results) {
+        pages.push(item.summary);
+        discoveredFrames.push(...item.frames);
+        discoveredLinks.push(...item.links);
+      }
+
+      const frameTargets = [];
+      for (const f of discoveredFrames) {
+        if (!isPortHost(f.origin) || !f.pathname) continue;
+        const key = `${f.origin.toLowerCase()}${f.pathname}`;
+        if (fetchedPageKeys.has(key) || frameTargets.some((t) => t.canonKey === key)) {
+          continue;
+        }
+        frameTargets.push({
+          canonKey: key,
+          url: `${f.origin}${f.pathname}`,
+        });
+        if (frameTargets.length >= 6) break;
+      }
+
+      if (frameTargets.length > 0) {
+        const frameResults = await Promise.all(
+          frameTargets.map((ft, idx) => fetchAndAnalyzePortPage(`frame_${idx}`, ft.url))
+        );
+        for (const item of frameResults) {
+          pages.push(item.summary);
+          discoveredLinks.push(...item.links);
+        }
+      }
+
+      const priorityLinks = [];
+      const normalLinks = [];
+      const seenCandidateLinks = new Set();
+      for (const link of discoveredLinks) {
+        if (!link || !isPortHost(link.origin) || !link.pathname) continue;
+        if (STATIC_ASSET_RE.test(link.pathname)) continue;
+        const canonKey = `${link.origin.toLowerCase()}${link.pathname}`;
+        if (fetchedPageKeys.has(canonKey) || seenCandidateLinks.has(canonKey)) continue;
+        seenCandidateLinks.add(canonKey);
+        const url = `${link.origin}${link.pathname}`;
+        const entry = { url, canonKey };
+        if (PORT_LINK_PRIORITY_RE.test(`${link.text || ''} ${link.pathname}`)) {
+          priorityLinks.push(entry);
+        } else {
+          normalLinks.push(entry);
+        }
+      }
+
+      const pageTargets = [...priorityLinks, ...normalLinks].slice(0, 12);
+      for (let i = 0; i < pageTargets.length; i += 6) {
+        const chunk = pageTargets.slice(i, i + 6);
+        const chunkResults = await Promise.all(
+          chunk.map((pt, offset) => fetchAndAnalyzePortPage(`page_${i + offset}`, pt.url))
+        );
+        for (const item of chunkResults) {
+          pages.push(item.summary);
+        }
+      }
+
+      const scriptCandidates = [];
+      const seenScripts = new Set();
+      for (const page of pages) {
+        const urls = [...(page.scriptUrls || []), ...(page.nextChunkUrls || [])];
+        for (const sUrl of urls) {
+          const sp = parseOriginPath(sUrl);
+          if (!isPortHost(sp.origin) || !sp.pathname) continue;
+          const sKey = `${sp.origin.toLowerCase()}${sp.pathname}`;
+          if (seenScripts.has(sKey)) continue;
+          seenScripts.add(sKey);
+          scriptCandidates.push(`${sp.origin}${sp.pathname}`);
+          if (scriptCandidates.length >= 12) break;
+        }
+        if (scriptCandidates.length >= 12) break;
+      }
+
+      const jsSnippets = [];
+      if (scriptCandidates.length > 0) {
+        const scriptResults = await Promise.all(
+          scriptCandidates.map((sUrl) =>
+            requestPortal({
+              url: sUrl,
+              method: 'GET',
+              headers: { Accept: 'application/javascript, text/javascript, */*' },
+              timeout: 12000,
+            })
+          )
+        );
+        for (let i = 0; i < scriptCandidates.length; i += 1) {
+          const sUrl = scriptCandidates[i];
+          const res = scriptResults[i];
+          if (!res || !res.ok || !res.responseText) continue;
+          const sp = parseOriginPath(sUrl);
+          jsSnippets.push({
+            origin: sp.origin,
+            pathname: sp.pathname,
+            apiHints: extractApiHintsFromJs(res.responseText, contractId),
+            codeContexts: extractCodeContextsFromJs(
+              res.responseText,
+              PORT_JS_KEYWORD_RE,
+              contractId
+            ),
+          });
+        }
+      }
+
+      state.deepScan = {
+        scanKind: 'port_deep_v1',
+        scannedAt: new Date().toISOString(),
+        hasContractContext: Boolean(contractId),
+        pages,
+        jsSnippets,
+      };
+
+      const allBlockedOrIam =
+        pages.length > 0 && pages.every((p) => p.iamExpired || !p.status || p.status >= 400);
+      if (allBlockedOrIam) {
+        state.copyNotice =
+          'Chưa đọc được dữ liệu cổng Port (chưa đăng nhập hoặc mất kết nối VPN). Hãy đăng nhập port.fpt.net ở 1 tab riêng (đừng F5), rồi quay lại đây bấm quét lại nhé.';
+      } else {
+        state.copyNotice = `Đã quét xong cấu trúc cổng Port (${pages.length} trang, ${jsSnippets.length} file JS)! Hãy bấm "Tải file JSON" lưu vào thư mục Remote inside/scans rồi nhắn mình nhé.`;
+      }
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét cổng Port: ${
         err && err.message ? err.message : 'Không rõ nguyên nhân'
       }`;
     } finally {
@@ -3052,7 +3318,24 @@ export function mountRemoteInside({
           onClick: handleOpsSignatureScan,
         })
       );
+    } else if (state.activePortalId === 'port') {
+      scannerActionBtns.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-primary-btn',
+          disabled: state.isDeepScanning,
+          text: state.isDeepScanning
+            ? 'Đang quét cấu trúc cổng Port…'
+            : '3. Quét tự động cấu trúc cổng Port (chạy ngay từ Inside, không cần F5)',
+          onClick: handlePortDeepScan,
+        })
+      );
     }
+
+    const scannerSubText =
+      state.activePortalId === 'port'
+        ? 'Nếu trang port.fpt.net bị lỗi khi F5, bạn chỉ cần đăng nhập port.fpt.net ở 1 tab riêng (không bấm F5), rồi mở Remote Inside ngay trên tab Inside -> chọn tab Port -> bấm nút 3 bên dưới để quét tự động.'
+        : 'Dùng công cụ này khi bạn đang mở trang gốc (ví dụ inside.fpt.net) để lấy đúng các nút và lệnh bên dưới về ghép chạy thật.';
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { className: 'ri-sheet' }, [
@@ -3070,7 +3353,7 @@ export function mountRemoteInside({
         ]),
         el('p', {
           className: 'ri-sheet-sub',
-          text: 'Dùng công cụ này khi bạn đang mở trang gốc (ví dụ inside.fpt.net) để lấy đúng các nút và lệnh bên dưới về ghép chạy thật.',
+          text: scannerSubText,
         }),
         el('div', { className: 'ri-privacy-note' }, [
           el('div', {

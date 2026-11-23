@@ -1220,6 +1220,104 @@ export function extractOpsMenuFromLeftAsp(htmlText, baseUrl = 'http://inside.fpt
   return items;
 }
 
+/**
+ * Trich xuat tieu de, frame/iframe va danh sach lien ket dieu huong tu HTML (khong luu gia tri query nhay cam).
+ */
+export function extractFramesAndLinksFromHtml(
+  htmlText,
+  baseUrl = 'http://port.fpt.net/',
+  contractId = ''
+) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { title: '', frames: [], links: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const titleMatch = withoutStyles.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+  const rawTitle = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : '';
+  const title = rawTitle ? replaceContractToken(rawTitle, contractId, 80) : '';
+
+  const frames = [];
+  const seenFrames = new Set();
+  const frameRe = /<(i?frame)\b([^>]*)>/gi;
+  let frm;
+  while ((frm = frameRe.exec(withoutStyles)) !== null && frames.length < 20) {
+    const tag = frm[1].toLowerCase();
+    const attrs = frm[2] || '';
+    const src = getAttrValue(attrs, 'src').trim();
+    if (!src || /^about:blank$/i.test(src) || /^\s*javascript:/i.test(src)) {
+      continue;
+    }
+    const parsed = parseSafeUrlParts(src, baseUrl, contractId);
+    if (!parsed.pathname) continue;
+    const key = `${parsed.origin}|${parsed.pathname}`;
+    if (seenFrames.has(key)) continue;
+    seenFrames.add(key);
+    frames.push({
+      tag,
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      origin: parsed.origin,
+      pathname: parsed.pathname,
+      queryParamNames: parsed.queryParamNames,
+    });
+  }
+
+  const links = [];
+  const seenLinks = new Set();
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let am;
+  while ((am = anchorRe.exec(withoutStyles)) !== null && links.length < 120) {
+    const attrs = am[1] || '';
+    const innerText = am[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const onclick = getAttrValue(attrs, 'onclick');
+    const dataUrl = getAttrValue(attrs, 'data-url');
+    const href = getAttrValue(attrs, 'href');
+
+    let rawTarget = '';
+    if (onclick) {
+      const mGo = onclick.match(/GoPage\s*\(\s*['"]([^'"]+)['"]/i);
+      const mOpen = onclick.match(/window\.open\s*\(\s*['"]([^'"]+)['"]/i);
+      const mLoc = onclick.match(/(?:window\.|top\.|self\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]/i);
+      rawTarget = (mGo && mGo[1]) || (mOpen && mOpen[1]) || (mLoc && mLoc[1]) || '';
+    }
+    if (!rawTarget && dataUrl) {
+      rawTarget = dataUrl.trim();
+    }
+    if (!rawTarget && href) {
+      rawTarget = href.trim();
+    }
+
+    if (
+      !rawTarget ||
+      rawTarget === '#' ||
+      rawTarget.startsWith('#') ||
+      /^\s*(?:mailto:|tel:|javascript:)/i.test(rawTarget)
+    ) {
+      continue;
+    }
+
+    const parsed = parseSafeUrlParts(rawTarget, baseUrl, contractId);
+    if (!parsed.pathname) continue;
+    const linkKey = `${parsed.origin}|${parsed.pathname}`;
+    if (seenLinks.has(linkKey)) continue;
+    seenLinks.add(linkKey);
+
+    links.push({
+      text: replaceContractToken(innerText, contractId, 80),
+      origin: parsed.origin,
+      pathname: parsed.pathname,
+      queryParamNames: parsed.queryParamNames,
+    });
+  }
+
+  return { title, frames, links };
+}
+
 const DEFAULT_JS_FN_KEYWORD_RE =
   /(?:ClearSerial|testOID|ViewPort|MonitorOLT|Swap|ReplaceMAC|GetMac|Ajax|OLT|Port)/i;
 

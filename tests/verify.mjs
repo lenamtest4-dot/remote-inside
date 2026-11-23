@@ -27,6 +27,7 @@ import {
   extractApiHintsFromJs,
   extractCodeContextsFromJs,
   extractFormControlsMeta,
+  extractFramesAndLinksFromHtml,
   extractInlineScriptsSanitized,
   extractMatchingFunctionsFromJs,
   extractNextAppChunkUrls,
@@ -124,8 +125,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.7.0'),
-    'Userscript must bump @version to 0.7.0'
+    userscriptContent.includes('@version      0.7.1'),
+    'Userscript must bump @version to 0.7.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1168,6 +1169,39 @@ async function runTests() {
   assert.ok(userscriptContent.includes('runPortAction'), 'Userscript bundle must include runPortAction');
   assert.ok(userscriptContent.includes('mvcport.fpt.net'), 'Userscript bundle must include mvcport.fpt.net');
   assert.ok(userscriptContent.includes('matchedPortalId'), 'Userscript bundle must include host auto-detection');
+  assert.ok(userscriptContent.includes('handlePortDeepScan'), 'Userscript bundle must include handlePortDeepScan');
+  assert.ok(userscriptContent.includes('port_deep_v1'), 'Userscript bundle must include port_deep_v1');
+
+  const portHtmlSample = `
+    <html>
+      <head><title>Quan ly Port VTAAR2393</title></head>
+      <frameset>
+        <frame id="leftFrame" name="left" src="Left.asp?token=secret123">
+      </frameset>
+      <body>
+        <iframe id="ftthNew" name="main" src="http://mvcport.fpt.net/FTTH/Index?hd=VTAAR2393"></iframe>
+        <a href="/Port/View?id=1" onclick="GoPage('/Port/Assign?token=abc')">Cấp Port VTAAR2393</a>
+        <a href="mailto:a@b.c">mail</a>
+      </body>
+    </html>
+  `;
+  const portParsed = extractFramesAndLinksFromHtml(portHtmlSample, 'http://port.fpt.net/', 'VTAAR2393');
+  assert.equal(portParsed.title, 'Quan ly Port <CONTRACT_ID>');
+  assert.equal(portParsed.frames.length, 2);
+  assert.equal(portParsed.frames[0].origin, 'http://port.fpt.net');
+  assert.equal(portParsed.frames[0].pathname, '/Left.asp');
+  assert.deepEqual(portParsed.frames[0].queryParamNames, ['token']);
+  assert.equal(portParsed.frames[1].origin, 'http://mvcport.fpt.net');
+  assert.equal(portParsed.frames[1].pathname, '/FTTH/Index');
+  assert.deepEqual(portParsed.frames[1].queryParamNames, ['hd']);
+  assert.equal(portParsed.links.length, 1);
+  assert.equal(portParsed.links[0].pathname, '/Port/Assign');
+  assert.equal(portParsed.links[0].text, 'Cấp Port <CONTRACT_ID>');
+  assert.deepEqual(portParsed.links[0].queryParamNames, ['token']);
+  const portSerialized = JSON.stringify(portParsed);
+  assert.equal(portSerialized.includes('secret123'), false, 'Must strip frame query value');
+  assert.equal(portSerialized.includes('VTAAR2393'), false, 'Must redact contract token');
+  assert.equal(portSerialized.includes('abc'), false, 'Must strip link query value');
   console.log('   OK: port.fpt.net adapter tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');

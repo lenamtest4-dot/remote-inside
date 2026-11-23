@@ -1,5 +1,6 @@
 /**
- * Lop giao tiep mang qua Userscript (GM_xmlhttpRequest) giu nguyen phien IAM & VPN chinh chu.
+ * Lop giao tiep mang qua Userscript (GM_xmlhttpRequest) hoac Android Native WebView Bridge
+ * giu nguyen phien IAM & VPN chinh chu.
  * Khi mo file preview.html doc lap, tu dong chay che do xem thu (Demo).
  */
 
@@ -7,8 +8,191 @@ const IAM_HOST_RE = /(iam|sso|login|auth|signin|oauth|cas)/i;
 const LOGIN_PASSWORD_INPUT_RE = /<input[^>]+type\s*=\s*["']?password["']?/i;
 const LOGIN_TITLE_RE = /<title[^>]*>[^<]*(iam|sign\s*in|đăng\s*nhập|login)[^<]*<\/title>/i;
 
+let androidReqSeq = 0;
+
+export function isAndroidAppEnv() {
+  return (
+    typeof window !== 'undefined' &&
+    Boolean(window.RemoteInsideNative) &&
+    typeof window.RemoteInsideNative.httpRequest === 'function'
+  );
+}
+
+export function getRuntimeEnv() {
+  if (isAndroidAppEnv()) {
+    return 'android';
+  }
+  if (typeof GM_xmlhttpRequest === 'function') {
+    return 'userscript';
+  }
+  return 'preview';
+}
+
 export function isUserscriptEnv() {
-  return typeof GM_xmlhttpRequest === 'function';
+  return typeof GM_xmlhttpRequest === 'function' || isAndroidAppEnv();
+}
+
+export function openExternalOrPortalUrl(
+  url,
+  {
+    mode = 'portal',
+    title = '',
+    pageWindow = typeof window !== 'undefined' ? window : null,
+  } = {}
+) {
+  if (!url || typeof url !== 'string') {
+    return false;
+  }
+  if (
+    isAndroidAppEnv() &&
+    typeof window.RemoteInsideNative.openPortal === 'function'
+  ) {
+    window.RemoteInsideNative.openPortal(
+      String(url || ''),
+      String(mode || 'portal'),
+      String(title || '')
+    );
+    return true;
+  }
+  if (pageWindow && typeof pageWindow.open === 'function') {
+    pageWindow.open(url, '_blank', 'noopener');
+    return true;
+  }
+  return false;
+}
+
+function requestViaAndroidNative({
+  url,
+  method = 'GET',
+  headers = {},
+  data = null,
+  timeout = 15000,
+} = {}) {
+  if (typeof window === 'undefined' || !isAndroidAppEnv()) {
+    return Promise.resolve({
+      ok: false,
+      mode: 'android',
+      status: 0,
+      finalUrl: url || '',
+      responseText: '',
+      error: 'BRIDGE_UNAVAILABLE',
+    });
+  }
+
+  if (!window.__riNativePending || typeof window.__riNativePending.set !== 'function') {
+    window.__riNativePending = new Map();
+  }
+
+  if (typeof window.__riNativeResolve !== 'function') {
+    window.__riNativeResolve = (reqId, inlineRawJson) => {
+      const pending = window.__riNativePending;
+      const entry = pending && pending.get(reqId);
+      if (!entry) {
+        return;
+      }
+      pending.delete(reqId);
+      if (entry.timer) {
+        clearTimeout(entry.timer);
+      }
+
+      let rawJson = typeof inlineRawJson === 'string' ? inlineRawJson : '';
+      if (!rawJson) {
+        try {
+          if (
+            window.RemoteInsideNative &&
+            typeof window.RemoteInsideNative.consumeResponse === 'function'
+          ) {
+            rawJson = window.RemoteInsideNative.consumeResponse(reqId) || '';
+          }
+        } catch {
+          rawJson = '';
+        }
+      }
+
+      let parsed = null;
+      try {
+        parsed = rawJson ? JSON.parse(rawJson) : null;
+      } catch {
+        parsed = null;
+      }
+
+      if (!parsed || typeof parsed !== 'object') {
+        entry.resolve({
+          ok: false,
+          mode: 'android',
+          status: 0,
+          finalUrl: entry.url || '',
+          responseText: '',
+          responseHeaders: '',
+          error: 'INVALID_BRIDGE_RESPONSE',
+        });
+        return;
+      }
+
+      entry.resolve({
+        ok: Boolean(parsed.ok),
+        mode: 'android',
+        status: Number(parsed.status) || 0,
+        finalUrl: String(parsed.finalUrl || entry.url || ''),
+        responseText: String(parsed.responseText || ''),
+        responseHeaders: String(parsed.responseHeaders || ''),
+        error: parsed.error ? String(parsed.error) : undefined,
+      });
+    };
+  }
+
+  const reqId = `ri_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1000, Number(timeout) || 15000);
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+        resolve({
+          ok: false,
+          mode: 'android',
+          status: 0,
+          finalUrl: url || '',
+          responseText: '',
+          responseHeaders: '',
+          error: 'TIMEOUT',
+        });
+      }
+    }, numericTimeout + 3000);
+
+    window.__riNativePending.set(reqId, {
+      resolve,
+      timer,
+      url: url || '',
+    });
+
+    try {
+      window.RemoteInsideNative.httpRequest(
+        JSON.stringify({
+          reqId,
+          url: url || '',
+          method: method || 'GET',
+          headers: headers || {},
+          data: data === null || data === undefined ? null : String(data),
+          timeout: numericTimeout,
+        })
+      );
+    } catch (err) {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        mode: 'android',
+        status: 0,
+        finalUrl: url || '',
+        responseText: '',
+        responseHeaders: '',
+        error: err && err.message ? err.message : 'REQUEST_FAILED',
+      });
+    }
+  });
 }
 
 export function sleep(ms) {
@@ -79,7 +263,7 @@ export function detectIamRedirect({
 }
 
 /**
- * Gui yeu cau HTTP bang GM_xmlhttpRequest (khong bi chan CORS giua 5 trang FPT).
+ * Gui yeu cau HTTP bang Android Native Bridge hoac GM_xmlhttpRequest (khong bi chan CORS giua 5 trang FPT).
  */
 export function requestPortal({
   url,
@@ -88,7 +272,11 @@ export function requestPortal({
   data = null,
   timeout = 15000,
 } = {}) {
-  if (!isUserscriptEnv()) {
+  if (isAndroidAppEnv()) {
+    return requestViaAndroidNative({ url, method, headers, data, timeout });
+  }
+
+  if (typeof GM_xmlhttpRequest !== 'function') {
     return Promise.resolve({
       ok: false,
       mode: 'preview',

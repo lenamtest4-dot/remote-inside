@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.RemoteInside" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="colorPrimary">@color/ri_accent</item>
+        <item name="colorPrimaryDark">@color/ri_accent_dark</item>
+        <item name="colorAccent">@color/ri_accent</item>
+        <item name="android:statusBarColor">@color/ri_surface</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/ri_canvas</item>
+    </style>
+</resources>

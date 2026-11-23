@@ -1,0 +1,719 @@
+package com.remoteinside.app
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.net.Uri
+import android.net.http.SslError
+import android.os.Build
+import android.os.Bundle
+import android.os.Message
+import android.view.View
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.SslErrorHandler
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
+import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
+import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.nio.charset.Charset
+import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var consoleWebView: WebView
+    private lateinit var portalOverlay: LinearLayout
+    private lateinit var portalWebView: WebView
+    private lateinit var portalProgress: ProgressBar
+    private lateinit var tvPortalTitle: TextView
+    private lateinit var tvPortalUrl: TextView
+    private lateinit var btnPortalBack: TextView
+    private lateinit var btnPortalReload: TextView
+    private lateinit var btnPortalDone: TextView
+
+    private val httpExecutor: ExecutorService = Executors.newCachedThreadPool()
+    private val pendingResponses = ConcurrentHashMap<String, String>()
+
+    @Volatile
+    private var webViewUserAgent: String = ""
+
+    private val assetLoader by lazy {
+        WebViewAssetLoader.Builder()
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        consoleWebView = findViewById(R.id.consoleWebView)
+        portalOverlay = findViewById(R.id.portalOverlay)
+        portalWebView = findViewById(R.id.portalWebView)
+        portalProgress = findViewById(R.id.portalProgress)
+        tvPortalTitle = findViewById(R.id.tvPortalTitle)
+        tvPortalUrl = findViewById(R.id.tvPortalUrl)
+        btnPortalBack = findViewById(R.id.btnPortalBack)
+        btnPortalReload = findViewById(R.id.btnPortalReload)
+        btnPortalDone = findViewById(R.id.btnPortalDone)
+
+        val cookieManager = CookieManager.getInstance()
+        cookieManager.setAcceptCookie(true)
+        cookieManager.setAcceptThirdPartyCookies(consoleWebView, true)
+        cookieManager.setAcceptThirdPartyCookies(portalWebView, true)
+
+        setupConsoleWebView()
+        setupPortalWebView()
+        setupOverlayButtons()
+        setupBackHandler()
+
+        consoleWebView.loadUrl(APP_CONSOLE_URL)
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupConsoleWebView() {
+        val settings = consoleWebView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+        webViewUserAgent = settings.userAgentString.orEmpty()
+
+        consoleWebView.addJavascriptInterface(NativeBridge(), "RemoteInsideNative")
+
+        consoleWebView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): WebResourceResponse? {
+                val uri = request?.url ?: return null
+                return if (APP_ASSETS_HOST.equals(uri.host, ignoreCase = true)) {
+                    assetLoader.shouldInterceptRequest(uri)
+                } else {
+                    null
+                }
+            }
+
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val uri = request?.url ?: return false
+                if (!request.isForMainFrame) {
+                    return false
+                }
+                if (APP_ASSETS_HOST.equals(uri.host, ignoreCase = true)) {
+                    return false
+                }
+                val scheme = uri.scheme?.lowercase(Locale.US).orEmpty()
+                if (scheme == "http" || scheme == "https") {
+                    openPortalOverlay(uri.toString(), "portal", "")
+                }
+                return true
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: SslErrorHandler?,
+                error: SslError?
+            ) {
+                handler?.cancel()
+            }
+        }
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupPortalWebView() {
+        val settings = portalWebView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        settings.useWideViewPort = true
+        settings.loadWithOverviewMode = true
+        settings.builtInZoomControls = true
+        settings.displayZoomControls = false
+        settings.setSupportMultipleWindows(true)
+        settings.javaScriptCanOpenWindowsAutomatically = true
+
+        portalWebView.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                if (newProgress in 1..99) {
+                    portalProgress.visibility = View.VISIBLE
+                    portalProgress.progress = newProgress
+                } else {
+                    portalProgress.visibility = View.GONE
+                }
+            }
+
+            override fun onReceivedTitle(view: WebView?, title: String?) {
+                val trimmed = title?.trim().orEmpty()
+                if (trimmed.isNotEmpty()) {
+                    tvPortalTitle.text = trimmed
+                }
+            }
+
+            override fun onCreateWindow(
+                view: WebView?,
+                isDialog: Boolean,
+                isUserGesture: Boolean,
+                resultMsg: Message?
+            ): Boolean {
+                val extra = view?.hitTestResult?.extra
+                if (!extra.isNullOrBlank() &&
+                    (extra.startsWith("http://", ignoreCase = true) ||
+                        extra.startsWith("https://", ignoreCase = true))
+                ) {
+                    portalWebView.loadUrl(extra)
+                    return false
+                }
+                val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
+                val tempWebView = WebView(this@MainActivity)
+                var forwarded = false
+                fun forwardAndDestroy(target: String?) {
+                    if (forwarded) return
+                    forwarded = true
+                    if (!target.isNullOrBlank() &&
+                        (target.startsWith("http://", ignoreCase = true) ||
+                            target.startsWith("https://", ignoreCase = true))
+                    ) {
+                        portalWebView.loadUrl(target)
+                    }
+                    runCatching { tempWebView.destroy() }
+                }
+                tempWebView.webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        subView: WebView?,
+                        subReq: WebResourceRequest?
+                    ): Boolean {
+                        forwardAndDestroy(subReq?.url?.toString())
+                        return true
+                    }
+
+                    override fun onPageStarted(
+                        subView: WebView?,
+                        url: String?,
+                        favicon: Bitmap?
+                    ) {
+                        forwardAndDestroy(url)
+                    }
+                }
+                transport.webView = tempWebView
+                resultMsg.sendToTarget()
+                return true
+            }
+        }
+
+        portalWebView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val scheme = request?.url?.scheme?.lowercase(Locale.US).orEmpty()
+                return scheme != "http" && scheme != "https"
+            }
+
+            override fun onPageStarted(
+                view: WebView?,
+                url: String?,
+                favicon: Bitmap?
+            ) {
+                tvPortalUrl.text = url.orEmpty()
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                tvPortalUrl.text = url.orEmpty()
+                val title = view?.title?.trim().orEmpty()
+                if (title.isNotEmpty()) {
+                    tvPortalTitle.text = title
+                }
+                CookieManager.getInstance().flush()
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: SslErrorHandler?,
+                error: SslError?
+            ) {
+                handler?.cancel()
+                Toast.makeText(
+                    this@MainActivity,
+                    "Cảnh báo: Chứng chỉ SSL trang không hợp lệ.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun setupOverlayButtons() {
+        btnPortalBack.setOnClickListener {
+            closePortalOverlay()
+        }
+        btnPortalDone.setOnClickListener {
+            closePortalOverlay()
+        }
+        btnPortalReload.setOnClickListener {
+            portalWebView.reload()
+        }
+    }
+
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    if (portalOverlay.visibility == View.VISIBLE) {
+                        if (portalWebView.canGoBack()) {
+                            portalWebView.goBack()
+                        } else {
+                            closePortalOverlay()
+                        }
+                        return
+                    }
+                    consoleWebView.evaluateJavascript(
+                        "Boolean(window.__riHandleBack && window.__riHandleBack())"
+                    ) { value ->
+                        if (value != "true") {
+                            finish()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    private fun openPortalOverlay(url: String, mode: String, title: String) {
+        val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return
+        val scheme = parsed.scheme?.lowercase(Locale.US).orEmpty()
+        if (scheme != "http" && scheme != "https") {
+            return
+        }
+        val fallbackTitle = if (mode == "login") {
+            "Đăng nhập cổng nội bộ FPT"
+        } else {
+            "Trang nội bộ FPT"
+        }
+        runOnUiThread {
+            if (isDestroyed || isFinishing) {
+                return@runOnUiThread
+            }
+            tvPortalTitle.text = if (title.isNotBlank()) title else fallbackTitle
+            tvPortalUrl.text = url
+            portalProgress.visibility = View.VISIBLE
+            portalProgress.progress = 15
+            portalOverlay.visibility = View.VISIBLE
+            portalWebView.loadUrl(url)
+        }
+    }
+
+    private fun closePortalOverlay() {
+        if (portalOverlay.visibility != View.VISIBLE) {
+            return
+        }
+        portalOverlay.visibility = View.GONE
+        CookieManager.getInstance().flush()
+        consoleWebView.evaluateJavascript(
+            "window.__riOnPortalBrowserClosed && window.__riOnPortalBrowserClosed();",
+            null
+        )
+    }
+
+    override fun onDestroy() {
+        httpExecutor.shutdownNow()
+        pendingResponses.clear()
+        runCatching {
+            consoleWebView.removeJavascriptInterface("RemoteInsideNative")
+            (consoleWebView.parent as? ViewGroup)?.removeView(consoleWebView)
+            consoleWebView.destroy()
+        }
+        runCatching {
+            (portalWebView.parent as? ViewGroup)?.removeView(portalWebView)
+            portalWebView.destroy()
+        }
+        super.onDestroy()
+    }
+
+    private fun isAllowedPortalHost(rawHost: String?): Boolean {
+        val host = rawHost?.trim()?.lowercase(Locale.US).orEmpty()
+        if (host.isEmpty()) return false
+        return host == "fpt.net" ||
+            host.endsWith(".fpt.net") ||
+            host == "fcam.vn" ||
+            host.endsWith(".fcam.vn")
+    }
+
+    private fun deliverBridgeResponse(reqId: String, resultJson: JSONObject) {
+        pendingResponses[reqId] = resultJson.toString()
+        runOnUiThread {
+            if (!isDestroyed && !isFinishing) {
+                consoleWebView.evaluateJavascript(
+                    "window.__riNativeResolve && window.__riNativeResolve(${JSONObject.quote(reqId)});",
+                    null
+                )
+            }
+        }
+    }
+
+    private fun parseCharset(contentType: String?): Charset {
+        if (!contentType.isNullOrBlank()) {
+            val match = Regex("""charset\s*=\s*["']?([A-Za-z0-9._-]+)""", RegexOption.IGNORE_CASE)
+                .find(contentType)
+            if (match != null) {
+                val charsetName = match.groupValues[1]
+                runCatching { return Charset.forName(charsetName) }
+            }
+        }
+        return Charsets.UTF_8
+    }
+
+    private fun readStreamText(stream: InputStream?, contentType: String?): String {
+        if (stream == null) return ""
+        val charset = parseCharset(contentType)
+        val buffer = ByteArray(8192)
+        val out = ByteArrayOutputStream()
+        var total = 0
+        stream.use { input ->
+            while (true) {
+                val read = input.read(buffer)
+                if (read <= 0) break
+                val allowed = minOf(read, MAX_RESPONSE_BYTES - total)
+                if (allowed > 0) {
+                    out.write(buffer, 0, allowed)
+                    total += allowed
+                }
+                if (total >= MAX_RESPONSE_BYTES) break
+            }
+        }
+        return out.toString(charset.name())
+    }
+
+    private fun executeHttpRequest(reqId: String, payload: JSONObject) {
+        val initialUrl = payload.optString("url", "")
+        var currentUrl = initialUrl
+        var currentMethod = payload.optString("method", "GET")
+            .trim()
+            .uppercase(Locale.US)
+            .ifEmpty { "GET" }
+        val rawData = if (payload.isNull("data")) null else payload.optString("data", "")
+        var currentBody: String? = rawData
+        val timeoutMs = payload.optInt("timeout", 15000).coerceIn(1000, 60000)
+        val headerObj = payload.optJSONObject("headers")
+
+        val initialUri = runCatching { Uri.parse(initialUrl) }.getOrNull()
+        val initialScheme = initialUri?.scheme?.lowercase(Locale.US).orEmpty()
+        if (initialUri == null ||
+            (initialScheme != "http" && initialScheme != "https") ||
+            !isAllowedPortalHost(initialUri.host)
+        ) {
+            deliverBridgeResponse(
+                reqId,
+                JSONObject().apply {
+                    put("ok", false)
+                    put("status", 0)
+                    put("finalUrl", initialUrl)
+                    put("responseText", "")
+                    put("responseHeaders", "")
+                    put("error", "INVALID_OR_DISALLOWED_URL")
+                }
+            )
+            return
+        }
+
+        val cookieManager = CookieManager.getInstance()
+        var cookiesUpdated = false
+
+        try {
+            var hop = 0
+            while (hop <= MAX_REDIRECTS) {
+                val hopUri = Uri.parse(currentUrl)
+                val hopScheme = hopUri.scheme?.lowercase(Locale.US).orEmpty()
+                if (hopScheme != "http" && hopScheme != "https") {
+                    throw IllegalStateException("UNSUPPORTED_REDIRECT_SCHEME")
+                }
+
+                val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    instanceFollowRedirects = false
+                    connectTimeout = timeoutMs
+                    readTimeout = timeoutMs
+                    requestMethod = currentMethod
+                    doInput = true
+                }
+
+                try {
+                    var hasUserAgent = false
+                    if (headerObj != null) {
+                        val keys = headerObj.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            val value = headerObj.optString(key, "")
+                            if (key.equals("cookie", ignoreCase = true) ||
+                                key.equals("content-length", ignoreCase = true) ||
+                                key.equals("host", ignoreCase = true)
+                            ) {
+                                continue
+                            }
+                            if (key.equals("user-agent", ignoreCase = true)) {
+                                hasUserAgent = true
+                            }
+                            conn.setRequestProperty(key, value)
+                        }
+                    }
+
+                    if (!hasUserAgent && webViewUserAgent.isNotEmpty()) {
+                        conn.setRequestProperty("User-Agent", webViewUserAgent)
+                    }
+
+                    val cookies = cookieManager.getCookie(currentUrl)
+                    if (!cookies.isNullOrEmpty()) {
+                        conn.setRequestProperty("Cookie", cookies)
+                    }
+
+                    val sendsBody = currentMethod == "POST" ||
+                        currentMethod == "PUT" ||
+                        currentMethod == "PATCH"
+                    val bodyToSend = currentBody
+                    if (sendsBody && bodyToSend != null) {
+                        val bodyBytes = bodyToSend.toByteArray(Charsets.UTF_8)
+                        conn.doOutput = true
+                        conn.setFixedLengthStreamingMode(bodyBytes.size)
+                        conn.outputStream.use { os ->
+                            os.write(bodyBytes)
+                        }
+                    } else if (sendsBody) {
+                        conn.doOutput = true
+                        conn.setFixedLengthStreamingMode(0)
+                    }
+
+                    val statusCode = conn.responseCode
+                    val headerMap = conn.headerFields
+                    for ((key, values) in headerMap) {
+                        if (key != null &&
+                            (key.equals("set-cookie", ignoreCase = true) ||
+                                key.equals("set-cookie2", ignoreCase = true)) &&
+                            values != null
+                        ) {
+                            for (cookieVal in values) {
+                                if (!cookieVal.isNullOrBlank()) {
+                                    cookieManager.setCookie(currentUrl, cookieVal)
+                                    cookiesUpdated = true
+                                }
+                            }
+                        }
+                    }
+
+                    if (statusCode in REDIRECT_STATUS_CODES) {
+                        val location = conn.getHeaderField("Location")
+                        if (!location.isNullOrBlank() && hop < MAX_REDIRECTS) {
+                            currentUrl = URL(URL(currentUrl), location).toString()
+                            if ((statusCode == 301 || statusCode == 302 || statusCode == 303) &&
+                                currentMethod != "GET" &&
+                                currentMethod != "HEAD"
+                            ) {
+                                currentMethod = "GET"
+                                currentBody = null
+                            }
+                            hop++
+                            continue
+                        }
+                    }
+
+                    if (cookiesUpdated) {
+                        cookieManager.flush()
+                    }
+
+                    val rawHeaders = StringBuilder()
+                    for ((key, values) in headerMap) {
+                        if (key == null || values == null) continue
+                        for (v in values) {
+                            rawHeaders.append(key).append(": ").append(v).append("\r\n")
+                        }
+                    }
+
+                    val stream = if (statusCode >= 400) {
+                        conn.errorStream ?: runCatching { conn.inputStream }.getOrNull()
+                    } else {
+                        runCatching { conn.inputStream }.getOrNull()
+                    }
+                    val bodyText = readStreamText(stream, conn.contentType)
+
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", statusCode in 200..399)
+                            put("status", statusCode)
+                            put("finalUrl", conn.url?.toString() ?: currentUrl)
+                            put("responseText", bodyText)
+                            put("responseHeaders", rawHeaders.toString())
+                        }
+                    )
+                    return
+                } finally {
+                    conn.disconnect()
+                }
+            }
+
+            deliverBridgeResponse(
+                reqId,
+                JSONObject().apply {
+                    put("ok", false)
+                    put("status", 0)
+                    put("finalUrl", currentUrl)
+                    put("responseText", "")
+                    put("responseHeaders", "")
+                    put("error", "TOO_MANY_REDIRECTS")
+                }
+            )
+        } catch (err: Exception) {
+            if (cookiesUpdated) {
+                runCatching { cookieManager.flush() }
+            }
+            val errType = if (err is java.net.SocketTimeoutException) "TIMEOUT" else "NETWORK_ERROR"
+            deliverBridgeResponse(
+                reqId,
+                JSONObject().apply {
+                    put("ok", false)
+                    put("status", 0)
+                    put("finalUrl", currentUrl)
+                    put("responseText", "")
+                    put("responseHeaders", "")
+                    put("error", errType)
+                }
+            )
+        }
+    }
+
+    inner class NativeBridge {
+
+        @JavascriptInterface
+        fun httpRequest(payloadJson: String) {
+            val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val reqId = payload.optString("reqId", "")
+            if (reqId.isBlank()) return
+            httpExecutor.execute {
+                executeHttpRequest(reqId, payload)
+            }
+        }
+
+        @JavascriptInterface
+        fun consumeResponse(reqId: String): String {
+            return pendingResponses.remove(reqId) ?: ""
+        }
+
+        @JavascriptInterface
+        fun openPortal(url: String, mode: String, title: String) {
+            openPortalOverlay(url, mode, title)
+        }
+
+        @JavascriptInterface
+        fun openExternalBrowser(url: String) {
+            val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return
+            if (!"https".equals(parsed.scheme, ignoreCase = true)) {
+                return
+            }
+            runOnUiThread {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, parsed))
+                } catch (_: ActivityNotFoundException) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Không tìm thấy trình duyệt trên máy.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun copyText(text: String): Boolean {
+            return try {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("Remote Inside", text))
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun readClipboard(): String {
+            return try {
+                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = cm.primaryClip ?: return ""
+                if (clip.itemCount <= 0) return ""
+                clip.getItemAt(0).coerceToText(this@MainActivity)?.toString().orEmpty()
+            } catch (_: Exception) {
+                ""
+            }
+        }
+
+        @JavascriptInterface
+        fun clearSessionCookies(): Boolean {
+            return try {
+                val cookieManager = CookieManager.getInstance()
+                cookieManager.removeAllCookies(null)
+                cookieManager.flush()
+                runOnUiThread {
+                    if (!isDestroyed && !isFinishing) {
+                        portalWebView.clearCache(true)
+                        portalWebView.clearHistory()
+                    }
+                }
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        @JavascriptInterface
+        fun getAppVersion(): String {
+            return try {
+                val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.PackageInfoFlags.of(0)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.getPackageInfo(packageName, 0)
+                }
+                info.versionName ?: "0.10.0"
+            } catch (_: Exception) {
+                "0.10.0"
+            }
+        }
+    }
+
+    companion object {
+        private const val APP_ASSETS_HOST = "appassets.androidplatform.net"
+        private const val APP_CONSOLE_URL =
+            "https://appassets.androidplatform.net/assets/remote-inside.html"
+        private const val MAX_REDIRECTS = 10
+        private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+        private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
+    }
+}

@@ -18,7 +18,14 @@ import {
   getState,
   setState,
 } from '../src/core/storage.js';
-import { detectIamRedirect } from '../src/core/transport.js';
+import {
+  detectIamRedirect,
+  getRuntimeEnv,
+  isAndroidAppEnv,
+  isUserscriptEnv,
+  openExternalOrPortalUrl,
+  requestPortal,
+} from '../src/core/transport.js';
 import {
   buildScanReport,
   createNetworkRecorder,
@@ -104,6 +111,12 @@ const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
 async function runTests() {
   console.log('1. Checking built artifacts in dist/...');
+  const pkgJson = JSON.parse(
+    fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')
+  );
+  const expectedVersion = String(pkgJson.version || '').trim();
+  assert.ok(expectedVersion.length > 0, 'package.json must contain a valid version');
+
   const userscriptPath = path.join(DIST_DIR, 'remote-inside.user.js');
   const metaPath = path.join(DIST_DIR, 'remote-inside.meta.js');
   const previewPath = path.join(DIST_DIR, 'preview.html');
@@ -158,8 +171,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.9.1'),
-    'Userscript must bump @version to 0.9.1'
+    userscriptContent.includes(`@version      ${expectedVersion}`),
+    `Userscript must match package.json @version ${expectedVersion}`
   );
   assert.ok(
     userscriptContent.includes('@homepageURL  https://github.com/lenamtest4-dot/remote-inside'),
@@ -174,7 +187,7 @@ async function runTests() {
     'Userscript must include @downloadURL pointing to remote-inside.user.js'
   );
   assert.ok(
-    metaContent.includes('@version      0.9.1') &&
+    metaContent.includes(`@version      ${expectedVersion}`) &&
       metaContent.includes('@updateURL    ') &&
       metaContent.includes('@downloadURL  ') &&
       metaContent.includes('@homepageURL  '),
@@ -1783,6 +1796,183 @@ async function runTests() {
     'Userscript must include loadInsideByPassModal'
   );
   console.log('   OK: Inside CheckList ByPass adapter tests passed.');
+
+  console.log('16. Testing Android App Native Bridge & Packaging...');
+  assert.equal(isAndroidAppEnv(), false);
+  assert.equal(getRuntimeEnv(), 'preview');
+
+  const hadOwnWindow = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+  const prevWindow = globalThis.window;
+  const capturedHttpCalls = [];
+  const capturedOpenCalls = [];
+  const nativeStore = new Map();
+
+  try {
+    globalThis.window = {
+      RemoteInsideNative: {
+        httpRequest(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          capturedHttpCalls.push(parsed);
+          nativeStore.set(
+            parsed.reqId,
+            JSON.stringify({
+              ok: true,
+              status: 200,
+              finalUrl: `${parsed.url}?ok=1`,
+              responseText: 'NATIVE_OK',
+              responseHeaders: 'Content-Type: text/plain\r\n',
+            })
+          );
+          queueMicrotask(() => {
+            if (typeof globalThis.window.__riNativeResolve === 'function') {
+              globalThis.window.__riNativeResolve(parsed.reqId);
+            }
+          });
+        },
+        consumeResponse(reqId) {
+          const val = nativeStore.get(reqId) || '';
+          nativeStore.delete(reqId);
+          return val;
+        },
+        openPortal(url, mode, title) {
+          capturedOpenCalls.push({ url, mode, title });
+        },
+      },
+    };
+
+    assert.equal(isAndroidAppEnv(), true);
+    assert.equal(getRuntimeEnv(), 'android');
+    assert.equal(isUserscriptEnv(), true);
+
+    const nativeRes = await requestPortal({
+      url: 'http://inside.fpt.net/CustomerService/Search',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      data: 'Contract=SGN123456',
+      timeout: 5000,
+    });
+    assert.equal(capturedHttpCalls.length, 1);
+    assert.equal(capturedHttpCalls[0].method, 'POST');
+    assert.equal(
+      capturedHttpCalls[0].headers['Content-Type'],
+      'application/x-www-form-urlencoded'
+    );
+    assert.equal(capturedHttpCalls[0].data, 'Contract=SGN123456');
+    assert.equal(nativeRes.ok, true);
+    assert.equal(nativeRes.mode, 'android');
+    assert.equal(nativeRes.status, 200);
+    assert.equal(
+      nativeRes.finalUrl,
+      'http://inside.fpt.net/CustomerService/Search?ok=1'
+    );
+    assert.equal(nativeRes.responseText, 'NATIVE_OK');
+    assert.equal(
+      globalThis.window.__riNativePending.size,
+      0,
+      'Native bridge must clean up __riNativePending after resolve'
+    );
+
+    const openedNative = openExternalOrPortalUrl('http://port.fpt.net', {
+      mode: 'login',
+      title: 'Đăng nhập Port',
+    });
+    assert.equal(openedNative, true);
+    assert.deepEqual(capturedOpenCalls, [
+      { url: 'http://port.fpt.net', mode: 'login', title: 'Đăng nhập Port' },
+    ]);
+  } finally {
+    if (hadOwnWindow) {
+      globalThis.window = prevWindow;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
+  assert.equal(isAndroidAppEnv(), false);
+  const fallbackOpenCalls = [];
+  const openedFallback = openExternalOrPortalUrl('http://inside.fpt.net', {
+    mode: 'portal',
+    title: 'Inside',
+    pageWindow: {
+      open(u, t, f) {
+        fallbackOpenCalls.push({ u, t, f });
+      },
+    },
+  });
+  assert.equal(openedFallback, true);
+  assert.deepEqual(fallbackOpenCalls, [
+    { u: 'http://inside.fpt.net', t: '_blank', f: 'noopener' },
+  ]);
+
+  const androidDistPath = path.join(DIST_DIR, 'android-app.html');
+  const androidAssetPath = path.join(
+    ROOT_DIR,
+    'android',
+    'app',
+    'src',
+    'main',
+    'assets',
+    'remote-inside.html'
+  );
+  assert.ok(fs.existsSync(androidDistPath), 'dist/android-app.html must exist');
+  assert.ok(
+    fs.existsSync(androidAssetPath),
+    'android/app/src/main/assets/remote-inside.html must exist'
+  );
+  const androidDistContent = fs.readFileSync(androidDistPath, 'utf8');
+  const androidAssetContent = fs.readFileSync(androidAssetPath, 'utf8');
+  assert.equal(
+    androidDistContent,
+    androidAssetContent,
+    'dist/android-app.html and Android WebView asset HTML must be byte-identical'
+  );
+  assert.equal(
+    forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Android bundle asset must not contain personal/contract/IP demo fixtures'
+  );
+  const androidScriptMatch = androidAssetContent.match(/<script>([\s\S]*?)<\/script>/i);
+  assert.ok(
+    androidScriptMatch && androidScriptMatch[1],
+    'Android HTML asset must contain embedded <script>'
+  );
+  const androidEmbeddedJs = androidScriptMatch[1].replace(/<\\\/script/gi, '</script');
+  new vm.Script(androidEmbeddedJs, { filename: 'android-embedded.js' });
+  assert.ok(
+    androidEmbeddedJs.includes('RemoteInsideNative'),
+    'Android embedded JS must contain RemoteInsideNative bridge'
+  );
+  assert.ok(
+    androidEmbeddedJs.includes('__REMOTE_INSIDE_VERSION__'),
+    'Android embedded JS must contain __REMOTE_INSIDE_VERSION__'
+  );
+
+  const requiredAndroidFiles = [
+    'android/settings.gradle.kts',
+    'android/build.gradle.kts',
+    'android/gradle.properties',
+    'android/app/build.gradle.kts',
+    'android/app/proguard-rules.pro',
+    'android/app/src/main/AndroidManifest.xml',
+    'android/app/src/main/res/xml/network_security_config.xml',
+    'android/app/src/main/res/values/colors.xml',
+    'android/app/src/main/res/values/styles.xml',
+    'android/app/src/main/res/drawable/bg_btn_primary.xml',
+    'android/app/src/main/res/drawable/bg_btn_subtle.xml',
+    'android/app/src/main/res/drawable/ic_launcher_background.xml',
+    'android/app/src/main/res/drawable/ic_launcher_foreground.xml',
+    'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
+    'android/app/src/main/res/layout/activity_main.xml',
+    'android/app/src/main/java/com/remoteinside/app/MainActivity.kt',
+    '.github/workflows/android-apk.yml',
+  ];
+  for (const rel of requiredAndroidFiles) {
+    assert.ok(
+      fs.existsSync(path.join(ROOT_DIR, rel)),
+      `Required Android/CI file must exist: ${rel}`
+    );
+  }
+  console.log('   OK: Android App Native Bridge & Packaging checks passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

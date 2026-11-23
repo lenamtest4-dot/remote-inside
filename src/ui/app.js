@@ -20,7 +20,9 @@ import {
 import {
   checkPortalSession,
   detectIamRedirect,
+  isAndroidAppEnv,
   isUserscriptEnv,
+  openExternalOrPortalUrl,
   requestPortal,
 } from '../core/transport.js';
 import {
@@ -107,6 +109,20 @@ function formatTime(date = new Date()) {
 
 async function copyTextSafe(text) {
   if (!text) return false;
+  try {
+    if (
+      isAndroidAppEnv() &&
+      typeof window !== 'undefined' &&
+      window.RemoteInsideNative &&
+      typeof window.RemoteInsideNative.copyText === 'function'
+    ) {
+      if (window.RemoteInsideNative.copyText(String(text))) {
+        return true;
+      }
+    }
+  } catch {
+    // Fallback sang GM_setClipboard / navigator.clipboard
+  }
   try {
     if (typeof GM_setClipboard === 'function') {
       GM_setClipboard(text, 'text');
@@ -198,9 +214,11 @@ export function mountRemoteInside({
       className: 'ri-secondary-btn',
       text: 'Mở trang Port đăng nhập',
       onClick: () => {
-        if (pageWindow && pageWindow.open) {
-          pageWindow.open(loginUrl, '_blank', 'noopener');
-        }
+        openExternalOrPortalUrl(loginUrl, {
+          mode: 'login',
+          title: 'Đăng nhập Port',
+          pageWindow,
+        });
       },
     });
   }
@@ -319,6 +337,7 @@ export function mountRemoteInside({
     portHistoryError: '',
     portHistoryRows: [],
     scannerOpen: false,
+    appMenuOpen: false,
     domSnapshot: null,
     recordedEntries: [],
     deepScan: null,
@@ -429,6 +448,19 @@ export function mountRemoteInside({
 
   async function handlePasteContract() {
     try {
+      if (
+        isAndroidAppEnv() &&
+        typeof window !== 'undefined' &&
+        window.RemoteInsideNative &&
+        typeof window.RemoteInsideNative.readClipboard === 'function'
+      ) {
+        const nativeText = window.RemoteInsideNative.readClipboard();
+        const nativeCleaned = normalizeContractId(nativeText);
+        if (nativeCleaned) {
+          setContractValue(nativeCleaned);
+          return;
+        }
+      }
       if (navigator.clipboard && navigator.clipboard.readText) {
         const text = await navigator.clipboard.readText();
         const cleaned = normalizeContractId(text);
@@ -1450,9 +1482,11 @@ export function mountRemoteInside({
       await copyTextSafe(clean);
       state.recentContracts = addRecentContract(clean);
     }
-    if (pageWindow && pageWindow.open) {
-      pageWindow.open(portal.url, '_blank', 'noopener');
-    }
+    openExternalOrPortalUrl(portal.url, {
+      mode: 'portal',
+      title: portal.fullName,
+      pageWindow,
+    });
     state.result = {
       status: 'ok',
       title: clean
@@ -2412,10 +2446,12 @@ export function mountRemoteInside({
     state.isOpen = false;
     resetConfirmState();
     state.scannerOpen = false;
+    state.appMenuOpen = false;
     render();
   }
 
   function renderTopBar() {
+    const isAndroid = isAndroidAppEnv();
     const pill = el(
       'button',
       {
@@ -2423,7 +2459,16 @@ export function mountRemoteInside({
         className: 'ri-status-pill',
         'data-state': state.sessionStatus.state,
         title: state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM',
-        onClick: () => refreshSessionStatus(),
+        onClick: () => {
+          if (isAndroid && state.sessionStatus.state === 'iam_expired') {
+            openExternalOrPortalUrl(
+              state.sessionStatus.loginUrl || PORTALS[state.activePortalId].url,
+              { mode: 'login', title: 'Đăng nhập IAM', pageWindow }
+            );
+            return;
+          }
+          refreshSessionStatus();
+        },
       },
       [
         el('span', { className: 'ri-status-dot' }),
@@ -2445,15 +2490,27 @@ export function mountRemoteInside({
       },
     });
 
-    const scanBtn = el('button', {
-      type: 'button',
-      className: 'ri-icon-btn',
-      text: 'Quét cấu trúc',
-      onClick: () => {
-        state.scannerOpen = true;
-        renderScanner();
-      },
-    });
+    const scanBtn = isAndroid
+      ? el('button', {
+          type: 'button',
+          className: 'ri-icon-btn',
+          text: 'Tiện ích',
+          onClick: () => {
+            state.scannerOpen = false;
+            state.appMenuOpen = true;
+            renderScanner();
+          },
+        })
+      : el('button', {
+          type: 'button',
+          className: 'ri-icon-btn',
+          text: 'Quét cấu trúc',
+          onClick: () => {
+            state.appMenuOpen = false;
+            state.scannerOpen = true;
+            renderScanner();
+          },
+        });
 
     const rightControls = [pill, wideBtn, scanBtn];
     if (!standalone) {
@@ -2759,9 +2816,11 @@ export function mountRemoteInside({
             className: 'ri-secondary-btn',
             text: 'Mở lại port.fpt.net',
             onClick: () => {
-              if (pageWindow && pageWindow.open) {
-                pageWindow.open(res.loginUrl, '_blank', 'noopener');
-              }
+              openExternalOrPortalUrl(res.loginUrl, {
+                mode: 'login',
+                title: 'Đăng nhập Port',
+                pageWindow,
+              });
             },
           })
         );
@@ -2772,9 +2831,11 @@ export function mountRemoteInside({
             className: 'ri-primary-btn',
             text: 'Đăng nhập IAM ngay',
             onClick: () => {
-              if (pageWindow && pageWindow.open) {
-                pageWindow.open(res.loginUrl, '_blank', 'noopener');
-              }
+              openExternalOrPortalUrl(res.loginUrl, {
+                mode: 'login',
+                title: 'Đăng nhập IAM',
+                pageWindow,
+              });
             },
           })
         );
@@ -2806,9 +2867,11 @@ export function mountRemoteInside({
           className: 'ri-secondary-btn',
           text: res.sourceLabel || 'Mở trang MonitorOLT gốc',
           onClick: () => {
-            if (pageWindow && pageWindow.open) {
-              pageWindow.open(res.sourceUrl, '_blank', 'noopener');
-            }
+            openExternalOrPortalUrl(res.sourceUrl, {
+              mode: 'portal',
+              title: res.sourceLabel || 'MonitorOLT',
+              pageWindow,
+            });
           },
         })
       );
@@ -2846,9 +2909,11 @@ export function mountRemoteInside({
               className: 'ri-embed-open-link',
               text: 'Mở riêng',
               onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(v.url, '_blank', 'noopener');
-                }
+                openExternalOrPortalUrl(v.url, {
+                  mode: 'portal',
+                  title: v.title || 'Xem chi tiết',
+                  pageWindow,
+                });
               },
             })
           );
@@ -3052,9 +3117,11 @@ export function mountRemoteInside({
           className: 'ri-embed-open-link',
           text: 'Mở riêng',
           onClick: () => {
-            if (pageWindow && pageWindow.open) {
-              pageWindow.open(connUrl, '_blank', 'noopener');
-            }
+            openExternalOrPortalUrl(connUrl, {
+              mode: 'portal',
+              title: 'Thông số kết nối',
+              pageWindow,
+            });
           },
         })
       );
@@ -3204,9 +3271,11 @@ export function mountRemoteInside({
             className: 'ri-secondary-btn',
             text: 'Đăng nhập IAM',
             onClick: () => {
-              if (pageWindow && pageWindow.open) {
-                pageWindow.open(state.oltLoginUrl, '_blank', 'noopener');
-              }
+              openExternalOrPortalUrl(state.oltLoginUrl, {
+                mode: 'login',
+                title: 'Đăng nhập IAM',
+                pageWindow,
+              });
             },
           })
         );
@@ -3623,9 +3692,11 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.modemLoginUrl, '_blank', 'noopener');
-                }
+                openExternalOrPortalUrl(state.modemLoginUrl, {
+                  mode: 'login',
+                  title: 'Đăng nhập IAM',
+                  pageWindow,
+                });
               },
             })
           );
@@ -3885,9 +3956,11 @@ export function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Đăng nhập IAM',
                 onClick: () => {
-                  if (pageWindow && pageWindow.open) {
-                    pageWindow.open(state.boxLoginUrl, '_blank', 'noopener');
-                  }
+                  openExternalOrPortalUrl(state.boxLoginUrl, {
+                    mode: 'login',
+                    title: 'Đăng nhập IAM',
+                    pageWindow,
+                  });
                 },
               })
             );
@@ -4074,9 +4147,11 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.killLoginUrl, '_blank', 'noopener');
-                }
+                openExternalOrPortalUrl(state.killLoginUrl, {
+                  mode: 'login',
+                  title: 'Đăng nhập IAM',
+                  pageWindow,
+                });
               },
             })
           );
@@ -4230,9 +4305,11 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.bypassLoginUrl, '_blank', 'noopener');
-                }
+                openExternalOrPortalUrl(state.bypassLoginUrl, {
+                  mode: 'login',
+                  title: 'Đăng nhập IAM',
+                  pageWindow,
+                });
               },
             })
           );
@@ -5378,6 +5455,103 @@ export function mountRemoteInside({
     ]);
   }
 
+  function renderAndroidAppMenuSheet() {
+    const versionStr =
+      typeof __REMOTE_INSIDE_VERSION__ !== 'undefined' ? __REMOTE_INSIDE_VERSION__ : '0.10.0';
+    const closeMenu = () => {
+      state.appMenuOpen = false;
+      renderScanner();
+    };
+    const openLogin = (url, title) => {
+      state.appMenuOpen = false;
+      renderScanner();
+      openExternalOrPortalUrl(url, { mode: 'login', title, pageWindow });
+    };
+
+    return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
+      el('div', { className: 'ri-sheet' }, [
+        el('div', { className: 'ri-log-head' }, [
+          el('h2', { className: 'ri-sheet-title', text: 'Tiện ích Remote Inside App' }),
+          el('button', {
+            type: 'button',
+            className: 'ri-icon-btn',
+            text: 'Đóng',
+            onClick: closeMenu,
+          }),
+        ]),
+        el('p', {
+          className: 'ri-sheet-sub',
+          text: `Phiên bản v${versionStr} — Dùng chung phiên đăng nhập IAM & VPN công ty trên điện thoại.`,
+        }),
+        el('div', { className: 'ri-privacy-note' }, [
+          el('div', {
+            text: 'Ứng dụng không lưu mật khẩu hay token. Toàn bộ thao tác chạy trực tiếp bằng cookie phiên IAM hợp lệ trong WebView bảo mật.',
+          }),
+        ]),
+        el('div', { className: 'ri-result-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập Inside (IAM)',
+            onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập Port (FTTH NEW)',
+            onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Kiểm tra / Tải bản mới (.apk)',
+            onClick: () => {
+              if (
+                typeof window !== 'undefined' &&
+                window.RemoteInsideNative &&
+                typeof window.RemoteInsideNative.openExternalBrowser === 'function'
+              ) {
+                window.RemoteInsideNative.openExternalBrowser(
+                  'https://github.com/lenamtest4-dot/remote-inside/releases'
+                );
+              }
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-danger-btn',
+            text: 'Đăng xuất (Xóa cookie phiên)',
+            onClick: () => {
+              if (
+                typeof window !== 'undefined' &&
+                window.RemoteInsideNative &&
+                typeof window.RemoteInsideNative.clearSessionCookies === 'function'
+              ) {
+                window.RemoteInsideNative.clearSessionCookies();
+              }
+              state.appMenuOpen = false;
+              state.result = {
+                status: 'ok',
+                title: 'Đã xóa cookie phiên đăng nhập',
+                message:
+                  'Cookie phiên IAM/Port trên ứng dụng đã được làm sạch. Khi cần thao tác lại, hãy mở đăng nhập IAM mới.',
+              };
+              renderScanner();
+              renderMain();
+              refreshSessionStatus();
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đóng',
+            onClick: closeMenu,
+          }),
+        ]),
+      ]),
+    ]);
+  }
+
   function renderMain() {
     mainLayer.textContent = '';
 
@@ -5537,13 +5711,19 @@ export function mountRemoteInside({
   }
 
   function renderScanner() {
-    if (!state.scannerOpen || (!state.isOpen && !standalone)) {
+    if (
+      (!state.scannerOpen && !state.appMenuOpen) ||
+      (!state.isOpen && !standalone)
+    ) {
       if (scannerLayer.childNodes.length > 0) {
         scannerLayer.textContent = '';
       }
       return;
     }
-    const scannerSheet = renderScannerSheet();
+    const scannerSheet =
+      state.appMenuOpen && isAndroidAppEnv()
+        ? renderAndroidAppMenuSheet()
+        : renderScannerSheet();
     scannerLayer.textContent = '';
     if (scannerSheet) {
       scannerLayer.appendChild(scannerSheet);
@@ -5559,6 +5739,30 @@ export function mountRemoteInside({
   render();
   if (standalone) {
     refreshSessionStatus();
+  }
+
+  if (typeof window !== 'undefined' && isAndroidAppEnv()) {
+    window.__riOnPortalBrowserClosed = () => {
+      refreshSessionStatus();
+    };
+    window.__riHandleBack = () => {
+      if (state.confirmAction) {
+        resetConfirmState();
+        renderConfirm();
+        return true;
+      }
+      if (state.appMenuOpen) {
+        state.appMenuOpen = false;
+        renderScanner();
+        return true;
+      }
+      if (state.scannerOpen) {
+        state.scannerOpen = false;
+        renderScanner();
+        return true;
+      }
+      return false;
+    };
   }
 
   return {

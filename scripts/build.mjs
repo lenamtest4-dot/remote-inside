@@ -7,6 +7,16 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
+const ANDROID_ASSETS_DIR = path.join(
+  ROOT_DIR,
+  'android',
+  'app',
+  'src',
+  'main',
+  'assets'
+);
+const PKG = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
+const APP_VERSION = String(PKG.version || '0.10.0').trim();
 
 const MODULE_ORDER = [
   'config/portals.js',
@@ -28,7 +38,7 @@ const RELEASE_BASE_URL = (
 const USERSCRIPT_HEADER = `// ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.9.1
+// @version      ${APP_VERSION}
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    ${RELEASE_BASE_URL}/remote-inside.meta.js
@@ -83,19 +93,24 @@ function buildIifeBundle(cssText) {
     return `// --- ${relPath} ---\n${clean}`;
   });
 
-  return `(function () {\n  'use strict';\n  const __REMOTE_INSIDE_CSS__ = ${JSON.stringify(
+  return `(function () {\n  'use strict';\n  const __REMOTE_INSIDE_VERSION__ = ${JSON.stringify(
+    APP_VERSION
+  )};\n  const __REMOTE_INSIDE_CSS__ = ${JSON.stringify(
     cssText
   )};\n\n${parts.join('\n\n')}\n})();\n`;
 }
 
-function buildPreviewHtml(bundleJs) {
+function buildStandaloneHtml(bundleJs, { title, themeColor = '' } = {}) {
   const safeJs = bundleJs.replace(/<\/script/gi, '<\\/script');
+  const themeMeta = themeColor
+    ? `\n  <meta name="theme-color" content="${themeColor}" />`
+    : '';
   return `<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Remote Inside — Xem thử giao diện hiện trường</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />${themeMeta}
+  <title>${title}</title>
   <style>
     html, body {
       margin: 0;
@@ -115,8 +130,22 @@ ${safeJs}
 `;
 }
 
+function buildPreviewHtml(bundleJs) {
+  return buildStandaloneHtml(bundleJs, {
+    title: 'Remote Inside — Xem thử giao diện hiện trường',
+  });
+}
+
+function buildAndroidHtml(bundleJs) {
+  return buildStandaloneHtml(bundleJs, {
+    title: 'Remote Inside',
+    themeColor: '#FFFFFF',
+  });
+}
+
 function main() {
   fs.mkdirSync(DIST_DIR, { recursive: true });
+  fs.mkdirSync(ANDROID_ASSETS_DIR, { recursive: true });
   const cssText = fs.readFileSync(path.join(SRC_DIR, 'styles/theme.css'), 'utf8');
   const iife = buildIifeBundle(cssText);
 
@@ -131,12 +160,20 @@ function main() {
   const previewPath = path.join(DIST_DIR, 'preview.html');
   fs.writeFileSync(previewPath, previewHtmlOut, 'utf8');
 
+  const androidHtmlOut = buildAndroidHtml(iife);
+  const androidDistPath = path.join(DIST_DIR, 'android-app.html');
+  const androidAssetPath = path.join(ANDROID_ASSETS_DIR, 'remote-inside.html');
+  fs.writeFileSync(androidDistPath, androidHtmlOut, 'utf8');
+  fs.writeFileSync(androidAssetPath, androidHtmlOut, 'utf8');
+
   const userSize = Buffer.byteLength(userscriptOut, 'utf8');
   const metaSize = Buffer.byteLength(USERSCRIPT_HEADER, 'utf8');
   const htmlSize = Buffer.byteLength(previewHtmlOut, 'utf8');
+  const androidSize = Buffer.byteLength(androidHtmlOut, 'utf8');
   console.log(`Built dist/remote-inside.user.js (${userSize} bytes)`);
   console.log(`Built dist/remote-inside.meta.js (${metaSize} bytes)`);
   console.log(`Built dist/preview.html (${htmlSize} bytes)`);
+  console.log(`Built dist/android-app.html & synced android asset (${androidSize} bytes)`);
 }
 
 main();

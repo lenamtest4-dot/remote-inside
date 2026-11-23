@@ -1,0 +1,122 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build web & Android assets
+        run: npm run build
+
+      - name: Run verification suite
+        run: npm test
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Prepare optional release signing keystore
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "${RUNNER_TEMP}/release.keystore"
+            echo "RI_KEYSTORE_FILE=${RUNNER_TEMP}/release.keystore" >> "$GITHUB_ENV"
+            echo "RI_KEYSTORE_PASSWORD=$ANDROID_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "RI_KEY_ALIAS=$ANDROID_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "RI_KEY_PASSWORD=$ANDROID_KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build signed Release APK
+        if: steps.signing.outputs.signed == 'true'
+        working-directory: android
+        run: gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Build Debug APK
+        if: steps.signing.outputs.signed != 'true'
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Collect APK artifact
+        id: pkg
+        run: |
+          APP_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          mkdir -p release-artifacts
+          if [ "${{ steps.signing.outputs.signed }}" = "true" ]; then
+            SRC_APK="android/app/build/outputs/apk/release/app-release.apk"
+            BUILD_KIND="release (signed)"
+          else
+            SRC_APK="android/app/build/outputs/apk/debug/app-debug.apk"
+            BUILD_KIND="debug"
+          fi
+          if [ ! -f "$SRC_APK" ]; then
+            echo "APK file not found at: $SRC_APK"
+            exit 1
+          fi
+          cp "$SRC_APK" "release-artifacts/remote-inside-v${APP_VERSION}.apk"
+          echo "build_kind=${BUILD_KIND}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APK build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-inside-apk
+          path: release-artifacts/remote-inside-v${{ steps.pkg.outputs.version }}.apk
+          retention-days: 90
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.pkg.outputs.version }}"
+          APK_FILE="release-artifacts/remote-inside-v${{ steps.pkg.outputs.version }}.apk"
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          cat <<EOF | sed 's/^          //' > "$NOTES_FILE"
+          ## Remote Inside ${TAG} (${{ steps.pkg.outputs.build_kind }})
+
+          - **App Android (.apk):** Tải \`remote-inside-${TAG}.apk\` bên dưới về điện thoại Android để cài đặt trực tiếp.
+          - **Bản PC (Userscript 1-link tự cập nhật):** \`dist/remote-inside.user.js\`
+          - **Tính năng đã chạy thật:**
+            - Inside: Tra thông tin HĐ, Reset MAC Modem, Reset MAC Box (+ Lịch sử), Kill Session (từng dòng IP), Clear OSP (tự đọc OLT/Port), ByPass (CheckList ByPass HĐ & Tập điểm)
+            - Port (FTTH NEW): Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --clobber
+            gh release edit "$TAG" --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE" --target "${{ github.sha }}"
+          fi

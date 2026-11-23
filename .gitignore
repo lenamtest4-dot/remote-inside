@@ -6,3 +6,8 @@ node_modules/
 *.log
 *.har
 scans/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+release-artifacts/

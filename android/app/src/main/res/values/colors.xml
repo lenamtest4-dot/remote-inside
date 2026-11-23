@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ri_canvas">#F2F4F7</color>
+    <color name="ri_surface">#FFFFFF</color>
+    <color name="ri_subtle">#E9EEF4</color>
+    <color name="ri_border">#D5DCE4</color>
+    <color name="ri_ink_primary">#141B24</color>
+    <color name="ri_ink_muted">#526072</color>
+    <color name="ri_accent">#E85D04</color>
+    <color name="ri_accent_dark">#C94E02</color>
+</resources>

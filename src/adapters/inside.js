@@ -26,6 +26,7 @@ export const INSIDE_ENDPOINTS = {
     radiusOnline: 'http://radius-portal.fpt.net/public/partial/online-session',
   },
   reset_mac: null,
+  reset_mac_box: null,
   kill_session: null,
   clear_osp: null,
 };
@@ -558,8 +559,15 @@ function buildInsideMockResult(actionId, contractId) {
       return {
         status: 'ok',
         mode: 'demo',
-        title: `Đã Reset MAC cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: MAC cũ đã được xóa trên bản xem thử.',
+        title: `Đã Reset MAC Modem cho ${contractId} (Dữ liệu mô phỏng)`,
+        message: 'Lệnh mô phỏng thành công: MAC Modem cũ đã được xóa trên bản xem thử.',
+      };
+    case 'reset_mac_box':
+      return {
+        status: 'ok',
+        mode: 'demo',
+        title: `Đã Reset MAC Box cho ${contractId} (Dữ liệu mô phỏng)`,
+        message: 'Lệnh mô phỏng thành công: MAC đầu thu Box giả lập đã được xử lý.',
       };
     case 'kill_session':
       return {

@@ -22,8 +22,10 @@ import { detectIamRedirect } from '../src/core/transport.js';
 import {
   buildScanReport,
   createNetworkRecorder,
+  extractAjaxSignaturesFromHtml,
   extractApiHintsFromHtml,
   extractApiHintsFromJs,
+  extractOpsMenuFromLeftAsp,
   redactHeaders,
   redactPayload,
   redactResponseStructure,
@@ -88,8 +90,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.3.0'),
-    'Userscript must bump @version to 0.3.0'
+    userscriptContent.includes('@version      0.3.1'),
+    'Userscript must bump @version to 0.3.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -112,6 +114,10 @@ function runTests() {
     PORTALS.inside.hosts.includes('mvc.inside.fpt.net'),
     'PORTALS.inside.hosts must include mvc.inside.fpt.net'
   );
+  const insideActions = Object.fromEntries(PORTALS.inside.actions.map((a) => [a.id, a.label]));
+  assert.equal(insideActions.reset_mac, 'Reset MAC Modem');
+  assert.equal(insideActions.reset_mac_box, 'Reset MAC Box');
+  assert.equal(INSIDE_ENDPOINTS.reset_mac_box, null);
   assert.equal(normalizeContractId('  sgn 123456\n '), 'SGN123456');
   assert.equal(normalizeContractId('hn-9988_1'), 'HN-9988_1');
   assert.equal(validateContractId('').valid, false);
@@ -515,6 +521,62 @@ function runTests() {
   assert.ok(jsHints.includes('/api/v1/online-session'));
   assert.equal(JSON.stringify(jsHints).includes('secret123'), false);
   console.log('   OK: HTML & JS API hint extractors passed.');
+
+  console.log('8. Testing AJAX signature & Left.Asp ops menu extractors...');
+  const ajaxSampleHtml = `
+    <select id="fSearchType" name="fSearchType">
+      <option value="1">Số HĐ</option>
+      <option value="2">Tên truy nhập</option>
+    </select>
+    <script>
+      function ChangeSubmit() {
+        $.ajax({
+          type: 'POST',
+          url: '/DSLLLine/ResetMAC/ChangeMAC?ObjID=' + objId,
+          contentType: 'application/json; charset=utf-8',
+          data: JSON.stringify({ ObjID: id, NewMAC: mac, secret: 'abc' })
+        });
+      }
+      function DeleteSession() {
+        $.post('/KillSession/KillSession/DeleteSession', { ObjID: x });
+      }
+    </script>
+  `;
+  const sigOut = extractAjaxSignaturesFromHtml(
+    ajaxSampleHtml,
+    'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+    'VTAAR2393'
+  );
+  assert.equal(sigOut.ajaxCalls.length, 2);
+  assert.equal(sigOut.ajaxCalls[0].fnHint, 'ChangeSubmit');
+  assert.equal(sigOut.ajaxCalls[0].method, 'POST');
+  assert.equal(sigOut.ajaxCalls[0].urlPath, '/DSLLLine/ResetMAC/ChangeMAC');
+  assert.ok(sigOut.ajaxCalls[0].dataKeys.includes('ObjID'));
+  assert.ok(sigOut.ajaxCalls[0].dataKeys.includes('NewMAC'));
+  assert.equal(JSON.stringify(sigOut).includes("'abc'"), false, 'Must not leak data object literal values');
+  assert.equal(sigOut.ajaxCalls[1].fnHint, 'DeleteSession');
+  assert.equal(sigOut.ajaxCalls[1].method, 'POST');
+  assert.equal(sigOut.ajaxCalls[1].urlPath, '/KillSession/KillSession/DeleteSession');
+  assert.ok(sigOut.ajaxCalls[1].dataKeys.includes('ObjID'));
+  assert.equal(sigOut.selects.length, 1);
+  assert.equal(sigOut.selects[0].id, 'fSearchType');
+  assert.deepEqual(sigOut.selects[0].options, [
+    { value: '1', text: 'Số HĐ' },
+    { value: '2', text: 'Tên truy nhập' },
+  ]);
+
+  const leftSample = `
+    <a href="#" onclick="GoPage('http://mvc.inside.fpt.net/ClearOSP/Index?vUrl=secretVal', this); return false;">Clear OSP</a>
+    <a href="#" onclick="GoPage('http://mvc.inside.fpt.net/Accounting/Bill', this); return false;">Hóa đơn</a>
+  `;
+  const leftOps = extractOpsMenuFromLeftAsp(leftSample, 'http://inside.fpt.net/Left.Asp');
+  assert.equal(leftOps.length, 1);
+  assert.equal(leftOps[0].text, 'Clear OSP');
+  assert.equal(leftOps[0].targetOrigin, 'http://mvc.inside.fpt.net');
+  assert.equal(leftOps[0].targetPath, '/ClearOSP/Index');
+  assert.deepEqual(leftOps[0].targetQueryParamNames, ['vUrl']);
+  assert.equal(JSON.stringify(leftOps).includes('secretVal'), false, 'Must never leak menu query values');
+  console.log('   OK: AJAX signature & Left.Asp ops menu extractors passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

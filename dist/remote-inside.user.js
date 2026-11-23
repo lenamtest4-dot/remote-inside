@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.3.0
+// @version      0.3.1
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -47,7 +47,7 @@ const PORTALS = {
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
     status: 'priority',
     statusLabel: 'Ưu tiên v0.1',
-    description: 'Tra thông tin HĐ, Reset MAC, Kill Session, Clear OSP.',
+    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP.',
     actions: [
       {
         id: 'lookup',
@@ -58,11 +58,19 @@ const PORTALS = {
       },
       {
         id: 'reset_mac',
-        label: 'Reset MAC',
+        label: 'Reset MAC Modem',
         description: 'Xóa địa chỉ MAC đang giữ để thiết bị nhận lại kết nối mới.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Hành động này sẽ xóa MAC đang gắn với hợp đồng trên hệ thống Inside.',
+        confirmNote: 'Hành động này sẽ xóa MAC Modem đang gắn với hợp đồng trên hệ thống Inside.',
+      },
+      {
+        id: 'reset_mac_box',
+        label: 'Reset MAC Box',
+        description: 'Xóa/đổi địa chỉ MAC đầu thu FPT Box (IPTV) của hợp đồng.',
+        kind: 'danger',
+        requiresConfirm: true,
+        confirmNote: 'Hành động này sẽ reset/thay đổi MAC đầu thu Box gắn với hợp đồng.',
       },
       {
         id: 'kill_session',
@@ -1516,6 +1524,254 @@ function extractApiHintsFromJs(jsText, contractId = '') {
   return hints;
 }
 
+function extractBalancedBraces(str, openIdx, maxLen = 1200) {
+  if (!str || str[openIdx] !== '{') return '';
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  const end = Math.min(str.length, openIdx + maxLen);
+
+  for (let i = openIdx; i < end; i += 1) {
+    const ch = str[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (ch === '\\') {
+        escaped = true;
+      } else if (ch === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+    } else if (ch === '{') {
+      depth += 1;
+    } else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return str.slice(openIdx, i + 1);
+      }
+    }
+  }
+  return str.slice(openIdx, end);
+}
+
+function findEnclosingFnHint(codeText, index) {
+  const start = Math.max(0, index - 600);
+  const before = codeText.slice(start, index);
+  const fnMatches = Array.from(
+    before.matchAll(
+      /(?:function\s+([A-Za-z0-9_$]+)\s*\(|\$\(\s*['"](#[^'"]+)['"]\s*\)\s*\.(?:click|on\s*\(\s*['"]click['"]))|(?:(?:var|let|const)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?function)/g
+    )
+  );
+  if (fnMatches.length === 0) return '';
+  const last = fnMatches[fnMatches.length - 1];
+  return last[1] || last[2] || last[3] || '';
+}
+
+function extractDataKeysFromExpr(block) {
+  const keys = new Set();
+  const objIdx = block.search(/(?:data\s*:\s*\{|JSON\.stringify\s*\(\s*\{|^\s*,\s*\{)/i);
+  if (objIdx !== -1) {
+    const braceIdx = block.indexOf('{', objIdx);
+    const objText = braceIdx !== -1 ? extractBalancedBraces(block, braceIdx, 600) : '';
+    const keyRe = /['"]?([A-Za-z0-9_$]+)['"]?\s*:/g;
+    let km;
+    while ((km = keyRe.exec(objText)) !== null) {
+      keys.add(km[1]);
+    }
+  }
+  const qpRe = /[?&"'\s]([A-Za-z0-9_]+)\s*=/g;
+  let qm;
+  while ((qm = qpRe.exec(block)) !== null) {
+    if (!['type', 'method', 'url', 'contentType', 'dataType', 'async'].includes(qm[1])) {
+      keys.add(qm[1]);
+    }
+  }
+  return Array.from(keys).slice(0, 20);
+}
+
+function extractConcatenatedUrlExpr(block) {
+  const m = block.match(/url\s*:\s*([^\n,}]+(?:\s*\+\s*[^\n,}]+)*)/i);
+  if (!m) return '';
+  const litRe = /['"`]([^'"`]+)['"`]/g;
+  const parts = [];
+  let lm;
+  while ((lm = litRe.exec(m[1])) !== null) {
+    parts.push(lm[1]);
+  }
+  return parts.join('');
+}
+
+/**
+ * Quet chi tiet chu ky goi AJAX ($.ajax, $.post, $.get) va cac o chon <select> tu HTML (chi doc cau truc).
+ */
+function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { ajaxCalls: [], selects: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const ajaxCalls = [];
+  const seenCalls = new Set();
+
+  function addCall({ fnHint, method, rawUrl, contentType, extraDataKeys = [] }) {
+    if (!rawUrl || ajaxCalls.length >= 30) return;
+    const parsed = parseSafeUrlParts(
+      rawUrl,
+      baseUrl || 'http://mvc.inside.fpt.net/',
+      contractId
+    );
+    if (!parsed.pathname) return;
+    const dataKeys = Array.from(new Set([...parsed.queryParamNames, ...extraDataKeys])).slice(0, 20);
+    const sigKey = `${method}|${parsed.pathname}|${dataKeys.join(',')}`;
+    if (seenCalls.has(sigKey)) return;
+    seenCalls.add(sigKey);
+    ajaxCalls.push({
+      fnHint: replaceContractToken(fnHint || '', contractId, 50),
+      method: method.toUpperCase(),
+      urlPath: parsed.pathname,
+      queryParamNames: parsed.queryParamNames,
+      contentType: truncateStr(contentType || '', 60),
+      dataKeys,
+    });
+  }
+
+  const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
+  let sm;
+  while ((sm = scriptRe.exec(withoutStyles)) !== null) {
+    const attrs = sm[1] || '';
+    if (getAttrValue(attrs, 'src')) continue;
+    const code = sm[2] || '';
+    if (!code.trim()) continue;
+
+    const ajaxRe = /\$\.ajax\s*\(\s*\{/g;
+    let am;
+    while ((am = ajaxRe.exec(code)) !== null) {
+      const braceStart = am.index + am[0].length - 1;
+      const block = extractBalancedBraces(code, braceStart, 1000);
+      const methodMatch = block.match(/\b(?:type|method)\s*:\s*['"]([A-Za-z]+)['"]/i);
+      const ctMatch = block.match(/\bcontentType\s*:\s*['"]([^'"]+)['"]/i);
+      const rawUrl = extractConcatenatedUrlExpr(block);
+      const dataKeys = extractDataKeysFromExpr(block);
+      addCall({
+        fnHint: findEnclosingFnHint(code, am.index),
+        method: methodMatch ? methodMatch[1] : 'GET',
+        rawUrl,
+        contentType: ctMatch ? ctMatch[1] : '',
+        extraDataKeys: dataKeys,
+      });
+    }
+
+    const shortRe = /\$\.(post|get|getJSON)\s*\(\s*['"`]([^'"`\n]+)['"`]([^)]{0,320})\)/gi;
+    let shm;
+    while ((shm = shortRe.exec(code)) !== null) {
+      const fnName = shm[1].toLowerCase();
+      const rawUrl = shm[2];
+      const tail = shm[3] || '';
+      const dataKeys = extractDataKeysFromExpr(tail);
+      addCall({
+        fnHint: findEnclosingFnHint(code, shm.index),
+        method: fnName === 'post' ? 'POST' : 'GET',
+        rawUrl,
+        contentType: fnName === 'post' ? 'application/x-www-form-urlencoded' : '',
+        extraDataKeys: dataKeys,
+      });
+    }
+  }
+
+  const selects = [];
+  const selectRe = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi;
+  let slm;
+  while ((slm = selectRe.exec(withoutStyles)) !== null && selects.length < 10) {
+    const attrs = slm[1] || '';
+    const inner = slm[2] || '';
+    const options = [];
+    const optRe = /<option\b([^>]*)>([\s\S]*?)<\/option>/gi;
+    let om;
+    while ((om = optRe.exec(inner)) !== null && options.length < 15) {
+      const optText = om[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      options.push({
+        value: truncateStr(getAttrValue(om[1] || '', 'value'), 40),
+        text: replaceContractToken(optText, contractId, 60),
+      });
+    }
+    selects.push({
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      options,
+    });
+  }
+
+  return { ajaxCalls, selects };
+}
+
+const LEFT_OPS_MENU_RE =
+  /(mac|box|osp|kill|session|port|reset|replace|clear|kỹ\s*thuật|mạng|iptv|camera|dsl|line|olt|pon)/i;
+
+/**
+ * Quet danh sach cac muc ky thuat / thao tac trong menu Left.Asp (tim Clear OSP, Reset MAC Box...).
+ */
+function extractOpsMenuFromLeftAsp(htmlText, baseUrl = 'http://inside.fpt.net/Left.Asp') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+
+  const items = [];
+  const seen = new Set();
+  const seenPaths = new Set();
+
+  function pushItem(label, rawUrl) {
+    if (!rawUrl || items.length >= 120) return;
+    const cleanText = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!LEFT_OPS_MENU_RE.test(`${cleanText} ${rawUrl}`)) return;
+    const parsed = parseSafeUrlParts(rawUrl, baseUrl, '');
+    if (!parsed.pathname) return;
+    const pathKey = `${parsed.origin}|${parsed.pathname}`;
+    if (!cleanText && seenPaths.has(pathKey)) return;
+    const key = `${cleanText}|${pathKey}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    seenPaths.add(pathKey);
+    items.push({
+      text: truncateStr(cleanText, 80),
+      targetOrigin: parsed.origin,
+      targetPath: parsed.pathname,
+      targetQueryParamNames: parsed.queryParamNames,
+    });
+  }
+
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let am;
+  while ((am = anchorRe.exec(htmlText)) !== null) {
+    const attrs = am[1] || '';
+    const text = am[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const onclick = getAttrValue(attrs, 'onclick');
+    const href = getAttrValue(attrs, 'href');
+    const goMatch = onclick.match(/GoPage\s*\(\s*['"]([^'"]+)['"]/i);
+    if (goMatch) {
+      pushItem(text, goMatch[1]);
+    } else if (href && href !== '#' && !/^\s*javascript:/i.test(href)) {
+      pushItem(text, href);
+    }
+  }
+
+  const goStandaloneRe = /GoPage\s*\(\s*['"]([^'"]+)['"]/gi;
+  let gm;
+  while ((gm = goStandaloneRe.exec(htmlText)) !== null) {
+    pushItem('', gm[1]);
+  }
+
+  return items;
+}
+
 /**
  * Dong goi bao cao JSON sach se de nguoi dung copy hoac tai ve gui AI ghep API.
  */
@@ -1561,6 +1817,7 @@ const INSIDE_ENDPOINTS = {
     radiusOnline: 'http://radius-portal.fpt.net/public/partial/online-session',
   },
   reset_mac: null,
+  reset_mac_box: null,
   kill_session: null,
   clear_osp: null,
 };
@@ -2091,8 +2348,15 @@ function buildInsideMockResult(actionId, contractId) {
       return {
         status: 'ok',
         mode: 'demo',
-        title: `Đã Reset MAC cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: MAC cũ đã được xóa trên bản xem thử.',
+        title: `Đã Reset MAC Modem cho ${contractId} (Dữ liệu mô phỏng)`,
+        message: 'Lệnh mô phỏng thành công: MAC Modem cũ đã được xóa trên bản xem thử.',
+      };
+    case 'reset_mac_box':
+      return {
+        status: 'ok',
+        mode: 'demo',
+        title: `Đã Reset MAC Box cho ${contractId} (Dữ liệu mô phỏng)`,
+        message: 'Lệnh mô phỏng thành công: MAC đầu thu Box giả lập đã được xử lý.',
       };
     case 'kill_session':
       return {
@@ -2832,6 +3096,137 @@ function mountRemoteInside({
     }
   }
 
+  async function handleOpsSignatureScan() {
+    if (state.isDeepScanning) return;
+    if (!isUserscriptEnv()) {
+      state.copyNotice =
+        'Tính năng Quét tham số chỉ chạy khi đang mở trang FPT qua Tampermonkey.';
+      render();
+      return;
+    }
+
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang đọc cấu trúc Reset MAC (Modem & Box), Kill Session và Menu Left.Asp (chỉ đọc, không chạy lệnh)…';
+    render();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      const targets = [
+        {
+          key: 'reset_mac_modem',
+          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+        },
+        {
+          key: 'kill_session',
+          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
+        },
+        {
+          key: 'replace_mac_box',
+          url: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC',
+        },
+        {
+          key: 'check_mac_box',
+          url: 'http://mvc.inside.fpt.net/Contract/CheckMACBox',
+        },
+        {
+          key: 'left_menu',
+          url: 'http://inside.fpt.net/Left.Asp',
+        },
+      ];
+
+      const settled = await Promise.allSettled(
+        targets.map((t) =>
+          requestPortal({
+            url: t.url,
+            method: 'GET',
+            headers: { Accept: 'text/html, */*' },
+            timeout: 12000,
+          })
+        )
+      );
+
+      const pages = [];
+      let leftMenuOps = [];
+
+      for (let i = 0; i < targets.length; i += 1) {
+        const t = targets[i];
+        const item = settled[i];
+        const res = item && item.status === 'fulfilled' ? item.value : null;
+        let pathname = '';
+        try {
+          pathname = new URL(t.url).pathname;
+        } catch {
+          pathname = '';
+        }
+
+        if (!res || !res.ok || !res.responseText) {
+          pages.push({
+            key: t.key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          });
+          continue;
+        }
+
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: t.url,
+        });
+
+        if (t.key === 'left_menu') {
+          leftMenuOps = extractOpsMenuFromLeftAsp(res.responseText, t.url);
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            menuOpsCount: leftMenuOps.length,
+          });
+        } else {
+          const hints = extractApiHintsFromHtml(res.responseText, t.url, contractId);
+          const sigs = extractAjaxSignaturesFromHtml(res.responseText, t.url, contractId);
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            ajaxCalls: sigs.ajaxCalls,
+            selects: sigs.selects,
+            forms: hints.forms,
+            fields: hints.fields,
+            buttons: hints.buttons,
+            apiHints: hints.apiHints,
+          });
+        }
+      }
+
+      state.deepScan = {
+        scanKind: 'ops_signatures',
+        scannedAt: new Date().toISOString(),
+        pages,
+        leftMenuOps,
+      };
+
+      const okCount = pages.filter((p) => p.status >= 200 && p.status < 400 && !p.iamExpired).length;
+      const callCount = pages.reduce(
+        (acc, p) => acc + (Array.isArray(p.ajaxCalls) ? p.ajaxCalls.length : 0),
+        0
+      );
+      state.copyNotice = `Đã quét xong ${okCount}/${targets.length} trang (bắt được ${callCount} lệnh AJAX và ${leftMenuOps.length} mục menu). Hãy bấm "Tải file JSON" lưu vào thư mục Dự án mới/Remote inside/scans và nhắn mình "đã lưu file"!`;
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét tham số: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      render();
+    }
+  }
+
   async function handleCopyScanReport() {
     const report = buildScanReport({
       domSnapshot: state.domSnapshot,
@@ -3494,6 +3889,15 @@ function mountRemoteInside({
               ? 'Đang quét 7 trang phụ…'
               : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
             onClick: handleDeepScan,
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            disabled: state.isDeepScanning,
+            text: state.isDeepScanning
+              ? 'Đang đọc tham số lệnh…'
+              : '4. Quét chi tiết tham số Reset MAC (Modem & Box) + Kill Session + Clear OSP',
+            onClick: handleOpsSignatureScan,
           }),
         ]),
         el('div', { className: 'ri-scan-stats' }, [

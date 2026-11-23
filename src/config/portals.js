@@ -13,7 +13,7 @@ export const PORTALS = {
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
     status: 'priority',
     statusLabel: 'Ưu tiên v0.1',
-    description: 'Tra thông tin HĐ, Reset MAC, Kill Session, Clear OSP.',
+    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP.',
     actions: [
       {
         id: 'lookup',
@@ -24,11 +24,19 @@ export const PORTALS = {
       },
       {
         id: 'reset_mac',
-        label: 'Reset MAC',
+        label: 'Reset MAC Modem',
         description: 'Xóa địa chỉ MAC đang giữ để thiết bị nhận lại kết nối mới.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Hành động này sẽ xóa MAC đang gắn với hợp đồng trên hệ thống Inside.',
+        confirmNote: 'Hành động này sẽ xóa MAC Modem đang gắn với hợp đồng trên hệ thống Inside.',
+      },
+      {
+        id: 'reset_mac_box',
+        label: 'Reset MAC Box',
+        description: 'Xóa/đổi địa chỉ MAC đầu thu FPT Box (IPTV) của hợp đồng.',
+        kind: 'danger',
+        requiresConfirm: true,
+        confirmNote: 'Hành động này sẽ reset/thay đổi MAC đầu thu Box gắn với hợp đồng.',
       },
       {
         id: 'kill_session',

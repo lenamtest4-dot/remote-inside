@@ -941,6 +941,254 @@ export function extractApiHintsFromJs(jsText, contractId = '') {
   return hints;
 }
 
+function extractBalancedBraces(str, openIdx, maxLen = 1200) {
+  if (!str || str[openIdx] !== '{') return '';
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+  const end = Math.min(str.length, openIdx + maxLen);
+
+  for (let i = openIdx; i < end; i += 1) {
+    const ch = str[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (quote) {
+      if (ch === '\\') {
+        escaped = true;
+      } else if (ch === quote) {
+        quote = '';
+      }
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+    } else if (ch === '{') {
+      depth += 1;
+    } else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return str.slice(openIdx, i + 1);
+      }
+    }
+  }
+  return str.slice(openIdx, end);
+}
+
+function findEnclosingFnHint(codeText, index) {
+  const start = Math.max(0, index - 600);
+  const before = codeText.slice(start, index);
+  const fnMatches = Array.from(
+    before.matchAll(
+      /(?:function\s+([A-Za-z0-9_$]+)\s*\(|\$\(\s*['"](#[^'"]+)['"]\s*\)\s*\.(?:click|on\s*\(\s*['"]click['"]))|(?:(?:var|let|const)\s+([A-Za-z0-9_$]+)\s*=\s*(?:async\s*)?function)/g
+    )
+  );
+  if (fnMatches.length === 0) return '';
+  const last = fnMatches[fnMatches.length - 1];
+  return last[1] || last[2] || last[3] || '';
+}
+
+function extractDataKeysFromExpr(block) {
+  const keys = new Set();
+  const objIdx = block.search(/(?:data\s*:\s*\{|JSON\.stringify\s*\(\s*\{|^\s*,\s*\{)/i);
+  if (objIdx !== -1) {
+    const braceIdx = block.indexOf('{', objIdx);
+    const objText = braceIdx !== -1 ? extractBalancedBraces(block, braceIdx, 600) : '';
+    const keyRe = /['"]?([A-Za-z0-9_$]+)['"]?\s*:/g;
+    let km;
+    while ((km = keyRe.exec(objText)) !== null) {
+      keys.add(km[1]);
+    }
+  }
+  const qpRe = /[?&"'\s]([A-Za-z0-9_]+)\s*=/g;
+  let qm;
+  while ((qm = qpRe.exec(block)) !== null) {
+    if (!['type', 'method', 'url', 'contentType', 'dataType', 'async'].includes(qm[1])) {
+      keys.add(qm[1]);
+    }
+  }
+  return Array.from(keys).slice(0, 20);
+}
+
+function extractConcatenatedUrlExpr(block) {
+  const m = block.match(/url\s*:\s*([^\n,}]+(?:\s*\+\s*[^\n,}]+)*)/i);
+  if (!m) return '';
+  const litRe = /['"`]([^'"`]+)['"`]/g;
+  const parts = [];
+  let lm;
+  while ((lm = litRe.exec(m[1])) !== null) {
+    parts.push(lm[1]);
+  }
+  return parts.join('');
+}
+
+/**
+ * Quet chi tiet chu ky goi AJAX ($.ajax, $.post, $.get) va cac o chon <select> tu HTML (chi doc cau truc).
+ */
+export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { ajaxCalls: [], selects: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const ajaxCalls = [];
+  const seenCalls = new Set();
+
+  function addCall({ fnHint, method, rawUrl, contentType, extraDataKeys = [] }) {
+    if (!rawUrl || ajaxCalls.length >= 30) return;
+    const parsed = parseSafeUrlParts(
+      rawUrl,
+      baseUrl || 'http://mvc.inside.fpt.net/',
+      contractId
+    );
+    if (!parsed.pathname) return;
+    const dataKeys = Array.from(new Set([...parsed.queryParamNames, ...extraDataKeys])).slice(0, 20);
+    const sigKey = `${method}|${parsed.pathname}|${dataKeys.join(',')}`;
+    if (seenCalls.has(sigKey)) return;
+    seenCalls.add(sigKey);
+    ajaxCalls.push({
+      fnHint: replaceContractToken(fnHint || '', contractId, 50),
+      method: method.toUpperCase(),
+      urlPath: parsed.pathname,
+      queryParamNames: parsed.queryParamNames,
+      contentType: truncateStr(contentType || '', 60),
+      dataKeys,
+    });
+  }
+
+  const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
+  let sm;
+  while ((sm = scriptRe.exec(withoutStyles)) !== null) {
+    const attrs = sm[1] || '';
+    if (getAttrValue(attrs, 'src')) continue;
+    const code = sm[2] || '';
+    if (!code.trim()) continue;
+
+    const ajaxRe = /\$\.ajax\s*\(\s*\{/g;
+    let am;
+    while ((am = ajaxRe.exec(code)) !== null) {
+      const braceStart = am.index + am[0].length - 1;
+      const block = extractBalancedBraces(code, braceStart, 1000);
+      const methodMatch = block.match(/\b(?:type|method)\s*:\s*['"]([A-Za-z]+)['"]/i);
+      const ctMatch = block.match(/\bcontentType\s*:\s*['"]([^'"]+)['"]/i);
+      const rawUrl = extractConcatenatedUrlExpr(block);
+      const dataKeys = extractDataKeysFromExpr(block);
+      addCall({
+        fnHint: findEnclosingFnHint(code, am.index),
+        method: methodMatch ? methodMatch[1] : 'GET',
+        rawUrl,
+        contentType: ctMatch ? ctMatch[1] : '',
+        extraDataKeys: dataKeys,
+      });
+    }
+
+    const shortRe = /\$\.(post|get|getJSON)\s*\(\s*['"`]([^'"`\n]+)['"`]([^)]{0,320})\)/gi;
+    let shm;
+    while ((shm = shortRe.exec(code)) !== null) {
+      const fnName = shm[1].toLowerCase();
+      const rawUrl = shm[2];
+      const tail = shm[3] || '';
+      const dataKeys = extractDataKeysFromExpr(tail);
+      addCall({
+        fnHint: findEnclosingFnHint(code, shm.index),
+        method: fnName === 'post' ? 'POST' : 'GET',
+        rawUrl,
+        contentType: fnName === 'post' ? 'application/x-www-form-urlencoded' : '',
+        extraDataKeys: dataKeys,
+      });
+    }
+  }
+
+  const selects = [];
+  const selectRe = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi;
+  let slm;
+  while ((slm = selectRe.exec(withoutStyles)) !== null && selects.length < 10) {
+    const attrs = slm[1] || '';
+    const inner = slm[2] || '';
+    const options = [];
+    const optRe = /<option\b([^>]*)>([\s\S]*?)<\/option>/gi;
+    let om;
+    while ((om = optRe.exec(inner)) !== null && options.length < 15) {
+      const optText = om[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      options.push({
+        value: truncateStr(getAttrValue(om[1] || '', 'value'), 40),
+        text: replaceContractToken(optText, contractId, 60),
+      });
+    }
+    selects.push({
+      id: getAttrValue(attrs, 'id'),
+      name: getAttrValue(attrs, 'name'),
+      options,
+    });
+  }
+
+  return { ajaxCalls, selects };
+}
+
+const LEFT_OPS_MENU_RE =
+  /(mac|box|osp|kill|session|port|reset|replace|clear|kỹ\s*thuật|mạng|iptv|camera|dsl|line|olt|pon)/i;
+
+/**
+ * Quet danh sach cac muc ky thuat / thao tac trong menu Left.Asp (tim Clear OSP, Reset MAC Box...).
+ */
+export function extractOpsMenuFromLeftAsp(htmlText, baseUrl = 'http://inside.fpt.net/Left.Asp') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+
+  const items = [];
+  const seen = new Set();
+  const seenPaths = new Set();
+
+  function pushItem(label, rawUrl) {
+    if (!rawUrl || items.length >= 120) return;
+    const cleanText = String(label || '').replace(/\s+/g, ' ').trim();
+    if (!LEFT_OPS_MENU_RE.test(`${cleanText} ${rawUrl}`)) return;
+    const parsed = parseSafeUrlParts(rawUrl, baseUrl, '');
+    if (!parsed.pathname) return;
+    const pathKey = `${parsed.origin}|${parsed.pathname}`;
+    if (!cleanText && seenPaths.has(pathKey)) return;
+    const key = `${cleanText}|${pathKey}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    seenPaths.add(pathKey);
+    items.push({
+      text: truncateStr(cleanText, 80),
+      targetOrigin: parsed.origin,
+      targetPath: parsed.pathname,
+      targetQueryParamNames: parsed.queryParamNames,
+    });
+  }
+
+  const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let am;
+  while ((am = anchorRe.exec(htmlText)) !== null) {
+    const attrs = am[1] || '';
+    const text = am[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const onclick = getAttrValue(attrs, 'onclick');
+    const href = getAttrValue(attrs, 'href');
+    const goMatch = onclick.match(/GoPage\s*\(\s*['"]([^'"]+)['"]/i);
+    if (goMatch) {
+      pushItem(text, goMatch[1]);
+    } else if (href && href !== '#' && !/^\s*javascript:/i.test(href)) {
+      pushItem(text, href);
+    }
+  }
+
+  const goStandaloneRe = /GoPage\s*\(\s*['"]([^'"]+)['"]/gi;
+  let gm;
+  while ((gm = goStandaloneRe.exec(htmlText)) !== null) {
+    pushItem('', gm[1]);
+  }
+
+  return items;
+}
+
 /**
  * Dong goi bao cao JSON sach se de nguoi dung copy hoac tai ve gui AI ghep API.
  */

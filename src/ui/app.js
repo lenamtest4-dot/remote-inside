@@ -26,8 +26,10 @@ import {
 import {
   buildScanReport,
   createNetworkRecorder,
+  extractAjaxSignaturesFromHtml,
   extractApiHintsFromHtml,
   extractApiHintsFromJs,
+  extractOpsMenuFromLeftAsp,
   scanPageStructure,
 } from '../core/inspector.js';
 import { getCachedInsideContract, runInsideAction } from '../adapters/inside.js';
@@ -578,6 +580,137 @@ export function mountRemoteInside({
       state.copyNotice = `Đã quét xong ${okPages}/${targets.length} màn hình phụ (tìm thấy ${uniqueHints.size} gợi ý API). Hãy bấm "Sao chép báo cáo gửi AI" bên dưới!`;
     } catch (err) {
       state.copyNotice = `Có lỗi khi quét nhanh API phụ: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      render();
+    }
+  }
+
+  async function handleOpsSignatureScan() {
+    if (state.isDeepScanning) return;
+    if (!isUserscriptEnv()) {
+      state.copyNotice =
+        'Tính năng Quét tham số chỉ chạy khi đang mở trang FPT qua Tampermonkey.';
+      render();
+      return;
+    }
+
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang đọc cấu trúc Reset MAC (Modem & Box), Kill Session và Menu Left.Asp (chỉ đọc, không chạy lệnh)…';
+    render();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      const targets = [
+        {
+          key: 'reset_mac_modem',
+          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+        },
+        {
+          key: 'kill_session',
+          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
+        },
+        {
+          key: 'replace_mac_box',
+          url: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC',
+        },
+        {
+          key: 'check_mac_box',
+          url: 'http://mvc.inside.fpt.net/Contract/CheckMACBox',
+        },
+        {
+          key: 'left_menu',
+          url: 'http://inside.fpt.net/Left.Asp',
+        },
+      ];
+
+      const settled = await Promise.allSettled(
+        targets.map((t) =>
+          requestPortal({
+            url: t.url,
+            method: 'GET',
+            headers: { Accept: 'text/html, */*' },
+            timeout: 12000,
+          })
+        )
+      );
+
+      const pages = [];
+      let leftMenuOps = [];
+
+      for (let i = 0; i < targets.length; i += 1) {
+        const t = targets[i];
+        const item = settled[i];
+        const res = item && item.status === 'fulfilled' ? item.value : null;
+        let pathname = '';
+        try {
+          pathname = new URL(t.url).pathname;
+        } catch {
+          pathname = '';
+        }
+
+        if (!res || !res.ok || !res.responseText) {
+          pages.push({
+            key: t.key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          });
+          continue;
+        }
+
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: t.url,
+        });
+
+        if (t.key === 'left_menu') {
+          leftMenuOps = extractOpsMenuFromLeftAsp(res.responseText, t.url);
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            menuOpsCount: leftMenuOps.length,
+          });
+        } else {
+          const hints = extractApiHintsFromHtml(res.responseText, t.url, contractId);
+          const sigs = extractAjaxSignaturesFromHtml(res.responseText, t.url, contractId);
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            ajaxCalls: sigs.ajaxCalls,
+            selects: sigs.selects,
+            forms: hints.forms,
+            fields: hints.fields,
+            buttons: hints.buttons,
+            apiHints: hints.apiHints,
+          });
+        }
+      }
+
+      state.deepScan = {
+        scanKind: 'ops_signatures',
+        scannedAt: new Date().toISOString(),
+        pages,
+        leftMenuOps,
+      };
+
+      const okCount = pages.filter((p) => p.status >= 200 && p.status < 400 && !p.iamExpired).length;
+      const callCount = pages.reduce(
+        (acc, p) => acc + (Array.isArray(p.ajaxCalls) ? p.ajaxCalls.length : 0),
+        0
+      );
+      state.copyNotice = `Đã quét xong ${okCount}/${targets.length} trang (bắt được ${callCount} lệnh AJAX và ${leftMenuOps.length} mục menu). Hãy bấm "Tải file JSON" lưu vào thư mục Dự án mới/Remote inside/scans và nhắn mình "đã lưu file"!`;
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét tham số: ${
         err && err.message ? err.message : 'Không rõ nguyên nhân'
       }`;
     } finally {
@@ -1248,6 +1381,15 @@ export function mountRemoteInside({
               ? 'Đang quét 7 trang phụ…'
               : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
             onClick: handleDeepScan,
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            disabled: state.isDeepScanning,
+            text: state.isDeepScanning
+              ? 'Đang đọc tham số lệnh…'
+              : '4. Quét chi tiết tham số Reset MAC (Modem & Box) + Kill Session + Clear OSP',
+            onClick: handleOpsSignatureScan,
           }),
         ]),
         el('div', { className: 'ri-scan-stats' }, [

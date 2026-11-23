@@ -1291,6 +1291,34 @@
   font-weight: 700;
 }
 
+.ri-port-chip.is-busy,
+.ri-port-chip:disabled {
+  background: #F4F5F7;
+  color: #9AA5B4;
+  border-color: #E2E7EE;
+  text-decoration: line-through;
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+
+.ri-textarea {
+  width: 100%;
+  min-height: 70px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border-crisp);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink-primary);
+  background: var(--bg-surface);
+  resize: vertical;
+}
+
+.ri-textarea:focus {
+  outline: none;
+  border-color: var(--accent-signal);
+}
+
 .ri-sheet-buttons {
   margin-top: 14px;
   display: flex;

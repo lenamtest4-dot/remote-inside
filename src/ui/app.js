@@ -52,6 +52,14 @@ import {
   setInsideOltHint,
   validateBoxNewMac,
 } from '../adapters/inside.js';
+import {
+  fetchPortBranches,
+  fetchPortConboxes,
+  fetchPortContractContext,
+  fetchPortHistory,
+  fetchPortPops,
+  fetchPortSlotList,
+} from '../adapters/port.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function el(tag, attrs = {}, children = []) {
@@ -216,6 +224,34 @@ export function mountRemoteInside({
     killLoginUrl: '',
     killSessions: [],
     killArmedObjId: '',
+    portModalLoading: false,
+    portModalError: '',
+    portModalLoginUrl: '',
+    portRecordMode: '',
+    portDetail: null,
+    portDetailWarn: '',
+    portTypeContract: '3',
+    portCardNumber: '1',
+    portDescription: '',
+    portLocations: [],
+    portLocationId: '',
+    portBranches: [],
+    portBranchId: '',
+    portPops: [],
+    portPopId: '',
+    portPopSearch: '',
+    portConboxes: [],
+    portConboxId: '',
+    portConboxSearch: '',
+    portSlotsLoading: false,
+    portSlots: [],
+    portSelectedPortId: '',
+    portSelectedPortLabel: '',
+    portCascadeLoading: false,
+    portHistoryOpen: false,
+    portHistoryLoading: false,
+    portHistoryError: '',
+    portHistoryRows: [],
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -373,6 +409,34 @@ export function mountRemoteInside({
     state.killLoginUrl = '';
     state.killSessions = [];
     state.killArmedObjId = '';
+    state.portModalLoading = false;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portTypeContract = '3';
+    state.portCardNumber = '1';
+    state.portDescription = '';
+    state.portLocations = [];
+    state.portLocationId = '';
+    state.portBranches = [];
+    state.portBranchId = '';
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlotsLoading = false;
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portCascadeLoading = false;
+    state.portHistoryOpen = false;
+    state.portHistoryLoading = false;
+    state.portHistoryError = '';
+    state.portHistoryRows = [];
   }
 
   function applyDetectedOltToModal() {
@@ -726,7 +790,306 @@ export function mountRemoteInside({
         return;
       }
       state.oltLoading = false;
+      state.oltLoading = false;
       state.oltError = err && err.message ? err.message : 'Lỗi tải danh sách POP OLT.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortSlotsForModal(deviceId) {
+    state.portConboxId = deviceId;
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    state.portHistoryError = '';
+    if (!deviceId || deviceId === '0') {
+      state.portSlotsLoading = false;
+      renderConfirm();
+      return;
+    }
+    state.portSlotsLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortSlotList(deviceId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portSlotsLoading = false;
+      if (res.status === 'ok') {
+        state.portSlots = Array.isArray(res.slots) ? res.slots : [];
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách Port trong Hộp đấu nối.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portSlotsLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortConboxesForModal(popId) {
+    state.portPopId = popId;
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+
+    const popObj = state.portPops.find((p) => p.value === popId);
+    const popName = popObj ? popObj.label : '';
+    if (!popId || popId === '0' || !popName) {
+      state.portCascadeLoading = false;
+      renderConfirm();
+      return;
+    }
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortConboxes(popName);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      if (res.status === 'ok') {
+        state.portConboxes = Array.isArray(res.conboxes) ? res.conboxes : [];
+        if (state.portConboxes.length === 1) {
+          loadPortSlotsForModal(state.portConboxes[0].value);
+          return;
+        }
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách Hộp đấu nối.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Hộp đấu nối.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortPopsForModal(locationId, branchId) {
+    state.portBranchId = branchId;
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortPops(locationId, branchId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      if (res.status === 'ok') {
+        state.portPops = Array.isArray(res.pops) ? res.pops : [];
+        if (state.portPops.length === 1) {
+          loadPortConboxesForModal(state.portPops[0].value);
+          return;
+        }
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách POP.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách POP.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortBranchesForModal(locationId) {
+    state.portLocationId = locationId;
+    state.portBranches = [];
+    state.portBranchId = '';
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortBranches(locationId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      if (res.status === 'ok') {
+        state.portBranches = Array.isArray(res.branches) ? res.branches : [];
+        const nextBranch = (state.portBranches[0] && state.portBranches[0].value) || '0';
+        loadPortPopsForModal(locationId, nextBranch);
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = res.message || 'Không tải được danh sách Chi nhánh.';
+      state.portModalLoginUrl = res.loginUrl || '';
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Chi nhánh.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortHistoryForModal() {
+    const conboxObj = state.portConboxes.find((c) => c.value === state.portConboxId);
+    const pointName = conboxObj ? conboxObj.label : '';
+    state.portHistoryOpen = true;
+    state.portHistoryLoading = true;
+    state.portHistoryError = '';
+    state.portHistoryRows = [];
+    renderConfirm();
+
+    try {
+      const res = await fetchPortHistory({
+        pointName,
+        port: state.portSelectedPortLabel,
+        locationID: state.portLocationId,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portHistoryLoading = false;
+      if (res.status === 'ok') {
+        state.portHistoryRows = Array.isArray(res.rows) ? res.rows : [];
+      } else {
+        state.portHistoryError = res.message || 'Không tải được Lịch sử Port.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portHistoryLoading = false;
+      state.portHistoryError = err && err.message ? err.message : 'Lỗi tải Lịch sử Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortReleaseModal(contractId) {
+    state.portModalLoading = true;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portDescription = '';
+    renderConfirm();
+
+    try {
+      const res = await fetchPortContractContext(contractId, { forceRefresh: true });
+      if (!state.confirmAction || state.confirmAction.id !== 'release_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      if (res.status === 'ok') {
+        state.portRecordMode = res.recordMode || '';
+        state.portDetail = res.detail || null;
+        state.portDetailWarn = res.loadDataError || '';
+        state.portDescription = (res.detail && res.detail.description) || '';
+      } else {
+        state.portModalError = res.message || 'Không tải được thông tin hợp đồng từ mvcport.fpt.net.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'release_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi đọc dữ liệu FTTH NEW Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortAssignModal(contractId, typeContractOverride = '') {
+    const activeType = typeContractOverride || state.portTypeContract || '3';
+    state.portModalLoading = true;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portTypeContract = activeType;
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    renderConfirm();
+
+    try {
+      const res = await fetchPortContractContext(contractId, {
+        typeContract: activeType,
+        forceRefresh: true,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      if (res.status === 'ok') {
+        state.portRecordMode = res.recordMode || '';
+        state.portDetail = res.detail || null;
+        state.portDetailWarn = res.loadDataError || '';
+        state.portTypeContract = (res.detail && res.detail.typeContract) || activeType;
+        state.portCardNumber = (res.detail && res.detail.cardNumber) || '1';
+        state.portDescription = (res.detail && res.detail.description) || '';
+        state.portLocations = Array.isArray(res.locations) ? res.locations : [];
+        state.portLocationId =
+          res.defaultLocationId || (state.portLocations[0] && state.portLocations[0].value) || '';
+        state.portBranches = Array.isArray(res.branches) ? res.branches : [];
+        state.portBranchId =
+          res.defaultBranchId || (state.portBranches[0] && state.portBranches[0].value) || '';
+        renderConfirm();
+        if (state.portRecordMode !== 'not_found' && state.portLocationId) {
+          loadPortPopsForModal(state.portLocationId, state.portBranchId || '0');
+        }
+        return;
+      }
+      state.portModalError = res.message || 'Không tải được thông tin cấp Port FTTH NEW.';
+      state.portModalLoginUrl = res.loginUrl || '';
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải form Cấp / Đổi Port.';
     }
     renderConfirm();
   }
@@ -766,6 +1129,10 @@ export function mountRemoteInside({
         if (state.contractInput) {
           loadContractOltContextForModal(state.contractInput);
         }
+      } else if (state.activePortalId === 'port' && action.id === 'release_port') {
+        loadPortReleaseModal(state.contractInput);
+      } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
+        loadPortAssignModal(state.contractInput);
       }
       return;
     }
@@ -789,6 +1156,8 @@ export function mountRemoteInside({
     const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
     const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
     const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
+    const isPortAssignLog = portal.id === 'port' && action.id === 'assign_port';
+    const isPortReleaseLog = portal.id === 'port' && action.id === 'release_port';
     const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
@@ -796,6 +1165,11 @@ export function mountRemoteInside({
       logTarget = contractId ? `${contractId} • ${baseOlt}` : baseOlt;
     } else if (isKillSession && actionCtx.ipAddress) {
       logTarget = contractId ? `${contractId} • ${actionCtx.ipAddress}` : actionCtx.ipAddress;
+    } else if (isPortAssignLog && actionCtx.deviceName) {
+      const baseDev = actionCtx.port ? `${actionCtx.deviceName} (${actionCtx.port})` : actionCtx.deviceName;
+      logTarget = contractId ? `${contractId} • ${baseDev}` : baseDev;
+    } else if (isPortReleaseLog) {
+      logTarget = contractId ? `${contractId} • Thu hồi` : 'Thu hồi';
     }
 
     try {
@@ -2075,7 +2449,7 @@ export function mountRemoteInside({
         el('button', {
           type: 'button',
           className: 'ri-secondary-btn',
-          text: 'Mở trang MonitorOLT gốc',
+          text: res.sourceLabel || 'Mở trang MonitorOLT gốc',
           onClick: () => {
             if (pageWindow && pageWindow.open) {
               pageWindow.open(res.sourceUrl, '_blank', 'noopener');
@@ -2734,6 +3108,8 @@ export function mountRemoteInside({
     const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
     const isInsideKill = portal.id === 'inside' && act.id === 'kill_session';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
+    const isPortRelease = portal.id === 'port' && act.id === 'release_port';
+    const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
     const sheetParts = [
       el('h2', {
@@ -3359,6 +3735,600 @@ export function mountRemoteInside({
             })
           )
         );
+      }
+    } else if (isPortRelease) {
+      confirmBtn.textContent = 'Xác nhận Thu hồi Port';
+
+      if (state.portModalLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông tin Port FTTH NEW của ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portModalError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadPortReleaseModal(contractId),
+          }),
+        ];
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Mở trang Port đăng nhập',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.portModalError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portRecordMode !== 'existing' || !state.portDetail || !state.portDetail.id) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text: `Hợp đồng ${contractId} hiện chưa có bản ghi Port trên FTTH NEW (không thể thu hồi).`,
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Kiểm tra lại',
+                onClick: () => loadPortReleaseModal(contractId),
+              }),
+            ]),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const d = state.portDetail;
+        const infoRows = [];
+        if (d.customer) infoRows.push(`Khách hàng: ${d.customer}`);
+        if (d.address) infoRows.push(`Địa chỉ: ${d.address}`);
+        if (d.tstc) infoRows.push(`Tập điểm / Port: ${d.tstc}`);
+        if (d.pc) infoRows.push(`Thông số kết nối: ${d.pc}`);
+        if (d.createBy || d.createDate) {
+          infoRows.push(`Cấp Port: ${[d.createBy, d.createDate].filter(Boolean).join(' • ')}`);
+        }
+        if (d.updateBy || d.updateDate) {
+          infoRows.push(`Cập nhật cuối: ${[d.updateBy, d.updateDate].filter(Boolean).join(' • ')}`);
+        }
+
+        sheetParts.push(
+          el('div', { className: 'ri-modem-info' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Thông tin FTTH NEW hiện tại' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadPortReleaseModal(contractId),
+              }),
+            ]),
+            el('div', {
+              className: 'ri-modem-mac',
+              text: d.statusLabel || `Trạng thái: ${d.status || '—'}`,
+            }),
+            ...infoRows.map((line) => el('div', { className: 'ri-box-sub', text: line })),
+          ])
+        );
+
+        if (d.status === '6') {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: 'Hợp đồng này hiện đã ở trạng thái "Đã thu hồi port". Bạn vẫn có thể bấm xác nhận nếu cần cập nhật lại ghi chú.',
+              }),
+            ])
+          );
+        }
+
+        const descEl = el('textarea', {
+          className: 'ri-textarea',
+          id: 'ri-port-release-desc',
+          placeholder: 'Nhập ghi chú thu hồi (nếu có)…',
+        });
+        descEl.value = state.portDescription || '';
+        descEl.addEventListener('input', (e) => {
+          state.portDescription = e.target.value;
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-port-release-desc',
+              text: 'Ghi chú (tùy chọn)',
+            }),
+            descEl,
+          ])
+        );
+
+        confirmBtn.disabled = false;
+        confirmBtn.addEventListener('click', () =>
+          runConfirmedAction(act, {
+            detail: state.portDetail,
+            statusPort: d.releaseStatusPortValue || '2',
+            cardNumber: d.cardNumber || '',
+            description: state.portDescription,
+          })
+        );
+      }
+    } else if (isPortAssign) {
+      confirmBtn.textContent =
+        state.portRecordMode === 'existing' ? 'Xác nhận Đổi Port' : 'Xác nhận Cấp Port';
+
+      if (state.portModalLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông tin hợp đồng & vùng miền cho ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portModalError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadPortAssignModal(contractId),
+          }),
+        ];
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Mở trang Port đăng nhập',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.portModalError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const d = state.portDetail || {};
+        const typeOpts =
+          Array.isArray(d.typeContractOptions) && d.typeContractOptions.length > 0
+            ? d.typeContractOptions
+            : [
+                { value: '3', label: 'FTTH_New' },
+                { value: '5', label: 'FTTH_NEW LeaseLine' },
+              ];
+        const typeSelect = el(
+          'select',
+          { className: 'ri-select', id: 'ri-port-type' },
+          typeOpts.map((opt) => {
+            const o = el('option', { value: opt.value, text: opt.label });
+            if (opt.value === state.portTypeContract) o.selected = true;
+            return o;
+          })
+        );
+        typeSelect.value = state.portTypeContract;
+        typeSelect.addEventListener('change', (e) => {
+          const nextType = e.target.value;
+          if (state.portRecordMode === 'existing') {
+            state.portTypeContract = nextType;
+          } else {
+            loadPortAssignModal(contractId, nextType);
+          }
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-type', text: 'Loại hợp đồng' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại HĐ',
+                onClick: () => loadPortAssignModal(contractId),
+              }),
+            ]),
+            typeSelect,
+          ])
+        );
+
+        if (state.portRecordMode === 'not_found') {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text:
+                  state.portDetailWarn ||
+                  `Không tìm thấy ${contractId} ở Loại HĐ hiện tại. Hãy thử đổi sang FTTH_NEW LeaseLine hoặc kiểm tra lại Mã HĐ.`,
+              }),
+            ])
+          );
+          confirmBtn.disabled = true;
+        } else {
+          const summaryTitle =
+            state.portRecordMode === 'existing'
+              ? `Đổi / Cấp lại Port (ID ${d.id}) • ${d.customer || contractId}`
+              : `Cấp Port mới • ${d.customer || contractId}`;
+          const summarySub = [d.address, d.tstc ? `Hiện tại: ${d.tstc}` : '', d.statusLabel]
+            .filter(Boolean)
+            .join(' • ');
+          sheetParts.push(
+            el('div', { className: 'ri-olt-detected' }, [
+              el('div', { className: 'ri-olt-detected-title', text: summaryTitle }),
+              summarySub ? el('div', { className: 'ri-olt-detected-sub', text: summarySub }) : null,
+            ])
+          );
+
+          if (state.portLocations.length > 0) {
+            const locSelect = el(
+              'select',
+              { className: 'ri-select', id: 'ri-port-location' },
+              state.portLocations.map((loc) => {
+                const o = el('option', { value: loc.value, text: loc.label });
+                if (loc.value === state.portLocationId) o.selected = true;
+                return o;
+              })
+            );
+            locSelect.value = state.portLocationId;
+            locSelect.addEventListener('change', (e) => loadPortBranchesForModal(e.target.value));
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-location', text: 'Vùng miền' }),
+                locSelect,
+              ])
+            );
+          }
+
+          if (state.portBranches.length > 0) {
+            const branchSelect = el(
+              'select',
+              { className: 'ri-select', id: 'ri-port-branch' },
+              state.portBranches.map((br) => {
+                const o = el('option', { value: br.value, text: br.label });
+                if (br.value === state.portBranchId) o.selected = true;
+                return o;
+              })
+            );
+            branchSelect.value = state.portBranchId;
+            branchSelect.addEventListener('change', (e) =>
+              loadPortPopsForModal(state.portLocationId, e.target.value)
+            );
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-branch', text: 'Chi nhánh' }),
+                branchSelect,
+              ])
+            );
+          }
+
+          const popCountSpan = el('span', { className: 'ri-text-btn' });
+          const popSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-pop-search',
+            placeholder: 'Lọc nhanh POP (ví dụ: BRUP075…)',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.portPopSearch,
+          });
+          popSearchInput.value = state.portPopSearch;
+          const popSelect = el('select', { className: 'ri-select', id: 'ri-port-pop' });
+
+          function populatePopSelect(qText) {
+            const q = String(qText || '').trim().toLowerCase();
+            const filtered = q
+              ? state.portPops.filter((p) => p.label.toLowerCase().includes(q))
+              : state.portPops;
+            popCountSpan.textContent = q
+              ? `${filtered.length}/${state.portPops.length} POP`
+              : `${state.portPops.length} POP`;
+            popSelect.textContent = '';
+            popSelect.appendChild(
+              el('option', {
+                value: '',
+                text:
+                  filtered.length > 0
+                    ? `-- Chọn POP (${filtered.length}) --`
+                    : state.portCascadeLoading
+                    ? 'Đang tải POP…'
+                    : '-- Không có POP khớp --',
+              })
+            );
+            let hasSel = false;
+            for (const item of filtered) {
+              const o = el('option', { value: item.value, text: item.label });
+              if (item.value === state.portPopId) {
+                o.selected = true;
+                hasSel = true;
+              }
+              popSelect.appendChild(o);
+            }
+            popSelect.value = hasSel ? state.portPopId : '';
+          }
+          populatePopSelect(state.portPopSearch);
+          popSearchInput.addEventListener('input', (e) => {
+            state.portPopSearch = e.target.value;
+            populatePopSelect(state.portPopSearch);
+          });
+          popSelect.addEventListener('change', (e) => loadPortConboxesForModal(e.target.value));
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-pop-search', text: 'POP' }),
+                popCountSpan,
+              ]),
+              popSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [popSelect])
+          );
+
+          const conboxCountSpan = el('span', { className: 'ri-text-btn' });
+          const conboxSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-conbox-search',
+            placeholder: 'Lọc nhanh Hộp đấu nối / Tập điểm…',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.portConboxSearch,
+          });
+          conboxSearchInput.value = state.portConboxSearch;
+          const conboxSelect = el('select', { className: 'ri-select', id: 'ri-port-conbox' });
+
+          function populateConboxSelect(qText) {
+            const q = String(qText || '').trim().toLowerCase();
+            const filtered = q
+              ? state.portConboxes.filter((c) => c.label.toLowerCase().includes(q))
+              : state.portConboxes;
+            conboxCountSpan.textContent = q
+              ? `${filtered.length}/${state.portConboxes.length} Hộp`
+              : `${state.portConboxes.length} Hộp`;
+            conboxSelect.textContent = '';
+            conboxSelect.appendChild(
+              el('option', {
+                value: '',
+                text: !state.portPopId
+                  ? '-- Chọn POP trước --'
+                  : state.portCascadeLoading
+                  ? 'Đang tải Hộp đấu nối…'
+                  : filtered.length > 0
+                  ? `-- Chọn Hộp đấu nối (${filtered.length}) --`
+                  : '-- Không có Hộp đấu nối khớp --',
+              })
+            );
+            let hasSel = false;
+            for (const item of filtered) {
+              const o = el('option', { value: item.value, text: item.label });
+              if (item.value === state.portConboxId) {
+                o.selected = true;
+                hasSel = true;
+              }
+              conboxSelect.appendChild(o);
+            }
+            conboxSelect.value = hasSel ? state.portConboxId : '';
+          }
+          populateConboxSelect(state.portConboxSearch);
+          conboxSearchInput.addEventListener('input', (e) => {
+            state.portConboxSearch = e.target.value;
+            populateConboxSelect(state.portConboxSearch);
+          });
+          conboxSelect.addEventListener('change', (e) => loadPortSlotsForModal(e.target.value));
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-port-conbox-search',
+                  text: 'Hộp đấu nối (Tập điểm)',
+                }),
+                conboxCountSpan,
+              ]),
+              conboxSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [conboxSelect])
+          );
+
+          const slotTools = [];
+          if (state.portConboxId) {
+            slotTools.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: state.portHistoryOpen ? 'Ẩn lịch sử Port' : 'Xem lịch sử Port',
+                onClick: () => {
+                  if (state.portHistoryOpen) {
+                    state.portHistoryOpen = false;
+                    renderConfirm();
+                  } else {
+                    loadPortHistoryForModal();
+                  }
+                },
+              })
+            );
+          }
+
+          if (state.portSlotsLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải các Port trong Hộp đấu nối…' }),
+              ])
+            );
+          } else if (state.portConboxId) {
+            if (state.portSlots.length === 0) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                  el('div', { text: 'Hộp đấu nối này chưa có Port khả dụng.' }),
+                ])
+              );
+            } else {
+              const slotGrid = el(
+                'div',
+                { className: 'ri-port-grid' },
+                state.portSlots.map((slot) => {
+                  const selected = state.portSelectedPortId === slot.portID;
+                  const btn = el('button', {
+                    type: 'button',
+                    className: `ri-port-chip${selected ? ' is-selected' : ''}${
+                      slot.disabled ? ' is-busy' : ''
+                    }`,
+                    disabled: Boolean(slot.disabled),
+                    'aria-pressed': selected ? 'true' : 'false',
+                    text: slot.disabled ? `${slot.port} (Bận)` : slot.port,
+                    onClick: () => {
+                      if (slot.disabled) return;
+                      state.portSelectedPortId = slot.portID;
+                      state.portSelectedPortLabel = slot.port;
+                      renderConfirm();
+                    },
+                  });
+                  return btn;
+                })
+              );
+
+              sheetParts.push(
+                el('div', { className: 'ri-confirm-input-wrap' }, [
+                  el('div', { className: 'ri-inline-head' }, [
+                    el('span', {
+                      className: 'ri-confirm-label',
+                      text: state.portSelectedPortLabel
+                        ? `Port đã chọn: ${state.portSelectedPortLabel}`
+                        : 'Chọn 1 Port còn trống',
+                    }),
+                    el('div', { className: 'ri-embed-toolbar-btns' }, slotTools),
+                  ]),
+                  slotGrid,
+                ])
+              );
+            }
+          }
+
+          if (state.portHistoryOpen) {
+            if (state.portHistoryLoading) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status is-loading' }, [
+                  el('span', { className: 'ri-spinner' }),
+                  el('span', { text: 'Đang tải Lịch sử Port tập điểm…' }),
+                ])
+              );
+            } else if (state.portHistoryError) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                  el('div', { text: state.portHistoryError }),
+                ])
+              );
+            } else if (state.portHistoryRows.length === 0) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Chưa có lịch sử thao tác Port cho hộp/port này.' }),
+                ])
+              );
+            } else {
+              sheetParts.push(
+                el(
+                  'div',
+                  { className: 'ri-history-list' },
+                  state.portHistoryRows.map((row) =>
+                    el('div', { className: 'ri-history-card' }, [
+                      el('div', {
+                        className: 'ri-history-macs',
+                        text: [row.port, row.action].filter(Boolean).join(' • ') || 'Lịch sử Port',
+                      }),
+                      row.contractName || row.createBy || row.actionDate
+                        ? el('div', {
+                            className: 'ri-history-meta',
+                            text: [row.contractName, row.createBy, row.actionDate]
+                              .filter(Boolean)
+                              .join(' • '),
+                          })
+                        : null,
+                      row.data ? el('div', { className: 'ri-history-meta', text: row.data }) : null,
+                    ])
+                  )
+                )
+              );
+            }
+          }
+
+          const cardInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-card',
+            placeholder: 'Số thẻ (mặc định 1)',
+            autocomplete: 'off',
+            value: state.portCardNumber,
+          });
+          cardInput.value = state.portCardNumber;
+          cardInput.addEventListener('input', (e) => {
+            state.portCardNumber = e.target.value;
+          });
+
+          const descEl = el('textarea', {
+            className: 'ri-textarea',
+            id: 'ri-port-desc',
+            placeholder: 'Ghi chú (nếu có)…',
+          });
+          descEl.value = state.portDescription || '';
+          descEl.addEventListener('input', (e) => {
+            state.portDescription = e.target.value;
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-card', text: 'Số thẻ' }),
+              cardInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-desc', text: 'Ghi chú' }),
+              descEl,
+            ])
+          );
+
+          confirmBtn.disabled =
+            !state.portSelectedPortId ||
+            !state.portConboxId ||
+            !state.portLocationId ||
+            !state.portBranchId;
+
+          confirmBtn.addEventListener('click', () => {
+            const conboxObj = state.portConboxes.find((c) => c.value === state.portConboxId) || {};
+            runConfirmedAction(act, {
+              recordMode: state.portRecordMode,
+              detail: state.portDetail,
+              typeContract: state.portTypeContract,
+              cardNumber: state.portCardNumber,
+              description: state.portDescription,
+              location: state.portLocationId,
+              branch: state.portBranchId,
+              deviceName: conboxObj.label || '',
+              portID: state.portSelectedPortId,
+              port: state.portSelectedPortLabel,
+              statusPort: d.reassignStatusPortValue || '3',
+            });
+          });
+        }
       }
     } else {
       confirmBtn.addEventListener('click', () =>

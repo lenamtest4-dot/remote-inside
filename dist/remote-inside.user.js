@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.7.2
+// @version      0.8.0
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -35,7 +35,7 @@
 
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -100,33 +100,34 @@ const PORTALS = {
     label: 'Port',
     fullName: 'port.fpt.net',
     url: 'http://port.fpt.net/',
+    sessionCheckUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
     hosts: ['port.fpt.net', 'mvcport.fpt.net'],
-    status: 'in_progress',
-    statusLabel: 'Đang ghép',
-    description: 'Kiểm tra, cấp mới và thu hồi Port cho hợp đồng.',
+    status: 'priority',
+    statusLabel: 'Đủ 3 lệnh',
+    description: 'FTTH NEW: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi mới và Thu hồi Port.',
     actions: [
       {
         id: 'lookup_port',
         label: 'Xem Port hiện tại',
-        description: 'Kiểm tra thông tin Port đang cấp cho hợp đồng.',
+        description: 'Tra thông tin hợp đồng, Tập điểm / Port, TSTC và trạng thái trên FTTH NEW.',
         kind: 'primary',
         requiresConfirm: false,
       },
       {
         id: 'assign_port',
-        label: 'Cấp Port',
-        description: 'Cấp Port mới cho hợp đồng trên port.fpt.net.',
+        label: 'Cấp / Đổi Port',
+        description: 'Cấp mới hoặc đổi Tập điểm / Port còn trống và xem Lịch sử Port.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Xác nhận cấp Port cho hợp đồng đang chọn.',
+        confirmNote: 'Chọn đúng Vùng, POP, Hộp đấu nối và Port còn trống trước khi xác nhận.',
       },
       {
         id: 'release_port',
         label: 'Thu hồi Port',
-        description: 'Thu hồi Port hiện tại khỏi hợp đồng.',
+        description: 'Chuyển trạng thái hợp đồng FTTH NEW sang Đã thu hồi port.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Thu hồi Port sẽ giải phóng tài nguyên port của hợp đồng này.',
+        confirmNote: 'Thu hồi Port sẽ chuyển tình trạng sang Đã thu hồi port trên mvcport.fpt.net.',
       },
     ],
   },
@@ -543,7 +544,8 @@ async function checkPortalSession(portal) {
     };
   }
 
-  const res = await requestPortal({ url: portal.url, method: 'GET', timeout: 10000 });
+  const checkUrl = portal.sessionCheckUrl || portal.url;
+  const res = await requestPortal({ url: checkUrl, method: 'GET', timeout: 10000 });
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -558,7 +560,7 @@ async function checkPortalSession(portal) {
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
-    requestedUrl: portal.url,
+    requestedUrl: checkUrl,
   });
 
   if (iamCheck.expired) {
@@ -4633,21 +4635,1179 @@ async function runInsideAction(actionId, rawContractId, ctx = {}) {
 
 // --- adapters/port.js ---
 /**
- * Adapter xu ly cho cong port.fpt.net
- * Khi chua quet mau API that, se xac minh phien IAM va huong dan quet mau 1 cham.
- */
-
-
-/**
- * Ban do endpoint that cua port.fpt.net se duoc dien vao day sau buoc Quet cau truc.
+ * Adapter xu ly nghiep vu FTTH NEW Port cho cong port.fpt.net / mvcport.fpt.net:
+ * - Xem Port hien tai (Index_Search + Insert/<ID> / LoadData)
+ * - Cap / Doi Port (Cascade Vung -> Chi nhanh -> POP -> Hop dau noi -> Port + Lich su Port)
+ * - Thu hoi Port (Insert_UpdateContact voi status=6)
  */
 const PORT_ENDPOINTS = {
-  lookup_port: null,
-  assign_port: null,
-  release_port: null,
+  lookup_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
+  assign_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/InsertContract',
+  release_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert_UpdateContact',
+  indexPage: 'http://mvcport.fpt.net/ftth_newport/contract/index',
+  insertPage: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert',
+  search: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
+  loadData: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/LoadData',
+  loadPort: 'http://mvcport.fpt.net/Contract/Load_PortContract',
+  loadPortHistory: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/LoadPortHistoryList',
+  insertContract: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/InsertContract',
+  updateContract: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert_UpdateContact',
+  locations: 'http://mvcport.fpt.net/Location/LocationID',
+  branches: 'http://mvcport.fpt.net/Location/GetBranch',
+  pops: 'http://mvcport.fpt.net/FTTH/Switch_FTTH/GetPopINF',
+  conboxes: 'http://mvcport.fpt.net/Location/Load_ConnectingBox_ByName_DeployCapacity',
+  libJs: 'http://mvcport.fpt.net/js/lib.js',
 };
 
-function buildPortMockResult(actionId, contractId) {
+const PORT_AJAX_HEADERS = {
+  Accept: 'application/json, text/javascript, */*; q=0.01',
+  'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+  'X-Requested-With': 'XMLHttpRequest',
+};
+
+const PORT_CONTRACT_CACHE = new Map();
+const CONTRACT_TTL_MS = 5 * 60 * 1000;
+const META_TTL_MS = 10 * 60 * 1000;
+
+let cachedLocations = { items: null, expiresAt: 0 };
+const cachedBranchesByLoc = new Map();
+let cachedConboxParamSpec = { specs: null, expiresAt: 0 };
+
+function safeJsonParse(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return null;
+  }
+  const trimmed = rawText.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function escapeRegExp(text) {
+  return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getHtmlAttr(attrs, attrName) {
+  const re = new RegExp(`\\b${escapeRegExp(attrName)}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const m = String(attrs || '').match(re);
+  if (!m) return '';
+  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3] || '';
+}
+
+/**
+ * Giai ma HTML entities (bao gom ma thap phan & hex tieng Viet trong ASP.NET MVC).
+ */
+function decodeHtmlEntities(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  return text
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/&#(\d+);/g, (orig, dec) => {
+      const code = Number(dec);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : orig;
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (orig, hex) => {
+      const code = parseInt(hex, 16);
+      return Number.isFinite(code) && code > 0 ? String.fromCodePoint(code) : orig;
+    });
+}
+
+function stripHtmlClean(html) {
+  return decodeHtmlEntities(
+    String(html || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  )
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*\n\s*/g, '\n')
+    .trim();
+}
+function clearPortContractCache(rawContractId) {
+  if (!rawContractId) {
+    PORT_CONTRACT_CACHE.clear();
+    return;
+  }
+  const clean = String(rawContractId).trim().toUpperCase();
+  for (const key of Array.from(PORT_CONTRACT_CACHE.keys())) {
+    if (key.startsWith(`${clean}:`)) {
+      PORT_CONTRACT_CACHE.delete(key);
+    }
+  }
+}
+
+function getMvcPortTokenFromPage() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return '';
+  }
+  try {
+    const host = (window.location && window.location.hostname ? window.location.hostname : '').toLowerCase();
+    if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
+      return '';
+    }
+    const rawCookies = typeof document.cookie === 'string' ? document.cookie : '';
+    if (!rawCookies) return '';
+    let baseMatch = '';
+    let suffixedMatch = '';
+    for (const part of rawCookies.split(';')) {
+      const trimmed = part.trim();
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx <= 0) continue;
+      const name = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!val) continue;
+      if (name === 'MVCPORT_TOKEN') {
+        baseMatch = decodeURIComponent(val);
+      } else if (name.indexOf('MVCPORT_TOKEN_') === 0) {
+        suffixedMatch = decodeURIComponent(val);
+      }
+    }
+    return suffixedMatch || baseMatch || '';
+  } catch {
+    return '';
+  }
+}
+
+function buildPortUrl(rawUrl) {
+  const token = getMvcPortTokenFromPage();
+  if (!token) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    if (!/mvcport\.fpt\.net$/i.test(u.hostname) || u.searchParams.has('Token')) {
+      return rawUrl;
+    }
+    u.searchParams.set('Token', token);
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function detectPortSessionExpired(res, requestedUrl) {
+  const status = (res && res.status) || 0;
+  const finalUrl = (res && res.finalUrl) || '';
+  const body = (res && res.responseText) || '';
+
+  const iam = detectIamRedirect({
+    status,
+    finalUrl,
+    responseText: body,
+    requestedUrl,
+  });
+  if (iam.expired) {
+    return { expired: true, reason: iam.reason };
+  }
+  if (/LoginPage\.aspx/i.test(finalUrl)) {
+    return {
+      expired: true,
+      reason: 'Phiên đăng nhập port.fpt.net đã chuyển về trang LoginPage.aspx.',
+    };
+  }
+  if (/Hết thời gian làm việc|Vui lòng Refesh/i.test(body)) {
+    return {
+      expired: true,
+      reason: 'Máy chủ Port báo hết thời gian làm việc (cần đăng nhập lại port.fpt.net).',
+    };
+  }
+  return { expired: false, reason: '' };
+}
+
+async function portRequest({ url, method = 'POST', data = null, headers = PORT_AJAX_HEADERS, timeout = 15000 }) {
+  const targetUrl = buildPortUrl(url);
+  const res = await requestPortal({ url: targetUrl, method, data, headers, timeout });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      ok: false,
+      statusType: 'error',
+      message: 'Không kết nối được tới mvcport.fpt.net. Hãy kiểm tra VPN công ty.',
+      loginUrl: PORTALS.port.url,
+      res,
+    };
+  }
+
+  const expiredCheck = detectPortSessionExpired(res, targetUrl);
+  if (expiredCheck.expired) {
+    return {
+      ok: false,
+      statusType: 'iam_expired',
+      message:
+        'Phiên đăng nhập Port (port.fpt.net) đã hết hạn. Bấm nút bên dưới để mở port.fpt.net đăng nhập lại (không cần F5 sau khi vào menu chính).',
+      loginUrl: PORTALS.port.url,
+      res,
+    };
+  }
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      statusType: 'error',
+      message: `Máy chủ Port trả về mã HTTP ${res.status}.`,
+      loginUrl: PORTALS.port.url,
+      res,
+    };
+  }
+
+  return { ok: true, res };
+}
+
+/**
+ * Tach danh sach { value, label } tu API dropdown ASP.NET MVC [{ Value, Text }].
+ */
+function parseDropdownOptions(json) {
+  const list = Array.isArray(json)
+    ? json
+    : json && typeof json === 'object' && Array.isArray(json.data)
+    ? json.data
+    : [];
+  const options = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const rawVal =
+      item.Value !== undefined
+        ? item.Value
+        : item.value !== undefined
+        ? item.value
+        : '';
+    const rawLabel =
+      item.Text !== undefined
+        ? item.Text
+        : item.text !== undefined
+        ? item.text
+        : '';
+    const value = String(rawVal ?? '').trim();
+    const label = decodeHtmlEntities(String(rawLabel ?? '')).trim();
+    if (!value && !label) continue;
+    options.push({ value, label: label || value });
+  }
+  return options;
+}
+
+const DEFAULT_CONBOX_PARAM_SPECS = [
+  { key: 'PopName', argIndex: 0 },
+  { key: 'type', argIndex: 1 },
+  { key: 'status', argIndex: 2 },
+];
+
+/**
+ * Tu dong doc ten tham so POST cua Load_ConnectingBox_ByName_DeployCapacity trong /js/lib.js.
+ */
+function parseConboxParamsFromLibJs(jsText) {
+  if (!jsText || typeof jsText !== 'string') {
+    return DEFAULT_CONBOX_PARAM_SPECS;
+  }
+  const fnMatch = jsText.match(/function\s+Load_ConnectingBox_ByName_DeployCapacity\s*\(([^)]*)\)/i);
+  if (!fnMatch || fnMatch.index === undefined) {
+    return DEFAULT_CONBOX_PARAM_SPECS;
+  }
+  const formalParams = fnMatch[1]
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const fnSlice = jsText.slice(fnMatch.index, fnMatch.index + 1600);
+  if (!/Load_ConnectingBox_ByName_DeployCapacity/i.test(fnSlice)) {
+    return DEFAULT_CONBOX_PARAM_SPECS;
+  }
+  const dataMatch = fnSlice.match(/\bdata\s*:\s*\{([^}]*)\}/i);
+  if (!dataMatch) {
+    return DEFAULT_CONBOX_PARAM_SPECS;
+  }
+
+  const specs = [];
+  const entries = dataMatch[1].split(',');
+  for (const entry of entries) {
+    const colonIdx = entry.indexOf(':');
+    if (colonIdx <= 0) continue;
+    const key = entry.slice(0, colonIdx).replace(/['"\s]/g, '').trim();
+    const rhs = entry.slice(colonIdx + 1).trim();
+    if (!key) continue;
+
+    let matchedArgIdx = -1;
+    for (let i = 0; i < formalParams.length; i += 1) {
+      const pName = formalParams[i];
+      if (new RegExp(`\\b${escapeRegExp(pName)}\\b`).test(rhs)) {
+        matchedArgIdx = i;
+        break;
+      }
+    }
+    if (matchedArgIdx >= 0) {
+      specs.push({ key, argIndex: matchedArgIdx });
+    } else if (/^['"]?[-.\w]+['"]?$/.test(rhs)) {
+      specs.push({ key, argIndex: -1, literalValue: rhs.replace(/^['"]|['"]$/g, '') });
+    }
+  }
+
+  return specs.length > 0 ? specs : DEFAULT_CONBOX_PARAM_SPECS;
+}
+
+function readInputValueById(html, id) {
+  const inputRe = /<input\b([^>]*)>/gi;
+  const target = id.toLowerCase();
+  let m;
+  while ((m = inputRe.exec(html)) !== null) {
+    const attrs = m[1] || '';
+    const elId = getHtmlAttr(attrs, 'id').toLowerCase();
+    const elName = getHtmlAttr(attrs, 'name').toLowerCase();
+    if (elId === target || elName === target) {
+      return decodeHtmlEntities(getHtmlAttr(attrs, 'value')).trim();
+    }
+  }
+  return '';
+}
+
+function readTextareaValueById(html, id) {
+  const re = new RegExp(
+    `<textarea\\b[^>]*\\b(?:id|name)\\s*=\\s*["']${escapeRegExp(id)}["'][^>]*>([\\s\\S]*?)<\\/textarea>`,
+    'i'
+  );
+  const m = String(html || '').match(re);
+  return m ? decodeHtmlEntities(m[1]).trim() : '';
+}
+
+function readSelectOptionsById(html, id) {
+  const selectRe = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi;
+  const target = id.toLowerCase();
+  let sm;
+  while ((sm = selectRe.exec(html)) !== null) {
+    const attrs = sm[1] || '';
+    const elId = getHtmlAttr(attrs, 'id').toLowerCase();
+    const elName = getHtmlAttr(attrs, 'name').toLowerCase();
+    if (elId !== target && elName !== target) {
+      continue;
+    }
+    const body = sm[2] || '';
+    const opts = [];
+    const optRe = /<option\b([^>]*)>([\s\S]*?)<\/option>/gi;
+    let om;
+    while ((om = optRe.exec(body)) !== null) {
+      const oAttrs = om[1] || '';
+      const value = decodeHtmlEntities(getHtmlAttr(oAttrs, 'value')).trim();
+      const label = stripHtmlClean(om[2] || '');
+      const selected = /\bselected\b/i.test(oAttrs);
+      opts.push({ value, label: label || value, selected });
+    }
+    return opts;
+  }
+  return [];
+}
+
+function extractElementTextById(html, id) {
+  const escaped = escapeRegExp(id);
+  const blockRe = new RegExp(
+    `<(div|span|td|p|label|lable)\\b[^>]*\\bid\\s*=\\s*["']${escaped}["'][^>]*>([\\s\\S]*?)<\\/\\1>`,
+    'i'
+  );
+  const m = String(html || '').match(blockRe);
+  return m ? stripHtmlClean(m[2]) : '';
+}
+
+/**
+ * Phan tich trang chi tiet hop dong /FTTH_NewPort/Contract/Insert/<ID>.
+ */
+function parsePortContractDetailHtml(htmlText) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return null;
+  }
+  const cleanHtml = htmlText
+    .replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+    .replace(new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'), ' ');
+
+  const typeContractOptions = readSelectOptionsById(cleanHtml, 'cbo_typeContract');
+  const statusOptions = readSelectOptionsById(cleanHtml, 'cbo_Status');
+  const statusPortOptions = readSelectOptionsById(cleanHtml, 'cbo_statusPort');
+
+  const id = readInputValueById(cleanHtml, 'h_id');
+  const rawTypeContract =
+    readInputValueById(cleanHtml, 'h_typeContract') ||
+    (typeContractOptions.find((o) => o.selected) || {}).value ||
+    '3';
+  const rawStatus =
+    readInputValueById(cleanHtml, 'h_status') ||
+    (statusOptions.find((o) => o.selected) || {}).value ||
+    '';
+  const rawStatusPort =
+    readInputValueById(cleanHtml, 'h_valueStatusPort') ||
+    (statusPortOptions.find((o) => o.selected) || {}).value ||
+    '';
+
+  const statusMatched = statusOptions.find((o) => o.value === rawStatus) || statusOptions.find((o) => o.selected);
+  const typeMatched =
+    typeContractOptions.find((o) => o.value === rawTypeContract) ||
+    typeContractOptions.find((o) => o.selected);
+  const statusPortMatched =
+    statusPortOptions.find((o) => o.value === rawStatusPort) ||
+    statusPortOptions.find((o) => o.selected);
+
+  const releaseOpt = statusPortOptions.find((o) => /thu\s*h[oồ]i/i.test(o.label));
+  const reassignOpt =
+    statusPortOptions.find((o) => o.value === '3') ||
+    statusPortOptions.find((o) => /c[aấ]p\s*(?:l[aạ]i|port)/i.test(o.label));
+
+  return {
+    id,
+    contractName: readInputValueById(cleanHtml, 'txtContact'),
+    typeContract: rawTypeContract,
+    typeContractLabel: (typeMatched && typeMatched.label) || (rawTypeContract === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New'),
+    status: rawStatus,
+    statusLabel: (statusMatched && statusMatched.label) || (rawStatus === '6' ? 'Đã thu hồi port' : rawStatus === '1' ? 'Bình thường' : ''),
+    statusPort: rawStatusPort,
+    statusPortLabel: (statusPortMatched && statusPortMatched.label) || '',
+    releaseStatusPortValue: (releaseOpt && releaseOpt.value) || '2',
+    reassignStatusPortValue: (reassignOpt && reassignOpt.value) || '3',
+    customer: readInputValueById(cleanHtml, 'txtCustomer'),
+    cmnd: readInputValueById(cleanHtml, 'txtCMND'),
+    company: readInputValueById(cleanHtml, 'txtCompany'),
+    address: readInputValueById(cleanHtml, 'txtAddress'),
+    email: readInputValueById(cleanHtml, 'txtEmail'),
+    // Luu y: trang Insert gốc gan handphone <- #txtHomePhone va telephone <- #txtTelephone
+    handphone: readInputValueById(cleanHtml, 'txtHomePhone'),
+    telephone: readInputValueById(cleanHtml, 'txtTelephone'),
+    localType: readInputValueById(cleanHtml, 'txtLocalType'),
+    cardNumber: readInputValueById(cleanHtml, 'txtCardNumber'),
+    description: readTextareaValueById(cleanHtml, 'txtDescription'),
+    createBy: readInputValueById(cleanHtml, 'txtCreateBy'),
+    createDate: readInputValueById(cleanHtml, 'txtCreateDate'),
+    updateBy: readInputValueById(cleanHtml, 'txtUpdateBy'),
+    updateDate: readInputValueById(cleanHtml, 'txtUpdateCreate'),
+    tstc: extractElementTextById(cleanHtml, 'dvTSTC'),
+    pc: extractElementTextById(cleanHtml, 'dvPC'),
+    typeContractOptions,
+    statusOptions,
+    statusPortOptions,
+  };
+}
+
+/**
+ * Tach danh sach Port trong hop dau noi tu /Contract/Load_PortContract.
+ */
+function parsePortOptionsFromHtml(rawResponse) {
+  if (!rawResponse || typeof rawResponse !== 'string') {
+    return [];
+  }
+  const maybeJson = safeJsonParse(rawResponse);
+  const html = typeof maybeJson === 'string' ? maybeJson : rawResponse;
+
+  const cleanHtml = html
+    .replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+    .replace(new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'), ' ');
+
+  const slots = [];
+  const seen = new Set();
+  const inputRe = /<input\b([^>]*)>/gi;
+  let im;
+
+  while ((im = inputRe.exec(cleanHtml)) !== null) {
+    const attrs = im[1] || '';
+    const type = getHtmlAttr(attrs, 'type').toLowerCase();
+    const id = getHtmlAttr(attrs, 'id');
+    if (type !== 'radio' && id.toLowerCase() !== 'radport') {
+      continue;
+    }
+    const portID = decodeHtmlEntities(getHtmlAttr(attrs, 'value')).trim();
+    if (!portID || seen.has(portID)) {
+      continue;
+    }
+    seen.add(portID);
+
+    const disabled = /\bdisabled\b/i.test(attrs);
+    const checked = /\bchecked\b/i.test(attrs);
+
+    const tail = cleanHtml.slice(inputRe.lastIndex, inputRe.lastIndex + 160);
+    const stopMatch = tail.match(/^([\s\S]*?)(?:<\/label>|<\/li>|<\/td>|<\/span>|<\/div>|<br\b|<input\b|$)/i);
+    let portLabel = stripHtmlClean(stopMatch ? stopMatch[1] : '');
+
+    if (!portLabel) {
+      const before = cleanHtml.slice(Math.max(0, im.index - 120), im.index);
+      const afterTag = before.replace(/^[\s\S]*<(?:label|li|td|span|div)[^>]*>/i, '');
+      portLabel = stripHtmlClean(afterTag);
+    }
+
+    slots.push({
+      portID,
+      port: portLabel || portID,
+      disabled,
+      checked,
+    });
+  }
+
+  return slots;
+}
+
+/**
+ * Chuan hoa bang Lich su Port tu /FTTH_NewPort/Contract/LoadPortHistoryList.
+ */
+function parsePortHistoryRows(json) {
+  const rows = Array.isArray(json)
+    ? json
+    : json && typeof json === 'object' && Array.isArray(json.data)
+    ? json.data
+    : [];
+
+  return rows
+    .filter((r) => r && typeof r === 'object')
+    .slice(0, 40)
+    .map((r, idx) => ({
+      stt: r.STT !== undefined && r.STT !== null ? String(r.STT) : String(idx + 1),
+      actionDate: decodeHtmlEntities(String(r.ActionDate ?? r.actionDate ?? '')).trim(),
+      createBy: decodeHtmlEntities(String(r.CreateBy ?? r.createBy ?? '')).trim(),
+      port: decodeHtmlEntities(String(r.Port ?? r.port ?? '')).trim(),
+      ip: decodeHtmlEntities(String(r.IP ?? r.ip ?? '')).trim(),
+      action: decodeHtmlEntities(String(r.Action ?? r.action ?? '')).trim(),
+      contractName: decodeHtmlEntities(String(r.ContractName ?? r.contractName ?? '')).trim(),
+      data: decodeHtmlEntities(String(r.Data ?? r.data ?? '')).trim(),
+    }));
+}
+
+/**
+ * Chuan hoa phan hoi InsertContract / Insert_UpdateContact ([code, msg, tstc, pc]).
+ */
+function parsePortMutationResponse(rawText, actionLabel, contractId) {
+  const parsed = safeJsonParse(rawText);
+  const summaryFields = [{ label: 'Mã hợp đồng', value: contractId }];
+
+  if (Array.isArray(parsed) && parsed.length > 0) {
+    const code = String(parsed[0] ?? '').trim();
+    const msg = stripHtmlClean(String(parsed[1] ?? ''));
+    const tstc = stripHtmlClean(String(parsed[2] ?? ''));
+    const pc = stripHtmlClean(String(parsed[3] ?? ''));
+
+    if (tstc) summaryFields.push({ label: 'Thông số Tập điểm / Port', value: tstc });
+    if (pc) summaryFields.push({ label: 'Thông số kết nối', value: pc });
+    if (msg) summaryFields.push({ label: 'Phản hồi hệ thống', value: msg });
+
+    if (code === '1') {
+      return {
+        status: 'ok',
+        mode: 'live',
+        title: `${actionLabel} thành công (${contractId})`,
+        message: msg || 'Máy chủ mvcport.fpt.net đã xác nhận cập nhật thành công.',
+        tstc,
+        pc,
+        summaryFields,
+      };
+    }
+
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} chưa thành công`,
+      message: msg || code || 'Máy chủ mvcport.fpt.net từ chối yêu cầu.',
+      tstc,
+      pc,
+      summaryFields,
+    };
+  }
+
+  const textMsg = stripHtmlClean(
+    typeof parsed === 'string'
+      ? parsed
+      : parsed && typeof parsed === 'object'
+      ? parsed.message || parsed.msg || parsed.Message || JSON.stringify(parsed)
+      : String(rawText || '')
+  );
+
+  const looksError =
+    !textMsg ||
+    /(lỗi|error|fail|không|chưa|đã sử dụng|hết thời gian|trùng|từ chối)/i.test(textMsg);
+  if (textMsg) {
+    summaryFields.push({ label: 'Phản hồi hệ thống', value: textMsg });
+  }
+
+  if (looksError && !/thành công/i.test(textMsg)) {
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} chưa thành công`,
+      message: textMsg || 'Máy chủ mvcport.fpt.net không trả về kết quả xác nhận.',
+      summaryFields,
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    title: `${actionLabel} thành công (${contractId})`,
+    message: textMsg || 'Đã thực thi thành công trên mvcport.fpt.net.',
+    summaryFields,
+  };
+}
+async function fetchPortLocations({ forceRefresh = false, forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+    };
+  }
+  if (!forceRefresh && cachedLocations.items && Date.now() < cachedLocations.expiresAt) {
+    return { status: 'ok', locations: cachedLocations.items };
+  }
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.locations,
+    method: 'POST',
+    data: '',
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, locations: [] };
+  }
+  const items = parseDropdownOptions(safeJsonParse(resp.res.responseText));
+  if (items.length > 0) {
+    cachedLocations = { items, expiresAt: Date.now() + META_TTL_MS };
+  }
+  return { status: 'ok', locations: items };
+}
+async function fetchPortBranches(locationId, { forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+    };
+  }
+  const locKey = String(locationId || '0').trim();
+  const cached = cachedBranchesByLoc.get(locKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    return { status: 'ok', branches: cached.items };
+  }
+  const body = new URLSearchParams({
+    locationid: String(Number(locKey) || 0),
+    type: '0',
+  }).toString();
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.branches,
+    method: 'POST',
+    data: body,
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, branches: [] };
+  }
+  const items = parseDropdownOptions(safeJsonParse(resp.res.responseText));
+  if (items.length > 0) {
+    cachedBranchesByLoc.set(locKey, { items, expiresAt: Date.now() + META_TTL_MS });
+  }
+  return { status: 'ok', branches: items };
+}
+async function fetchPortPops(locationId, branchId, { forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      pops: [
+        { value: '101', label: 'BRUP07501' },
+        { value: '102', label: 'BRUP00101' },
+      ],
+    };
+  }
+  const body = new URLSearchParams({
+    locationID: String(locationId || ''),
+    branchID: String(branchId || '0'),
+    type: '0',
+  }).toString();
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.pops,
+    method: 'POST',
+    data: body,
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, pops: [] };
+  }
+  return {
+    status: 'ok',
+    pops: parseDropdownOptions(safeJsonParse(resp.res.responseText)),
+  };
+}
+
+async function getConboxParamSpecs() {
+  if (cachedConboxParamSpec.specs && Date.now() < cachedConboxParamSpec.expiresAt) {
+    return cachedConboxParamSpec.specs;
+  }
+  try {
+    const res = await requestPortal({
+      url: buildPortUrl(PORT_ENDPOINTS.libJs),
+      method: 'GET',
+      headers: { Accept: 'application/javascript, text/javascript, */*' },
+      timeout: 10000,
+    });
+    if (res && res.ok && res.responseText) {
+      const specs = parseConboxParamsFromLibJs(res.responseText);
+      cachedConboxParamSpec = { specs, expiresAt: Date.now() + META_TTL_MS };
+      return specs;
+    }
+  } catch {
+    // Su dung danh sach tham so mac dinh neu khong tai duoc lib.js
+  }
+  return DEFAULT_CONBOX_PARAM_SPECS;
+}
+async function fetchPortConboxes(popName, { forceDemo = false } = {}) {
+  if (!popName) {
+    return { status: 'ok', conboxes: [] };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      conboxes: [
+        { value: '55101', label: `${popName}-SPL-01` },
+        { value: '55102', label: `${popName}-SPL-02` },
+      ],
+    };
+  }
+  const specs = await getConboxParamSpecs();
+  const args = [String(popName).trim(), '0', '0'];
+  const params = new URLSearchParams();
+  for (const s of specs) {
+    if (s.literalValue !== undefined) {
+      params.set(s.key, s.literalValue);
+    } else {
+      const v = s.argIndex >= 0 && s.argIndex < args.length ? args[s.argIndex] : '0';
+      params.set(s.key, v);
+    }
+  }
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.conboxes,
+    method: 'POST',
+    data: params.toString(),
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, conboxes: [] };
+  }
+  return {
+    status: 'ok',
+    conboxes: parseDropdownOptions(safeJsonParse(resp.res.responseText)),
+  };
+}
+async function fetchPortSlotList(deviceId, { forceDemo = false } = {}) {
+  if (!deviceId || deviceId === '0') {
+    return { status: 'ok', slots: [] };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      slots: [
+        { portID: '9001', port: 'Port 01', disabled: true, checked: false },
+        { portID: '9002', port: 'Port 02', disabled: false, checked: false },
+        { portID: '9003', port: 'Port 03', disabled: true, checked: false },
+        { portID: '9004', port: 'Port 04', disabled: false, checked: false },
+        { portID: '9005', port: 'Port 05', disabled: false, checked: false },
+        { portID: '9006', port: 'Port 06', disabled: true, checked: false },
+        { portID: '9007', port: 'Port 07', disabled: false, checked: false },
+        { portID: '9008', port: 'Port 08', disabled: false, checked: false },
+      ],
+    };
+  }
+  const body = new URLSearchParams({ pDeviceID: String(Number(deviceId) || 0) }).toString();
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.loadPort,
+    method: 'POST',
+    data: body,
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, slots: [] };
+  }
+  return {
+    status: 'ok',
+    slots: parsePortOptionsFromHtml(resp.res.responseText),
+  };
+}
+async function fetchPortHistory({ pointName = '', port = '', locationID = '', forceDemo = false } = {}) {
+  if (!pointName) {
+    return { status: 'validation_error', message: 'Hãy chọn Hộp đấu nối trước khi xem lịch sử Port.', rows: [] };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      rows: [
+        {
+          stt: '1',
+          actionDate: '11/23/2026 11:38:42',
+          createBy: 'phuongnam.namlp',
+          port: port || 'Port 04',
+          ip: '10.10.20.5',
+          action: 'Thu hồi port',
+          contractName: 'VTAAR2501',
+          data: 'Status=6 (Đã thu hồi port)',
+        },
+        {
+          stt: '2',
+          actionDate: '11/21/2026 08:49:42',
+          createBy: 'VTU.ThaoPT81',
+          port: port || 'Port 04',
+          ip: '10.10.20.5',
+          action: 'Cấp mới port',
+          contractName: 'VTAAR2501',
+          data: `${pointName} • Port 04`,
+        },
+      ],
+    };
+  }
+  const body = new URLSearchParams({
+    pointName: String(pointName || ''),
+    port: String(port || ''),
+    locationID: String(locationID || ''),
+  }).toString();
+  const resp = await portRequest({
+    url: PORT_ENDPOINTS.loadPortHistory,
+    method: 'POST',
+    data: body,
+  });
+  if (!resp.ok) {
+    return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl, rows: [] };
+  }
+  return {
+    status: 'ok',
+    rows: parsePortHistoryRows(safeJsonParse(resp.res.responseText)),
+  };
+}
+
+function makeDemoContext(contractId, typeContract = '3') {
+  return {
+    status: 'ok',
+    mode: 'demo',
+    recordMode: 'existing',
+    sourceUrl: `${PORT_ENDPOINTS.insertPage}/155123602`,
+    detail: {
+      id: '155123602',
+      contractName: contractId,
+      typeContract,
+      typeContractLabel: typeContract === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New',
+      status: '1',
+      statusLabel: 'Bình thường (Mẫu)',
+      statusPort: '1',
+      statusPortLabel: 'Bình thường',
+      releaseStatusPortValue: '2',
+      reassignStatusPortValue: '3',
+      customer: 'Khách hàng mẫu FTTH NEW',
+      cmnd: '',
+      company: '',
+      address: '2 Hải Đăng, Phường Vũng Tàu, TP. Hồ Chí Minh',
+      email: '',
+      handphone: '',
+      telephone: '',
+      localType: '188',
+      cardNumber: '1',
+      description: '',
+      createBy: 'VTU.ThaoPT81',
+      createDate: '11/21/2026 8:49:42 AM',
+      updateBy: 'Phuongnam.namlp',
+      updateDate: '11/23/2026 11:38:42 AM',
+      tstc: 'BRUP07501GC16 • SPL-07 • Port 04 (Mẫu)',
+      pc: 'BRUP07501 • PON 0/8 • VLAN 188 (Mẫu)',
+      typeContractOptions: [
+        { value: '3', label: 'FTTH_New', selected: typeContract !== '5' },
+        { value: '5', label: 'FTTH_NEW LeaseLine', selected: typeContract === '5' },
+      ],
+      statusOptions: [
+        { value: '1', label: 'Bình thường', selected: true },
+        { value: '6', label: 'Đã thu hồi port', selected: false },
+      ],
+      statusPortOptions: [
+        { value: '1', label: 'Bình thường', selected: true },
+        { value: '2', label: 'Thu hồi port', selected: false },
+        { value: '3', label: 'Cấp lại port', selected: false },
+      ],
+    },
+    locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+    defaultLocationId: '35',
+    branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+    defaultBranchId: '1',
+  };
+}
+
+/**
+ * Tai day du thong tin Port hien tai cua hop dong tren mvcport.fpt.net (Index_Search + Insert/<ID> hoac LoadData).
+ */
+async function fetchPortContractContext(
+  rawContractId,
+  { typeContract = '3', forceRefresh = false, forceDemo = false } = {}
+) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return { status: 'validation_error', message: check.error };
+  }
+
+  const contractId = check.value;
+  const cacheKey = `${contractId}:${typeContract}`;
+  if (!forceRefresh) {
+    const cached = PORT_CONTRACT_CACHE.get(cacheKey);
+    if (cached && Date.now() - cached.cachedAt < CONTRACT_TTL_MS) {
+      return cached.payload;
+    }
+  }
+
+  if (!isUserscriptEnv() || forceDemo) {
+    const demo = makeDemoContext(contractId, typeContract);
+    PORT_CONTRACT_CACHE.set(cacheKey, { cachedAt: Date.now(), payload: demo });
+    return demo;
+  }
+
+  const locRes = await fetchPortLocations({ forceRefresh });
+  if (locRes.status !== 'ok') {
+    return { status: locRes.status, message: locRes.message, loginUrl: locRes.loginUrl };
+  }
+  const locations = locRes.locations || [];
+  const defaultLocationId = (locations[0] && locations[0].value) || '0';
+
+  const branchRes = await fetchPortBranches(defaultLocationId);
+  if (branchRes.status !== 'ok') {
+    return { status: branchRes.status, message: branchRes.message, loginUrl: branchRes.loginUrl };
+  }
+  const branches = branchRes.branches || [];
+  const defaultBranchId = (branches[0] && branches[0].value) || '0';
+
+  async function runIndexSearch(pLocation, pBranch) {
+    const body = new URLSearchParams({
+      typeSearch: '1',
+      pLocation: String(pLocation || ''),
+      pBranch: String(pBranch || '0'),
+      pPOpID: '0',
+      pConBoxId: '0',
+      contract: contractId,
+    }).toString();
+    const resp = await portRequest({
+      url: PORT_ENDPOINTS.search,
+      method: 'POST',
+      data: body,
+    });
+    if (!resp.ok) {
+      return resp;
+    }
+    const parsed = safeJsonParse(resp.res.responseText);
+    return { ok: true, rows: Array.isArray(parsed) ? parsed : [] };
+  }
+
+  let searchRes = await runIndexSearch(defaultLocationId, defaultBranchId);
+  if (!searchRes.ok) {
+    return { status: searchRes.statusType, message: searchRes.message, loginUrl: searchRes.loginUrl };
+  }
+  let rows = searchRes.rows;
+  if (rows.length === 0 && defaultBranchId !== '0') {
+    const retryRes = await runIndexSearch(defaultLocationId, '0');
+    if (retryRes.ok && Array.isArray(retryRes.rows)) {
+      rows = retryRes.rows;
+    }
+  }
+
+  const exactRow =
+    rows.find((r) => r && String(r.ContractName || '').trim().toUpperCase() === contractId) ||
+    (rows.length === 1 ? rows[0] : null);
+
+  if (exactRow && exactRow.ID) {
+    const insertUrl = `${PORT_ENDPOINTS.insertPage}/${encodeURIComponent(String(exactRow.ID))}`;
+    const detailResp = await portRequest({
+      url: insertUrl,
+      method: 'GET',
+      headers: { Accept: 'text/html, */*' },
+    });
+    if (!detailResp.ok) {
+      return {
+        status: detailResp.statusType,
+        message: detailResp.message,
+        loginUrl: detailResp.loginUrl,
+      };
+    }
+
+    const parsedDetail = parsePortContractDetailHtml(detailResp.res.responseText) || {};
+    const detail = {
+      ...parsedDetail,
+      id: parsedDetail.id || String(exactRow.ID),
+      contractName: parsedDetail.contractName || String(exactRow.ContractName || contractId),
+      customer: parsedDetail.customer || decodeHtmlEntities(String(exactRow.CusName || '')),
+      address: parsedDetail.address || decodeHtmlEntities(String(exactRow.Address || '')),
+      cardNumber: parsedDetail.cardNumber || String(exactRow.CardNumber || ''),
+      email: parsedDetail.email || String(exactRow.Email || ''),
+      localType: parsedDetail.localType || String(exactRow.LocalType || ''),
+    };
+
+    const result = {
+      status: 'ok',
+      mode: 'live',
+      recordMode: 'existing',
+      sourceUrl: insertUrl,
+      detail,
+      locations,
+      defaultLocationId,
+      branches,
+      defaultBranchId,
+    };
+    PORT_CONTRACT_CACHE.set(cacheKey, { cachedAt: Date.now(), payload: result });
+    return result;
+  }
+
+  // Chua co tren Index_Search -> nap tu /FTTH_NewPort/Contract/LoadData de cap Port moi
+  const loadBody = new URLSearchParams({
+    ContractName: contractId,
+    TypeContract: String(typeContract || '3'),
+  }).toString();
+  const loadResp = await portRequest({
+    url: PORT_ENDPOINTS.loadData,
+    method: 'POST',
+    data: loadBody,
+  });
+  if (!loadResp.ok) {
+    return {
+      status: loadResp.statusType,
+      message: loadResp.message,
+      loginUrl: loadResp.loginUrl,
+    };
+  }
+
+  const loadParsed = safeJsonParse(loadResp.res.responseText);
+  if (Array.isArray(loadParsed) && loadParsed.length >= 10) {
+    const detail = {
+      id: '',
+      contractName: contractId,
+      typeContract: String(typeContract || '3'),
+      typeContractLabel: String(typeContract) === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New',
+      status: '1',
+      statusLabel: 'Chưa cấp Port (HĐ mới)',
+      statusPort: '',
+      statusPortLabel: '',
+      releaseStatusPortValue: '2',
+      reassignStatusPortValue: '3',
+      customer: decodeHtmlEntities(String(loadParsed[0] || '')).trim(),
+      company: decodeHtmlEntities(String(loadParsed[1] || '')).trim(),
+      address: decodeHtmlEntities(String(loadParsed[2] || '')).trim(),
+      email: decodeHtmlEntities(String(loadParsed[3] || '')).trim(),
+      handphone: decodeHtmlEntities(String(loadParsed[4] || '')).trim(),
+      telephone: decodeHtmlEntities(String(loadParsed[5] || '')).trim(),
+      localType: decodeHtmlEntities(String(loadParsed[6] || '')).trim(),
+      description: decodeHtmlEntities(String(loadParsed[7] || '')).trim(),
+      cmnd: decodeHtmlEntities(String(loadParsed[8] || '')).trim(),
+      cardNumber: '1',
+      createBy: '',
+      createDate: '',
+      updateBy: '',
+      updateDate: '',
+      tstc: '',
+      pc: '',
+      typeContractOptions: [
+        { value: '3', label: 'FTTH_New', selected: String(typeContract) !== '5' },
+        { value: '5', label: 'FTTH_NEW LeaseLine', selected: String(typeContract) === '5' },
+      ],
+      statusOptions: [
+        { value: '1', label: 'Bình thường', selected: true },
+        { value: '6', label: 'Đã thu hồi port', selected: false },
+      ],
+      statusPortOptions: [],
+    };
+    const result = {
+      status: 'ok',
+      mode: 'live',
+      recordMode: 'new',
+      sourceUrl: PORT_ENDPOINTS.insertPage,
+      detail,
+      locations,
+      defaultLocationId,
+      branches,
+      defaultBranchId,
+    };
+    PORT_CONTRACT_CACHE.set(cacheKey, { cachedAt: Date.now(), payload: result });
+    return result;
+  }
+
+  const loadMsg = stripHtmlClean(
+    typeof loadParsed === 'string'
+      ? loadParsed
+      : Array.isArray(loadParsed)
+      ? loadParsed[0] || ''
+      : loadResp.res.responseText || ''
+  );
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    recordMode: 'not_found',
+    loadDataError:
+      loadMsg ||
+      `Không tìm thấy hợp đồng ${contractId} trên FTTH NEW (Tìm kiếm lẫn LoadData). Hãy thử đổi Loại HĐ (FTTH_New / LeaseLine).`,
+    sourceUrl: PORT_ENDPOINTS.indexPage,
+    detail: {
+      id: '',
+      contractName: contractId,
+      typeContract: String(typeContract || '3'),
+      typeContractLabel: String(typeContract) === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New',
+      status: '',
+      statusLabel: 'Chưa có trên FTTH NEW',
+      customer: '',
+      address: '',
+      cardNumber: '1',
+      localType: '',
+      tstc: '',
+      pc: '',
+      typeContractOptions: [
+        { value: '3', label: 'FTTH_New', selected: String(typeContract) !== '5' },
+        { value: '5', label: 'FTTH_NEW LeaseLine', selected: String(typeContract) === '5' },
+      ],
+    },
+    locations,
+    defaultLocationId,
+    branches,
+    defaultBranchId,
+  };
+}
+
+function buildLookupResult(ctxRes, contractId) {
+  const d = ctxRes.detail || {};
+  if (ctxRes.recordMode === 'not_found') {
+    return {
+      status: 'warn',
+      mode: 'live',
+      title: `Chưa có dữ liệu Port FTTH NEW cho ${contractId}`,
+      message: ctxRes.loadDataError,
+      sourceUrl: ctxRes.sourceUrl,
+      sourceLabel: 'Mở trang Port gốc',
+    };
+  }
+
+  const summaryFields = [{ label: 'Mã hợp đồng', value: d.contractName || contractId }];
+  summaryFields.push({
+    label: 'Trạng thái Port',
+    value: d.statusLabel || (ctxRes.recordMode === 'new' ? 'Chưa cấp Port (HĐ mới)' : 'Không rõ'),
+  });
+  if (d.tstc) summaryFields.push({ label: 'Thông số Tập điểm / Port', value: d.tstc });
+  if (d.pc) summaryFields.push({ label: 'Thông số kết nối', value: d.pc });
+  if (d.typeContractLabel) summaryFields.push({ label: 'Loại hợp đồng', value: d.typeContractLabel });
+  if (d.customer) summaryFields.push({ label: 'Khách hàng', value: d.customer });
+  if (d.address) summaryFields.push({ label: 'Địa chỉ', value: d.address });
+  if (d.cardNumber) summaryFields.push({ label: 'Số thẻ', value: d.cardNumber });
+  if (d.localType) summaryFields.push({ label: 'LocalType', value: d.localType });
+  if (d.description) summaryFields.push({ label: 'Ghi chú', value: d.description });
+  if (d.createBy || d.createDate) {
+    summaryFields.push({
+      label: 'Người cấp / Ngày cấp',
+      value: [d.createBy, d.createDate].filter(Boolean).join(' • '),
+    });
+  }
+  if (d.updateBy || d.updateDate) {
+    summaryFields.push({
+      label: 'Cập nhật cuối',
+      value: [d.updateBy, d.updateDate].filter(Boolean).join(' • '),
+    });
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    title:
+      ctxRes.recordMode === 'new'
+        ? `Hợp đồng mới ${contractId} (chưa cấp Port FTTH NEW)`
+        : `Thông tin Port FTTH NEW — ${contractId}`,
+    message:
+      ctxRes.recordMode === 'new'
+        ? 'Hợp đồng chưa có bản ghi trên FTTH NEW (đã lấy sẵn thông tin từ LoadData). Bấm "Cấp / Đổi Port" để chọn Tập điểm & Port trống.'
+        : 'Đã lấy dữ liệu trực tiếp từ mvcport.fpt.net (FTTH NEW).',
+    summaryFields,
+    sourceUrl: ctxRes.sourceUrl,
+    sourceLabel: 'Mở trang Port gốc',
+  };
+}
+
+function buildPortMockResult(actionId, contractId, ctx = {}) {
   switch (actionId) {
     case 'lookup_port':
       return {
@@ -4655,14 +5815,13 @@ function buildPortMockResult(actionId, contractId) {
         mode: 'demo',
         title: `Thông tin Port của ${contractId} (Dữ liệu mô phỏng)`,
         message:
-          'Đã tải thông tin Port mẫu để kiểm tra giao diện trước khi ghép API thật của port.fpt.net.',
+          'Đã tải thông tin Port mẫu để kiểm tra giao diện trước khi chạy thật trên mvcport.fpt.net.',
         summaryFields: [
           { label: 'Mã hợp đồng', value: contractId },
-          { label: 'Trạng thái Port', value: 'Đang sử dụng (Đã cấp)' },
-          { label: 'Thiết bị OLT/Switch', value: 'HCM-OLT-Q1-01 (Mô phỏng)' },
-          { label: 'Card / Port PON', value: '0/3/12' },
-          { label: 'Splitter / Cổng', value: 'SPL 1:16 • cổng 07' },
-          { label: 'VLAN', value: 'VLAN 1001 (Internet)' },
+          { label: 'Trạng thái Port', value: 'Bình thường (Đã cấp)' },
+          { label: 'Thông số Tập điểm / Port', value: 'BRUP07501GC16 • SPL-07 • Port 04' },
+          { label: 'Thông số kết nối', value: 'BRUP07501 • PON 0/8 • VLAN 188' },
+          { label: 'Loại hợp đồng', value: 'FTTH_New' },
           { label: 'Nguồn dữ liệu', value: 'Dữ liệu mô phỏng (chưa bật VPN/Userscript)' },
         ],
       };
@@ -4673,6 +5832,11 @@ function buildPortMockResult(actionId, contractId) {
         title: `Đã cấp Port cho ${contractId} (Dữ liệu mô phỏng)`,
         message:
           'Lệnh mô phỏng thành công: Port mới đã được gán cho hợp đồng trên bản xem thử.',
+        summaryFields: [
+          { label: 'Mã hợp đồng', value: contractId },
+          { label: 'Tập điểm / Hộp đấu nối', value: ctx.deviceName || 'BRUP07501-SPL-01' },
+          { label: 'Port đã chọn', value: ctx.port || 'Port 04' },
+        ],
       };
     case 'release_port':
       return {
@@ -4692,7 +5856,7 @@ function buildPortMockResult(actionId, contractId) {
 }
 
 /**
- * Thuc thi mot lenh tren port.fpt.net.
+ * Thuc thi lenh nghiep vu tren port.fpt.net / mvcport.fpt.net.
  */
 async function runPortAction(actionId, rawContractId, ctx = {}) {
   const check = validateContractId(rawContractId);
@@ -4715,40 +5879,165 @@ async function runPortAction(actionId, rawContractId, ctx = {}) {
 
   if (!isUserscriptEnv() || ctx.forceDemo) {
     await sleep(350);
-    return buildPortMockResult(actionId, contractId);
+    return buildPortMockResult(actionId, contractId, ctx);
   }
 
-  const endpoint = PORT_ENDPOINTS[actionId];
-  if (!endpoint) {
-    const session = await checkPortalSession(portal);
-    if (session.state === 'iam_expired') {
+  if (actionId === 'lookup_port') {
+    const ctxRes = await fetchPortContractContext(contractId, { forceRefresh: true });
+    if (ctxRes.status !== 'ok') {
       return {
-        status: 'iam_expired',
-        message:
-          'Phiên đăng nhập IAM cho port.fpt.net đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
-        loginUrl: session.loginUrl,
+        status: ctxRes.status,
+        message: ctxRes.message,
+        loginUrl: ctxRes.loginUrl || portal.url,
       };
     }
-    if (session.state === 'offline') {
+    return buildLookupResult(ctxRes, contractId);
+  }
+
+  if (actionId === 'release_port') {
+    let detail = ctx.detail || null;
+    if (!detail || !detail.id) {
+      const ctxRes = await fetchPortContractContext(contractId, { forceRefresh: true });
+      if (ctxRes.status !== 'ok') {
+        return {
+          status: ctxRes.status,
+          message: ctxRes.message,
+          loginUrl: ctxRes.loginUrl || portal.url,
+        };
+      }
+      if (ctxRes.recordMode !== 'existing' || !ctxRes.detail || !ctxRes.detail.id) {
+        return {
+          status: 'warn',
+          title: `Không thể thu hồi Port cho ${contractId}`,
+          message: `Hợp đồng ${contractId} hiện chưa có bản ghi Port trên FTTH NEW để thu hồi.`,
+        };
+      }
+      detail = ctxRes.detail;
+    }
+
+    const body = new URLSearchParams({
+      typeContract: String(detail.typeContract || '3'),
+      customer: String(detail.customer || ''),
+      address: String(detail.address || ''),
+      cardNumber: String(ctx.cardNumber ?? detail.cardNumber ?? ''),
+      email: String(detail.email || ''),
+      status: '6',
+      cmnd: String(detail.cmnd || ''),
+      localType: String(detail.localType || ''),
+      description: String(ctx.description ?? detail.description ?? ''),
+      company: String(detail.company || ''),
+      telephone: String(detail.telephone || ''),
+      handphone: String(detail.handphone || ''),
+      portID: '',
+      port: '',
+      deviceName: '',
+      location: '',
+      branch: '',
+      id: String(detail.id),
+      statusPort: String(ctx.statusPort || detail.releaseStatusPortValue || '2'),
+    }).toString();
+
+    const resp = await portRequest({
+      url: PORT_ENDPOINTS.updateContract,
+      method: 'POST',
+      data: body,
+    });
+    if (!resp.ok) {
+      return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl };
+    }
+    clearPortContractCache(contractId);
+    return parsePortMutationResponse(resp.res.responseText, 'Thu hồi Port', contractId);
+  }
+
+  if (actionId === 'assign_port') {
+    const portID = String(ctx.portID || '').trim();
+    const port = String(ctx.port || '').trim();
+    const deviceName = String(ctx.deviceName || '').trim();
+    const location = String(ctx.location || '').trim();
+    const branch = String(ctx.branch || '').trim();
+    if (!portID || !port || !deviceName || !location || !branch) {
       return {
-        status: 'error',
-        message: session.detail,
-        loginUrl: session.loginUrl,
+        status: 'validation_error',
+        message: 'Hãy chọn đủ Vùng, Chi nhánh, POP, Hộp đấu nối và Port còn trống trước khi xác nhận.',
       };
     }
-    return {
-      status: 'needs_scan',
-      message:
-        'Đã kết nối được port.fpt.net (IAM hợp lệ). Hãy mở trang port.fpt.net, bấm "Quét cấu trúc" để lấy mẫu thao tác thật ghép vào nút này.',
-      hint: `Hoặc bấm "Mở trang port.fpt.net gốc" bên dưới (Mã HĐ ${contractId} đã sẵn sàng để dán).`,
-      loginUrl: portal.url,
-    };
+
+    const d = ctx.detail || {};
+    const typeContract = String(ctx.typeContract || d.typeContract || '3');
+    const cardNumber = String(ctx.cardNumber ?? d.cardNumber ?? '1');
+    const description = String(ctx.description ?? d.description ?? '');
+
+    if (ctx.recordMode === 'existing' && d.id) {
+      const body = new URLSearchParams({
+        typeContract,
+        customer: String(d.customer || ''),
+        address: String(d.address || ''),
+        cardNumber,
+        email: String(d.email || ''),
+        status: '1',
+        cmnd: String(d.cmnd || ''),
+        localType: String(d.localType || ''),
+        description,
+        company: String(d.company || ''),
+        telephone: String(d.telephone || ''),
+        handphone: String(d.handphone || ''),
+        portID,
+        port,
+        deviceName,
+        location,
+        branch,
+        id: String(d.id),
+        statusPort: String(ctx.statusPort || d.reassignStatusPortValue || '3'),
+      }).toString();
+
+      const resp = await portRequest({
+        url: PORT_ENDPOINTS.updateContract,
+        method: 'POST',
+        data: body,
+      });
+      if (!resp.ok) {
+        return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl };
+      }
+      clearPortContractCache(contractId);
+      return parsePortMutationResponse(resp.res.responseText, 'Đổi / Cấp lại Port', contractId);
+    }
+
+    const body = new URLSearchParams({
+      contractName: String(d.contractName || contractId),
+      typeContract,
+      customer: String(d.customer || ''),
+      address: String(d.address || ''),
+      cardNumber,
+      email: String(d.email || ''),
+      status: '1',
+      cmnd: String(d.cmnd || ''),
+      localType: String(d.localType || ''),
+      description,
+      company: String(d.company || ''),
+      telephone: String(d.telephone || ''),
+      handphone: String(d.handphone || ''),
+      portID,
+      port,
+      location,
+      branch,
+      deviceName,
+    }).toString();
+
+    const resp = await portRequest({
+      url: PORT_ENDPOINTS.insertContract,
+      method: 'POST',
+      data: body,
+    });
+    if (!resp.ok) {
+      return { status: resp.statusType, message: resp.message, loginUrl: resp.loginUrl };
+    }
+    clearPortContractCache(contractId);
+    return parsePortMutationResponse(resp.res.responseText, 'Cấp Port mới', contractId);
   }
 
   return {
-    status: 'needs_scan',
-    message: 'Endpoint đang chờ cập nhật chi tiết.',
-    loginUrl: portal.url,
+    status: 'error',
+    message: 'Thao tác Port không được hỗ trợ.',
   };
 }
 
@@ -4855,6 +6144,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
  * Giao dien dieu khien Remote Inside (1 man hinh toi uu Android & MacBook).
  * Toan bo chuoi tu nguoi dung deu duoc gan bang textContent de dam bao an toan.
  */
+
 
 
 
@@ -5023,6 +6313,34 @@ function mountRemoteInside({
     killLoginUrl: '',
     killSessions: [],
     killArmedObjId: '',
+    portModalLoading: false,
+    portModalError: '',
+    portModalLoginUrl: '',
+    portRecordMode: '',
+    portDetail: null,
+    portDetailWarn: '',
+    portTypeContract: '3',
+    portCardNumber: '1',
+    portDescription: '',
+    portLocations: [],
+    portLocationId: '',
+    portBranches: [],
+    portBranchId: '',
+    portPops: [],
+    portPopId: '',
+    portPopSearch: '',
+    portConboxes: [],
+    portConboxId: '',
+    portConboxSearch: '',
+    portSlotsLoading: false,
+    portSlots: [],
+    portSelectedPortId: '',
+    portSelectedPortLabel: '',
+    portCascadeLoading: false,
+    portHistoryOpen: false,
+    portHistoryLoading: false,
+    portHistoryError: '',
+    portHistoryRows: [],
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -5180,6 +6498,34 @@ function mountRemoteInside({
     state.killLoginUrl = '';
     state.killSessions = [];
     state.killArmedObjId = '';
+    state.portModalLoading = false;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portTypeContract = '3';
+    state.portCardNumber = '1';
+    state.portDescription = '';
+    state.portLocations = [];
+    state.portLocationId = '';
+    state.portBranches = [];
+    state.portBranchId = '';
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlotsLoading = false;
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portCascadeLoading = false;
+    state.portHistoryOpen = false;
+    state.portHistoryLoading = false;
+    state.portHistoryError = '';
+    state.portHistoryRows = [];
   }
 
   function applyDetectedOltToModal() {
@@ -5533,7 +6879,306 @@ function mountRemoteInside({
         return;
       }
       state.oltLoading = false;
+      state.oltLoading = false;
       state.oltError = err && err.message ? err.message : 'Lỗi tải danh sách POP OLT.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortSlotsForModal(deviceId) {
+    state.portConboxId = deviceId;
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    state.portHistoryError = '';
+    if (!deviceId || deviceId === '0') {
+      state.portSlotsLoading = false;
+      renderConfirm();
+      return;
+    }
+    state.portSlotsLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortSlotList(deviceId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portSlotsLoading = false;
+      if (res.status === 'ok') {
+        state.portSlots = Array.isArray(res.slots) ? res.slots : [];
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách Port trong Hộp đấu nối.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portSlotsLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortConboxesForModal(popId) {
+    state.portPopId = popId;
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+
+    const popObj = state.portPops.find((p) => p.value === popId);
+    const popName = popObj ? popObj.label : '';
+    if (!popId || popId === '0' || !popName) {
+      state.portCascadeLoading = false;
+      renderConfirm();
+      return;
+    }
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortConboxes(popName);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      if (res.status === 'ok') {
+        state.portConboxes = Array.isArray(res.conboxes) ? res.conboxes : [];
+        if (state.portConboxes.length === 1) {
+          loadPortSlotsForModal(state.portConboxes[0].value);
+          return;
+        }
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách Hộp đấu nối.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Hộp đấu nối.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortPopsForModal(locationId, branchId) {
+    state.portBranchId = branchId;
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortPops(locationId, branchId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      if (res.status === 'ok') {
+        state.portPops = Array.isArray(res.pops) ? res.pops : [];
+        if (state.portPops.length === 1) {
+          loadPortConboxesForModal(state.portPops[0].value);
+          return;
+        }
+      } else {
+        state.portModalError = res.message || 'Không tải được danh sách POP.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách POP.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortBranchesForModal(locationId) {
+    state.portLocationId = locationId;
+    state.portBranches = [];
+    state.portBranchId = '';
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portCascadeLoading = true;
+    renderConfirm();
+
+    try {
+      const res = await fetchPortBranches(locationId);
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      if (res.status === 'ok') {
+        state.portBranches = Array.isArray(res.branches) ? res.branches : [];
+        const nextBranch = (state.portBranches[0] && state.portBranches[0].value) || '0';
+        loadPortPopsForModal(locationId, nextBranch);
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = res.message || 'Không tải được danh sách Chi nhánh.';
+      state.portModalLoginUrl = res.loginUrl || '';
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portCascadeLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải danh sách Chi nhánh.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortHistoryForModal() {
+    const conboxObj = state.portConboxes.find((c) => c.value === state.portConboxId);
+    const pointName = conboxObj ? conboxObj.label : '';
+    state.portHistoryOpen = true;
+    state.portHistoryLoading = true;
+    state.portHistoryError = '';
+    state.portHistoryRows = [];
+    renderConfirm();
+
+    try {
+      const res = await fetchPortHistory({
+        pointName,
+        port: state.portSelectedPortLabel,
+        locationID: state.portLocationId,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portHistoryLoading = false;
+      if (res.status === 'ok') {
+        state.portHistoryRows = Array.isArray(res.rows) ? res.rows : [];
+      } else {
+        state.portHistoryError = res.message || 'Không tải được Lịch sử Port.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portHistoryLoading = false;
+      state.portHistoryError = err && err.message ? err.message : 'Lỗi tải Lịch sử Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortReleaseModal(contractId) {
+    state.portModalLoading = true;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portDescription = '';
+    renderConfirm();
+
+    try {
+      const res = await fetchPortContractContext(contractId, { forceRefresh: true });
+      if (!state.confirmAction || state.confirmAction.id !== 'release_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      if (res.status === 'ok') {
+        state.portRecordMode = res.recordMode || '';
+        state.portDetail = res.detail || null;
+        state.portDetailWarn = res.loadDataError || '';
+        state.portDescription = (res.detail && res.detail.description) || '';
+      } else {
+        state.portModalError = res.message || 'Không tải được thông tin hợp đồng từ mvcport.fpt.net.';
+        state.portModalLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'release_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi đọc dữ liệu FTTH NEW Port.';
+    }
+    renderConfirm();
+  }
+
+  async function loadPortAssignModal(contractId, typeContractOverride = '') {
+    const activeType = typeContractOverride || state.portTypeContract || '3';
+    state.portModalLoading = true;
+    state.portModalError = '';
+    state.portModalLoginUrl = '';
+    state.portRecordMode = '';
+    state.portDetail = null;
+    state.portDetailWarn = '';
+    state.portTypeContract = activeType;
+    state.portPops = [];
+    state.portPopId = '';
+    state.portPopSearch = '';
+    state.portConboxes = [];
+    state.portConboxId = '';
+    state.portConboxSearch = '';
+    state.portSlots = [];
+    state.portSelectedPortId = '';
+    state.portSelectedPortLabel = '';
+    state.portHistoryOpen = false;
+    state.portHistoryRows = [];
+    renderConfirm();
+
+    try {
+      const res = await fetchPortContractContext(contractId, {
+        typeContract: activeType,
+        forceRefresh: true,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      if (res.status === 'ok') {
+        state.portRecordMode = res.recordMode || '';
+        state.portDetail = res.detail || null;
+        state.portDetailWarn = res.loadDataError || '';
+        state.portTypeContract = (res.detail && res.detail.typeContract) || activeType;
+        state.portCardNumber = (res.detail && res.detail.cardNumber) || '1';
+        state.portDescription = (res.detail && res.detail.description) || '';
+        state.portLocations = Array.isArray(res.locations) ? res.locations : [];
+        state.portLocationId =
+          res.defaultLocationId || (state.portLocations[0] && state.portLocations[0].value) || '';
+        state.portBranches = Array.isArray(res.branches) ? res.branches : [];
+        state.portBranchId =
+          res.defaultBranchId || (state.portBranches[0] && state.portBranches[0].value) || '';
+        renderConfirm();
+        if (state.portRecordMode !== 'not_found' && state.portLocationId) {
+          loadPortPopsForModal(state.portLocationId, state.portBranchId || '0');
+        }
+        return;
+      }
+      state.portModalError = res.message || 'Không tải được thông tin cấp Port FTTH NEW.';
+      state.portModalLoginUrl = res.loginUrl || '';
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'assign_port') {
+        return;
+      }
+      state.portModalLoading = false;
+      state.portModalError = err && err.message ? err.message : 'Lỗi tải form Cấp / Đổi Port.';
     }
     renderConfirm();
   }
@@ -5573,6 +7218,10 @@ function mountRemoteInside({
         if (state.contractInput) {
           loadContractOltContextForModal(state.contractInput);
         }
+      } else if (state.activePortalId === 'port' && action.id === 'release_port') {
+        loadPortReleaseModal(state.contractInput);
+      } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
+        loadPortAssignModal(state.contractInput);
       }
       return;
     }
@@ -5596,6 +7245,8 @@ function mountRemoteInside({
     const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
     const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
     const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
+    const isPortAssignLog = portal.id === 'port' && action.id === 'assign_port';
+    const isPortReleaseLog = portal.id === 'port' && action.id === 'release_port';
     const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
@@ -5603,6 +7254,11 @@ function mountRemoteInside({
       logTarget = contractId ? `${contractId} • ${baseOlt}` : baseOlt;
     } else if (isKillSession && actionCtx.ipAddress) {
       logTarget = contractId ? `${contractId} • ${actionCtx.ipAddress}` : actionCtx.ipAddress;
+    } else if (isPortAssignLog && actionCtx.deviceName) {
+      const baseDev = actionCtx.port ? `${actionCtx.deviceName} (${actionCtx.port})` : actionCtx.deviceName;
+      logTarget = contractId ? `${contractId} • ${baseDev}` : baseDev;
+    } else if (isPortReleaseLog) {
+      logTarget = contractId ? `${contractId} • Thu hồi` : 'Thu hồi';
     }
 
     try {
@@ -6882,7 +8538,7 @@ function mountRemoteInside({
         el('button', {
           type: 'button',
           className: 'ri-secondary-btn',
-          text: 'Mở trang MonitorOLT gốc',
+          text: res.sourceLabel || 'Mở trang MonitorOLT gốc',
           onClick: () => {
             if (pageWindow && pageWindow.open) {
               pageWindow.open(res.sourceUrl, '_blank', 'noopener');
@@ -7541,6 +9197,8 @@ function mountRemoteInside({
     const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
     const isInsideKill = portal.id === 'inside' && act.id === 'kill_session';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
+    const isPortRelease = portal.id === 'port' && act.id === 'release_port';
+    const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
     const sheetParts = [
       el('h2', {
@@ -8166,6 +9824,600 @@ function mountRemoteInside({
             })
           )
         );
+      }
+    } else if (isPortRelease) {
+      confirmBtn.textContent = 'Xác nhận Thu hồi Port';
+
+      if (state.portModalLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông tin Port FTTH NEW của ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portModalError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadPortReleaseModal(contractId),
+          }),
+        ];
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Mở trang Port đăng nhập',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.portModalError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portRecordMode !== 'existing' || !state.portDetail || !state.portDetail.id) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text: `Hợp đồng ${contractId} hiện chưa có bản ghi Port trên FTTH NEW (không thể thu hồi).`,
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Kiểm tra lại',
+                onClick: () => loadPortReleaseModal(contractId),
+              }),
+            ]),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const d = state.portDetail;
+        const infoRows = [];
+        if (d.customer) infoRows.push(`Khách hàng: ${d.customer}`);
+        if (d.address) infoRows.push(`Địa chỉ: ${d.address}`);
+        if (d.tstc) infoRows.push(`Tập điểm / Port: ${d.tstc}`);
+        if (d.pc) infoRows.push(`Thông số kết nối: ${d.pc}`);
+        if (d.createBy || d.createDate) {
+          infoRows.push(`Cấp Port: ${[d.createBy, d.createDate].filter(Boolean).join(' • ')}`);
+        }
+        if (d.updateBy || d.updateDate) {
+          infoRows.push(`Cập nhật cuối: ${[d.updateBy, d.updateDate].filter(Boolean).join(' • ')}`);
+        }
+
+        sheetParts.push(
+          el('div', { className: 'ri-modem-info' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Thông tin FTTH NEW hiện tại' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadPortReleaseModal(contractId),
+              }),
+            ]),
+            el('div', {
+              className: 'ri-modem-mac',
+              text: d.statusLabel || `Trạng thái: ${d.status || '—'}`,
+            }),
+            ...infoRows.map((line) => el('div', { className: 'ri-box-sub', text: line })),
+          ])
+        );
+
+        if (d.status === '6') {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: 'Hợp đồng này hiện đã ở trạng thái "Đã thu hồi port". Bạn vẫn có thể bấm xác nhận nếu cần cập nhật lại ghi chú.',
+              }),
+            ])
+          );
+        }
+
+        const descEl = el('textarea', {
+          className: 'ri-textarea',
+          id: 'ri-port-release-desc',
+          placeholder: 'Nhập ghi chú thu hồi (nếu có)…',
+        });
+        descEl.value = state.portDescription || '';
+        descEl.addEventListener('input', (e) => {
+          state.portDescription = e.target.value;
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-port-release-desc',
+              text: 'Ghi chú (tùy chọn)',
+            }),
+            descEl,
+          ])
+        );
+
+        confirmBtn.disabled = false;
+        confirmBtn.addEventListener('click', () =>
+          runConfirmedAction(act, {
+            detail: state.portDetail,
+            statusPort: d.releaseStatusPortValue || '2',
+            cardNumber: d.cardNumber || '',
+            description: state.portDescription,
+          })
+        );
+      }
+    } else if (isPortAssign) {
+      confirmBtn.textContent =
+        state.portRecordMode === 'existing' ? 'Xác nhận Đổi Port' : 'Xác nhận Cấp Port';
+
+      if (state.portModalLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông tin hợp đồng & vùng miền cho ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.portModalError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadPortAssignModal(contractId),
+          }),
+        ];
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Mở trang Port đăng nhập',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.portModalError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const d = state.portDetail || {};
+        const typeOpts =
+          Array.isArray(d.typeContractOptions) && d.typeContractOptions.length > 0
+            ? d.typeContractOptions
+            : [
+                { value: '3', label: 'FTTH_New' },
+                { value: '5', label: 'FTTH_NEW LeaseLine' },
+              ];
+        const typeSelect = el(
+          'select',
+          { className: 'ri-select', id: 'ri-port-type' },
+          typeOpts.map((opt) => {
+            const o = el('option', { value: opt.value, text: opt.label });
+            if (opt.value === state.portTypeContract) o.selected = true;
+            return o;
+          })
+        );
+        typeSelect.value = state.portTypeContract;
+        typeSelect.addEventListener('change', (e) => {
+          const nextType = e.target.value;
+          if (state.portRecordMode === 'existing') {
+            state.portTypeContract = nextType;
+          } else {
+            loadPortAssignModal(contractId, nextType);
+          }
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-type', text: 'Loại hợp đồng' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại HĐ',
+                onClick: () => loadPortAssignModal(contractId),
+              }),
+            ]),
+            typeSelect,
+          ])
+        );
+
+        if (state.portRecordMode === 'not_found') {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text:
+                  state.portDetailWarn ||
+                  `Không tìm thấy ${contractId} ở Loại HĐ hiện tại. Hãy thử đổi sang FTTH_NEW LeaseLine hoặc kiểm tra lại Mã HĐ.`,
+              }),
+            ])
+          );
+          confirmBtn.disabled = true;
+        } else {
+          const summaryTitle =
+            state.portRecordMode === 'existing'
+              ? `Đổi / Cấp lại Port (ID ${d.id}) • ${d.customer || contractId}`
+              : `Cấp Port mới • ${d.customer || contractId}`;
+          const summarySub = [d.address, d.tstc ? `Hiện tại: ${d.tstc}` : '', d.statusLabel]
+            .filter(Boolean)
+            .join(' • ');
+          sheetParts.push(
+            el('div', { className: 'ri-olt-detected' }, [
+              el('div', { className: 'ri-olt-detected-title', text: summaryTitle }),
+              summarySub ? el('div', { className: 'ri-olt-detected-sub', text: summarySub }) : null,
+            ])
+          );
+
+          if (state.portLocations.length > 0) {
+            const locSelect = el(
+              'select',
+              { className: 'ri-select', id: 'ri-port-location' },
+              state.portLocations.map((loc) => {
+                const o = el('option', { value: loc.value, text: loc.label });
+                if (loc.value === state.portLocationId) o.selected = true;
+                return o;
+              })
+            );
+            locSelect.value = state.portLocationId;
+            locSelect.addEventListener('change', (e) => loadPortBranchesForModal(e.target.value));
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-location', text: 'Vùng miền' }),
+                locSelect,
+              ])
+            );
+          }
+
+          if (state.portBranches.length > 0) {
+            const branchSelect = el(
+              'select',
+              { className: 'ri-select', id: 'ri-port-branch' },
+              state.portBranches.map((br) => {
+                const o = el('option', { value: br.value, text: br.label });
+                if (br.value === state.portBranchId) o.selected = true;
+                return o;
+              })
+            );
+            branchSelect.value = state.portBranchId;
+            branchSelect.addEventListener('change', (e) =>
+              loadPortPopsForModal(state.portLocationId, e.target.value)
+            );
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-branch', text: 'Chi nhánh' }),
+                branchSelect,
+              ])
+            );
+          }
+
+          const popCountSpan = el('span', { className: 'ri-text-btn' });
+          const popSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-pop-search',
+            placeholder: 'Lọc nhanh POP (ví dụ: BRUP075…)',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.portPopSearch,
+          });
+          popSearchInput.value = state.portPopSearch;
+          const popSelect = el('select', { className: 'ri-select', id: 'ri-port-pop' });
+
+          function populatePopSelect(qText) {
+            const q = String(qText || '').trim().toLowerCase();
+            const filtered = q
+              ? state.portPops.filter((p) => p.label.toLowerCase().includes(q))
+              : state.portPops;
+            popCountSpan.textContent = q
+              ? `${filtered.length}/${state.portPops.length} POP`
+              : `${state.portPops.length} POP`;
+            popSelect.textContent = '';
+            popSelect.appendChild(
+              el('option', {
+                value: '',
+                text:
+                  filtered.length > 0
+                    ? `-- Chọn POP (${filtered.length}) --`
+                    : state.portCascadeLoading
+                    ? 'Đang tải POP…'
+                    : '-- Không có POP khớp --',
+              })
+            );
+            let hasSel = false;
+            for (const item of filtered) {
+              const o = el('option', { value: item.value, text: item.label });
+              if (item.value === state.portPopId) {
+                o.selected = true;
+                hasSel = true;
+              }
+              popSelect.appendChild(o);
+            }
+            popSelect.value = hasSel ? state.portPopId : '';
+          }
+          populatePopSelect(state.portPopSearch);
+          popSearchInput.addEventListener('input', (e) => {
+            state.portPopSearch = e.target.value;
+            populatePopSelect(state.portPopSearch);
+          });
+          popSelect.addEventListener('change', (e) => loadPortConboxesForModal(e.target.value));
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-port-pop-search', text: 'POP' }),
+                popCountSpan,
+              ]),
+              popSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [popSelect])
+          );
+
+          const conboxCountSpan = el('span', { className: 'ri-text-btn' });
+          const conboxSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-conbox-search',
+            placeholder: 'Lọc nhanh Hộp đấu nối / Tập điểm…',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.portConboxSearch,
+          });
+          conboxSearchInput.value = state.portConboxSearch;
+          const conboxSelect = el('select', { className: 'ri-select', id: 'ri-port-conbox' });
+
+          function populateConboxSelect(qText) {
+            const q = String(qText || '').trim().toLowerCase();
+            const filtered = q
+              ? state.portConboxes.filter((c) => c.label.toLowerCase().includes(q))
+              : state.portConboxes;
+            conboxCountSpan.textContent = q
+              ? `${filtered.length}/${state.portConboxes.length} Hộp`
+              : `${state.portConboxes.length} Hộp`;
+            conboxSelect.textContent = '';
+            conboxSelect.appendChild(
+              el('option', {
+                value: '',
+                text: !state.portPopId
+                  ? '-- Chọn POP trước --'
+                  : state.portCascadeLoading
+                  ? 'Đang tải Hộp đấu nối…'
+                  : filtered.length > 0
+                  ? `-- Chọn Hộp đấu nối (${filtered.length}) --`
+                  : '-- Không có Hộp đấu nối khớp --',
+              })
+            );
+            let hasSel = false;
+            for (const item of filtered) {
+              const o = el('option', { value: item.value, text: item.label });
+              if (item.value === state.portConboxId) {
+                o.selected = true;
+                hasSel = true;
+              }
+              conboxSelect.appendChild(o);
+            }
+            conboxSelect.value = hasSel ? state.portConboxId : '';
+          }
+          populateConboxSelect(state.portConboxSearch);
+          conboxSearchInput.addEventListener('input', (e) => {
+            state.portConboxSearch = e.target.value;
+            populateConboxSelect(state.portConboxSearch);
+          });
+          conboxSelect.addEventListener('change', (e) => loadPortSlotsForModal(e.target.value));
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-port-conbox-search',
+                  text: 'Hộp đấu nối (Tập điểm)',
+                }),
+                conboxCountSpan,
+              ]),
+              conboxSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [conboxSelect])
+          );
+
+          const slotTools = [];
+          if (state.portConboxId) {
+            slotTools.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: state.portHistoryOpen ? 'Ẩn lịch sử Port' : 'Xem lịch sử Port',
+                onClick: () => {
+                  if (state.portHistoryOpen) {
+                    state.portHistoryOpen = false;
+                    renderConfirm();
+                  } else {
+                    loadPortHistoryForModal();
+                  }
+                },
+              })
+            );
+          }
+
+          if (state.portSlotsLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải các Port trong Hộp đấu nối…' }),
+              ])
+            );
+          } else if (state.portConboxId) {
+            if (state.portSlots.length === 0) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                  el('div', { text: 'Hộp đấu nối này chưa có Port khả dụng.' }),
+                ])
+              );
+            } else {
+              const slotGrid = el(
+                'div',
+                { className: 'ri-port-grid' },
+                state.portSlots.map((slot) => {
+                  const selected = state.portSelectedPortId === slot.portID;
+                  const btn = el('button', {
+                    type: 'button',
+                    className: `ri-port-chip${selected ? ' is-selected' : ''}${
+                      slot.disabled ? ' is-busy' : ''
+                    }`,
+                    disabled: Boolean(slot.disabled),
+                    'aria-pressed': selected ? 'true' : 'false',
+                    text: slot.disabled ? `${slot.port} (Bận)` : slot.port,
+                    onClick: () => {
+                      if (slot.disabled) return;
+                      state.portSelectedPortId = slot.portID;
+                      state.portSelectedPortLabel = slot.port;
+                      renderConfirm();
+                    },
+                  });
+                  return btn;
+                })
+              );
+
+              sheetParts.push(
+                el('div', { className: 'ri-confirm-input-wrap' }, [
+                  el('div', { className: 'ri-inline-head' }, [
+                    el('span', {
+                      className: 'ri-confirm-label',
+                      text: state.portSelectedPortLabel
+                        ? `Port đã chọn: ${state.portSelectedPortLabel}`
+                        : 'Chọn 1 Port còn trống',
+                    }),
+                    el('div', { className: 'ri-embed-toolbar-btns' }, slotTools),
+                  ]),
+                  slotGrid,
+                ])
+              );
+            }
+          }
+
+          if (state.portHistoryOpen) {
+            if (state.portHistoryLoading) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status is-loading' }, [
+                  el('span', { className: 'ri-spinner' }),
+                  el('span', { text: 'Đang tải Lịch sử Port tập điểm…' }),
+                ])
+              );
+            } else if (state.portHistoryError) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                  el('div', { text: state.portHistoryError }),
+                ])
+              );
+            } else if (state.portHistoryRows.length === 0) {
+              sheetParts.push(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Chưa có lịch sử thao tác Port cho hộp/port này.' }),
+                ])
+              );
+            } else {
+              sheetParts.push(
+                el(
+                  'div',
+                  { className: 'ri-history-list' },
+                  state.portHistoryRows.map((row) =>
+                    el('div', { className: 'ri-history-card' }, [
+                      el('div', {
+                        className: 'ri-history-macs',
+                        text: [row.port, row.action].filter(Boolean).join(' • ') || 'Lịch sử Port',
+                      }),
+                      row.contractName || row.createBy || row.actionDate
+                        ? el('div', {
+                            className: 'ri-history-meta',
+                            text: [row.contractName, row.createBy, row.actionDate]
+                              .filter(Boolean)
+                              .join(' • '),
+                          })
+                        : null,
+                      row.data ? el('div', { className: 'ri-history-meta', text: row.data }) : null,
+                    ])
+                  )
+                )
+              );
+            }
+          }
+
+          const cardInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-port-card',
+            placeholder: 'Số thẻ (mặc định 1)',
+            autocomplete: 'off',
+            value: state.portCardNumber,
+          });
+          cardInput.value = state.portCardNumber;
+          cardInput.addEventListener('input', (e) => {
+            state.portCardNumber = e.target.value;
+          });
+
+          const descEl = el('textarea', {
+            className: 'ri-textarea',
+            id: 'ri-port-desc',
+            placeholder: 'Ghi chú (nếu có)…',
+          });
+          descEl.value = state.portDescription || '';
+          descEl.addEventListener('input', (e) => {
+            state.portDescription = e.target.value;
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-card', text: 'Số thẻ' }),
+              cardInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-port-desc', text: 'Ghi chú' }),
+              descEl,
+            ])
+          );
+
+          confirmBtn.disabled =
+            !state.portSelectedPortId ||
+            !state.portConboxId ||
+            !state.portLocationId ||
+            !state.portBranchId;
+
+          confirmBtn.addEventListener('click', () => {
+            const conboxObj = state.portConboxes.find((c) => c.value === state.portConboxId) || {};
+            runConfirmedAction(act, {
+              recordMode: state.portRecordMode,
+              detail: state.portDetail,
+              typeContract: state.portTypeContract,
+              cardNumber: state.portCardNumber,
+              description: state.portDescription,
+              location: state.portLocationId,
+              branch: state.portBranchId,
+              deviceName: conboxObj.label || '',
+              portID: state.portSelectedPortId,
+              port: state.portSelectedPortLabel,
+              statusPort: d.reassignStatusPortValue || '3',
+            });
+          });
+        }
       }
     } else {
       confirmBtn.addEventListener('click', () =>

@@ -64,7 +64,20 @@ import {
   setInsideOltHint,
   validateBoxNewMac,
 } from '../src/adapters/inside.js';
-import { PORT_ENDPOINTS, runPortAction } from '../src/adapters/port.js';
+import {
+  PORT_ENDPOINTS,
+  decodeHtmlEntities,
+  fetchPortContractContext,
+  fetchPortHistory,
+  fetchPortSlotList,
+  parseConboxParamsFromLibJs,
+  parseDropdownOptions,
+  parsePortContractDetailHtml,
+  parsePortHistoryRows,
+  parsePortMutationResponse,
+  parsePortOptionsFromHtml,
+  runPortAction,
+} from '../src/adapters/port.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -125,8 +138,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.7.2'),
-    'Userscript must bump @version to 0.7.2'
+    userscriptContent.includes('@version      0.8.0'),
+    'Userscript must bump @version to 0.8.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1133,9 +1146,14 @@ async function runTests() {
   assert.ok(userscriptContent.includes('oltConnManualOpen'), 'Bundle must include oltConnManualOpen');
   console.log('   OK: Kill Session rows, Box history schema, and Radius OLT auto-detect passed.');
 
-  console.log('14. Testing port.fpt.net adapter (demo mode & routing)...');
-  assert.equal(PORTALS.port.status, 'in_progress');
+  console.log('14. Testing port.fpt.net / mvcport.fpt.net FTTH NEW adapter & parsers...');
+  assert.equal(PORTALS.port.status, 'priority');
   assert.equal(PORTALS.port.url, 'http://port.fpt.net/');
+  assert.ok(
+    PORTALS.port.sessionCheckUrl &&
+      PORTALS.port.sessionCheckUrl.includes('/ftth_newport/contract/index'),
+    'PORTALS.port.sessionCheckUrl must check mvcport contract index'
+  );
   assert.ok(
     Array.isArray(PORTALS.port.hosts) &&
       PORTALS.port.hosts.includes('port.fpt.net') &&
@@ -1143,11 +1161,119 @@ async function runTests() {
     'PORTALS.port.hosts must include port.fpt.net and mvcport.fpt.net'
   );
   assert.ok(
-    'lookup_port' in PORT_ENDPOINTS &&
-      'assign_port' in PORT_ENDPOINTS &&
-      'release_port' in PORT_ENDPOINTS,
-    'PORT_ENDPOINTS must declare lookup_port, assign_port, and release_port'
+    PORT_ENDPOINTS.search.includes('/FTTH_NewPort/Contract/Index_Search') &&
+      PORT_ENDPOINTS.insertContract.includes('/FTTH_NewPort/Contract/InsertContract') &&
+      PORT_ENDPOINTS.updateContract.includes('/FTTH_NewPort/Contract/Insert_UpdateContact') &&
+      PORT_ENDPOINTS.loadData.includes('/FTTH_NewPort/Contract/LoadData') &&
+      PORT_ENDPOINTS.loadPort.includes('/Contract/Load_PortContract') &&
+      PORT_ENDPOINTS.loadPortHistory.includes('/FTTH_NewPort/Contract/LoadPortHistoryList'),
+    'PORT_ENDPOINTS must declare all live FTTH NEW endpoints'
   );
+  assert.equal(
+    decodeHtmlEntities('&#272;&#227; thu h&#7891;i port &amp; kiểm tra'),
+    'Đã thu hồi port & kiểm tra'
+  );
+  assert.deepEqual(parseDropdownOptions([{ Value: '35', Text: 'VTU - V&#361;ng T&#224;u' }]), [
+    { value: '35', label: 'VTU - Vũng Tàu' },
+  ]);
+
+  const sampleLibJs = `
+    function Load_ConnectingBox_ByName_DeployCapacity(NamePOp, type, status, htmlcontroller) {
+      $.ajax({
+        url: "/Location/Load_ConnectingBox_ByName_DeployCapacity",
+        type: "POST",
+        data: { popName: NamePOp, type: Number(type), isCheck: Number(status) }
+      });
+    }
+  `;
+  const conboxSpecs = parseConboxParamsFromLibJs(sampleLibJs);
+  assert.deepEqual(conboxSpecs, [
+    { key: 'popName', argIndex: 0 },
+    { key: 'type', argIndex: 1 },
+    { key: 'isCheck', argIndex: 2 },
+  ]);
+
+  const sampleInsertHtml = `
+    <input type="hidden" id="h_id" value="155123602" />
+    <input type="hidden" id="h_typeContract" value="3" />
+    <input type="hidden" id="h_status" value="6" />
+    <input type="hidden" id="h_valueStatusPort" value="2" />
+    <select id="cbo_typeContract">
+      <option value="3" selected>FTTH_New</option>
+      <option value="5">FTTH_NEW LeaseLine</option>
+    </select>
+    <select id="cbo_Status">
+      <option value="1">B&#236;nh th&#432;&#7901;ng</option>
+      <option value="6" selected>&#272;&#227; thu h&#7891;i port</option>
+    </select>
+    <select id="cbo_statusPort">
+      <option value="1">Bình thường</option>
+      <option value="2" selected>Thu hồi port</option>
+      <option value="3">Cấp lại port</option>
+    </select>
+    <input id="txtContact" value="VTAAR2501" />
+    <input id="txtCustomer" value="Ho&#224;ng Minh Ti&#7871;n" />
+    <input id="txtHomePhone" value="0969000001" />
+    <input id="txtTelephone" value="0254000002" />
+    <input id="txtCardNumber" value="1" />
+    <input id="txtLocalType" value="188" />
+    <input id="txtUpdateCreate" value="11/23/2026 11:38:42 AM" />
+    <textarea id="txtDescription">Ghi ch&#250; m&#7851;u</textarea>
+    <div id="dvTSTC"><lable><b>BRUP07501 • Port 04</b></lable></div>
+    <div id="dvPC"><lable>OLT PON 0/8</lable></div>
+  `;
+  const parsedDetail = parsePortContractDetailHtml(sampleInsertHtml);
+  assert.equal(parsedDetail.id, '155123602');
+  assert.equal(parsedDetail.customer, 'Hoàng Minh Tiến');
+  assert.equal(parsedDetail.handphone, '0969000001', 'handphone must map from #txtHomePhone');
+  assert.equal(parsedDetail.telephone, '0254000002', 'telephone must map from #txtTelephone');
+  assert.equal(parsedDetail.status, '6');
+  assert.equal(parsedDetail.statusLabel, 'Đã thu hồi port');
+  assert.equal(parsedDetail.releaseStatusPortValue, '2');
+  assert.equal(parsedDetail.reassignStatusPortValue, '3');
+  assert.equal(parsedDetail.updateDate, '11/23/2026 11:38:42 AM');
+  assert.equal(parsedDetail.description, 'Ghi chú mẫu');
+  assert.equal(parsedDetail.tstc, 'BRUP07501 • Port 04');
+  assert.equal(parsedDetail.pc, 'OLT PON 0/8');
+
+  const rawPortHtml =
+    '<label><input type="radio" id="radPort" value="91" disabled /> Port 01</label>' +
+    '<label><input type="radio" id="radPort" value="92" /> Port 02</label>';
+  const slotsRaw = parsePortOptionsFromHtml(rawPortHtml);
+  const slotsJsonStr = parsePortOptionsFromHtml(JSON.stringify(rawPortHtml));
+  assert.equal(slotsRaw.length, 2);
+  assert.deepEqual(slotsRaw[0], { portID: '91', port: 'Port 01', disabled: true, checked: false });
+  assert.deepEqual(slotsRaw[1], { portID: '92', port: 'Port 02', disabled: false, checked: false });
+  assert.deepEqual(slotsJsonStr, slotsRaw);
+
+  const histRows = parsePortHistoryRows([
+    { STT: 1, ActionDate: '11/23/2026', CreateBy: 'namlp', Port: 'Port 02', IP: '10.0.0.1', Action: 'Thu hồi', ContractName: 'VTAAR2501', Data: 'OK' },
+  ]);
+  assert.equal(histRows.length, 1);
+  assert.equal(histRows[0].createBy, 'namlp');
+  assert.equal(histRows[0].port, 'Port 02');
+
+  const mutOk = parsePortMutationResponse(
+    JSON.stringify(['1', 'Cập nhật thành công', 'BRUP07501 • P02', 'OLT 0/8']),
+    'Đổi Port',
+    'VTAAR2501'
+  );
+  assert.equal(mutOk.status, 'ok');
+  assert.equal(mutOk.tstc, 'BRUP07501 • P02');
+  const mutErr = parsePortMutationResponse(
+    JSON.stringify(['2', 'Port đang được sử dụng']),
+    'Cấp Port',
+    'VTAAR2501'
+  );
+  assert.equal(mutErr.status, 'error');
+
+  const demoPortCtx = await fetchPortContractContext('VTAAR2501', { forceDemo: true });
+  assert.equal(demoPortCtx.status, 'ok');
+  assert.ok(demoPortCtx.locations.length >= 1);
+  const demoSlots = await fetchPortSlotList('55101', { forceDemo: true });
+  assert.ok(demoSlots.slots.some((s) => !s.disabled) && demoSlots.slots.some((s) => s.disabled));
+  const demoHistory = await fetchPortHistory({ pointName: 'BRUP07501-SPL-01', forceDemo: true });
+  assert.ok(demoHistory.rows.length >= 1);
   const portLookup = await runPortAction('lookup_port', ' sgn123456 ');
   assert.equal(portLookup.status, 'ok');
   assert.equal(portLookup.mode, 'demo');

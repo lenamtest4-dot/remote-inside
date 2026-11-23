@@ -160,7 +160,8 @@ export async function checkPortalSession(portal) {
     };
   }
 
-  const res = await requestPortal({ url: portal.url, method: 'GET', timeout: 10000 });
+  const checkUrl = portal.sessionCheckUrl || portal.url;
+  const res = await requestPortal({ url: checkUrl, method: 'GET', timeout: 10000 });
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -175,7 +176,7 @@ export async function checkPortalSession(portal) {
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
-    requestedUrl: portal.url,
+    requestedUrl: checkUrl,
   });
 
   if (iamCheck.expired) {

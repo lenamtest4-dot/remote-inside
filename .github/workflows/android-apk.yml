@@ -89,6 +89,13 @@ jobs:
           fi
           cp "$SRC_APK" "release-artifacts/remote-inside-v${APP_VERSION}.apk"
           echo "build_kind=${BUILD_KIND}" >> "$GITHUB_OUTPUT"
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          APKSIGNER="$(find "$SDK_ROOT/build-tools" -maxdepth 2 -type f -name apksigner 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$APKSIGNER" ] || [ ! -x "$APKSIGNER" ]; then
+            echo "apksigner not found under $SDK_ROOT/build-tools"
+            exit 1
+          fi
+          "$APKSIGNER" verify --print-certs "release-artifacts/remote-inside-v${APP_VERSION}.apk"
 
       - name: Upload APK build artifact
         uses: actions/upload-artifact@v4

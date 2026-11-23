@@ -1,4 +1,4 @@
-# Remote Inside (v0.10.0)
+# Remote Inside (v0.10.1)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)** và **MacBook / PC** khi đi hiện trường.
 
@@ -15,15 +15,15 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.10.0.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.10.1.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
 3. Bật **VPN công ty**, mở biểu tượng app **Remote Inside** trên màn hình chính.
 4. Nếu trạng thái báo **Cần đăng nhập IAM**, chạm thẳng vào ô trạng thái (hoặc nút **Tiện ích** ở góc trên bên phải -> **Đăng nhập Inside (IAM)** / **Đăng nhập Port (FTTH NEW)**) để đăng nhập IAM trong trình duyệt bảo mật ngay bên trong app -> bấm **Xong** để quay lại thao tác ngay.
 
-> **Mẹo phát hành bản cập nhật `.apk` đè trực tiếp cho cả đội:**
-> Mặc định GitHub Actions tạo `.apk` debug ký sẵn để dùng ngay. Khi phát hành rộng rãi muốn mọi máy bấm **Cài đè (Update)** không cần gỡ bản cũ, cấu hình thêm 4 **Repository Secrets** trong GitHub (`ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) để CI tự xuất bản Release có chữ ký cố định.
+> **Cập nhật đè trực tiếp từ bản v0.10.1 trở đi:**
+> Các bản phát hành từ `v0.10.1` trở lên đều được ký bằng khóa Release cố định (`remoteinside`) trên GitHub Actions, nên mọi máy cài về sau chỉ cần tải file `.apk` mới về bấm **Cập nhật (Cài đè)** không cần gỡ bản cũ. *(Riêng máy nào đang cài bản thử `v0.10.0` dạng debug cần gỡ `v0.10.0` một lần duy nhất trước khi cài `v0.10.1`.)*
 
 ---
 

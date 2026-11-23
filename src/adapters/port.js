@@ -118,39 +118,192 @@ export function clearPortContractCache(rawContractId) {
   }
 }
 
+let cachedMvcPortToken = '';
+
+function safeDecodeToken(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  try {
+    return decodeURIComponent(raw).trim();
+  } catch {
+    return raw.trim();
+  }
+}
+
+export function parseMvcPortTokenFromCookieString(rawCookies) {
+  if (!rawCookies || typeof rawCookies !== 'string') {
+    return '';
+  }
+  let baseMatch = '';
+  let suffixedMatch = '';
+  for (const part of rawCookies.split(';')) {
+    const trimmed = part.trim();
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx <= 0) continue;
+    const name = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    if (!val) continue;
+    if (name === 'MVCPORT_TOKEN') {
+      baseMatch = safeDecodeToken(val);
+    } else if (name.indexOf('MVCPORT_TOKEN_') === 0) {
+      suffixedMatch = safeDecodeToken(val);
+    }
+  }
+  return suffixedMatch || baseMatch || '';
+}
+
+export function extractMvcPortTokenFromText(text) {
+  if (!text || typeof text !== 'string') {
+    return '';
+  }
+  const m = text.match(/https?:\/\/mvcport\.fpt\.net\/[^"'<>\s]*?[?&]Token=([^"'&<>\s#]+)/i);
+  if (!m || !m[1]) return '';
+  return safeDecodeToken(m[1]);
+}
+
+function readTokenFromPortLocation(loc) {
+  try {
+    if (!loc) return '';
+    const host = String(loc.hostname || '').toLowerCase();
+    if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
+      return '';
+    }
+    const sp = new URLSearchParams(loc.search || '');
+    return safeDecodeToken(sp.get('Token') || sp.get('token') || '');
+  } catch {
+    return '';
+  }
+}
+
+function readTokenFromPortFrame(win) {
+  try {
+    if (!win || !win.location) return '';
+    const host = String(win.location.hostname || '').toLowerCase();
+    if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
+      return '';
+    }
+    const locToken = readTokenFromPortLocation(win.location);
+    if (locToken) return locToken;
+
+    const doc = win.document;
+    if (!doc) return '';
+
+    const cookieToken = parseMvcPortTokenFromCookieString(
+      typeof doc.cookie === 'string' ? doc.cookie : ''
+    );
+    if (cookieToken) return cookieToken;
+
+    const candidates = doc.querySelectorAll(
+      'a[href*="mvcport.fpt.net"], a[href*="Token="], [onclick*="mvcport.fpt.net"], [onclick*="Token="]'
+    );
+    for (const node of candidates) {
+      const hrefAttr = node.getAttribute('href') || '';
+      const onclickAttr = node.getAttribute('onclick') || '';
+      const extracted =
+        extractMvcPortTokenFromText(hrefAttr) ||
+        extractMvcPortTokenFromText(onclickAttr) ||
+        extractMvcPortTokenFromText(node.href || '');
+      if (extracted) return extracted;
+      if (node.href) {
+        try {
+          const u = new URL(node.href);
+          if (u.hostname.toLowerCase().endsWith('mvcport.fpt.net')) {
+            const qTok = safeDecodeToken(u.searchParams.get('Token') || u.searchParams.get('token') || '');
+            if (qTok) return qTok;
+          }
+        } catch {
+          // ignore invalid href URL
+        }
+      }
+    }
+
+    if (host.endsWith('port.fpt.net') && doc.documentElement) {
+      const htmlToken = extractMvcPortTokenFromText(doc.documentElement.innerHTML || '');
+      if (htmlToken) return htmlToken;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
 function getMvcPortTokenFromPage() {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return '';
   }
   try {
     const host = (window.location && window.location.hostname ? window.location.hostname : '').toLowerCase();
-    if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
-      return '';
-    }
-    const rawCookies = typeof document.cookie === 'string' ? document.cookie : '';
-    if (!rawCookies) return '';
-    let baseMatch = '';
-    let suffixedMatch = '';
-    for (const part of rawCookies.split(';')) {
-      const trimmed = part.trim();
-      const eqIdx = trimmed.indexOf('=');
-      if (eqIdx <= 0) continue;
-      const name = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim();
-      if (!val) continue;
-      if (name === 'MVCPORT_TOKEN') {
-        baseMatch = decodeURIComponent(val);
-      } else if (name.indexOf('MVCPORT_TOKEN_') === 0) {
-        suffixedMatch = decodeURIComponent(val);
+    if (host === 'fpt.net' || host.endsWith('.fpt.net')) {
+      const docToken = parseMvcPortTokenFromCookieString(
+        typeof document.cookie === 'string' ? document.cookie : ''
+      );
+      if (docToken) {
+        cachedMvcPortToken = docToken;
+        return docToken;
+      }
+      try {
+        if (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.document) {
+          const unsafeToken = parseMvcPortTokenFromCookieString(
+            typeof unsafeWindow.document.cookie === 'string' ? unsafeWindow.document.cookie : ''
+          );
+          if (unsafeToken) {
+            cachedMvcPortToken = unsafeToken;
+            return unsafeToken;
+          }
+        }
+      } catch {
+        // ignore unsafeWindow cookie access errors
       }
     }
-    return suffixedMatch || baseMatch || '';
+
+    const locToken = readTokenFromPortLocation(window.location);
+    if (locToken) {
+      cachedMvcPortToken = locToken;
+      return locToken;
+    }
+
+    const roots = [window];
+    try {
+      if (window.top) roots.push(window.top);
+    } catch {
+      // ignore cross-origin top access
+    }
+    try {
+      if (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.top) {
+        roots.push(unsafeWindow.top);
+      }
+    } catch {
+      // ignore cross-origin unsafeWindow top access
+    }
+
+    const visited = new Set();
+    for (const rootWin of roots) {
+      const windowsToCheck = [rootWin];
+      try {
+        const frameCount = rootWin && rootWin.frames ? Math.min(rootWin.frames.length, 12) : 0;
+        for (let i = 0; i < frameCount; i += 1) {
+          windowsToCheck.push(rootWin.frames[i]);
+        }
+      } catch {
+        // ignore cross-origin frame list
+      }
+      for (const candidateWin of windowsToCheck) {
+        if (!candidateWin || visited.has(candidateWin)) continue;
+        visited.add(candidateWin);
+        const frameToken = readTokenFromPortFrame(candidateWin);
+        if (frameToken) {
+          cachedMvcPortToken = frameToken;
+          return frameToken;
+        }
+      }
+    }
+
+    return cachedMvcPortToken || '';
   } catch {
-    return '';
+    return cachedMvcPortToken || '';
   }
 }
 
-function buildPortUrl(rawUrl) {
+export function buildPortUrl(rawUrl) {
   const token = getMvcPortTokenFromPage();
   if (!token) return rawUrl;
   try {
@@ -165,7 +318,7 @@ function buildPortUrl(rawUrl) {
   }
 }
 
-function detectPortSessionExpired(res, requestedUrl) {
+export function detectPortSessionExpired(res, requestedUrl) {
   const status = (res && res.status) || 0;
   const finalUrl = (res && res.finalUrl) || '';
   const body = (res && res.responseText) || '';
@@ -185,7 +338,13 @@ function detectPortSessionExpired(res, requestedUrl) {
       reason: 'Phiên đăng nhập port.fpt.net đã chuyển về trang LoginPage.aspx.',
     };
   }
-  if (/Hết thời gian làm việc|Vui lòng Refesh/i.test(body)) {
+  const trimmedBody = body.trim();
+  const looksHtmlPage = /<(?:!doctype|html|head|body|script|div|select|input|table)\b/i.test(trimmedBody);
+  if (
+    !looksHtmlPage &&
+    trimmedBody.length < 500 &&
+    /Hết thời gian làm việc|Vui lòng Refesh/i.test(trimmedBody)
+  ) {
     return {
       expired: true,
       reason: 'Máy chủ Port báo hết thời gian làm việc (cần đăng nhập lại port.fpt.net).',
@@ -194,7 +353,14 @@ function detectPortSessionExpired(res, requestedUrl) {
   return { expired: false, reason: '' };
 }
 
-async function portRequest({ url, method = 'POST', data = null, headers = PORT_AJAX_HEADERS, timeout = 15000 }) {
+async function portRequest({
+  url,
+  method = 'POST',
+  data = null,
+  headers = PORT_AJAX_HEADERS,
+  timeout = 15000,
+  _didBootstrap = false,
+}) {
   const targetUrl = buildPortUrl(url);
   const res = await requestPortal({ url: targetUrl, method, data, headers, timeout });
 
@@ -210,11 +376,35 @@ async function portRequest({ url, method = 'POST', data = null, headers = PORT_A
 
   const expiredCheck = detectPortSessionExpired(res, targetUrl);
   if (expiredCheck.expired) {
+    if (!_didBootstrap && url !== PORT_ENDPOINTS.indexPage) {
+      const token = getMvcPortTokenFromPage();
+      if (token) {
+        const warmUrl = buildPortUrl(PORT_ENDPOINTS.indexPage);
+        const warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
+        if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
+          return portRequest({ url, method, data, headers, timeout, _didBootstrap: true });
+        }
+      }
+    }
+    if (_didBootstrap) {
+      cachedMvcPortToken = '';
+    }
+    let onLoggedInPortHost = false;
+    try {
+      if (typeof window !== 'undefined' && window.location) {
+        const h = String(window.location.hostname || '').toLowerCase();
+        const p = String(window.location.pathname || '');
+        onLoggedInPortHost = h === 'port.fpt.net' && !/LoginPage\.aspx/i.test(p);
+      }
+    } catch {
+      onLoggedInPortHost = false;
+    }
     return {
       ok: false,
       statusType: 'iam_expired',
-      message:
-        'Phiên đăng nhập Port (port.fpt.net) đã hết hạn. Bấm nút bên dưới để mở port.fpt.net đăng nhập lại (không cần F5 sau khi vào menu chính).',
+      message: onLoggedInPortHost
+        ? 'Bạn đã đăng nhập port.fpt.net nhưng phiên FTTH NEW (mvcport.fpt.net) chưa được kích hoạt. Hãy bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần để nạp phiên, rồi bấm thử lại (không cần đăng nhập lại hay F5).'
+        : 'Phiên đăng nhập Port (port.fpt.net) đã hết hạn hoặc chưa kích hoạt FTTH NEW. Bấm nút bên dưới để mở port.fpt.net đăng nhập rồi vào menu FTTH NEW → Hợp đồng → Tìm kiếm 1 lần (không cần F5).',
       loginUrl: PORTALS.port.url,
       res,
     };

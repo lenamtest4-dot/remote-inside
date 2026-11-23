@@ -52,6 +52,13 @@ export function detectIamRedirect({
     };
   }
 
+  if (/\/LoginPage\.aspx(?:\?|$|#)/i.test(finalUrl)) {
+    return {
+      expired: true,
+      reason: 'Trang đã chuyển hướng về màn hình đăng nhập (LoginPage.aspx).',
+    };
+  }
+
   if (typeof responseText === 'string' && responseText.length > 0) {
     if (LOGIN_PASSWORD_INPUT_RE.test(responseText) || LOGIN_TITLE_RE.test(responseText)) {
       return {
@@ -141,7 +148,7 @@ export function requestPortal({
 /**
  * Kiem tra nhanh tinh trang ket noi VPN & phien dang nhap IAM cua 1 cong cu.
  */
-export async function checkPortalSession(portal) {
+export async function checkPortalSession(portal, { checkUrlOverride = '' } = {}) {
   if (!portal || !portal.url) {
     return {
       state: 'offline',
@@ -160,7 +167,7 @@ export async function checkPortalSession(portal) {
     };
   }
 
-  const checkUrl = portal.sessionCheckUrl || portal.url;
+  const checkUrl = checkUrlOverride || portal.sessionCheckUrl || portal.url;
   const res = await requestPortal({ url: checkUrl, method: 'GET', timeout: 10000 });
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {

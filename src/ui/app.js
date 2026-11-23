@@ -53,12 +53,14 @@ import {
   validateBoxNewMac,
 } from '../adapters/inside.js';
 import {
+  buildPortUrl,
   fetchPortBranches,
   fetchPortConboxes,
   fetchPortContractContext,
   fetchPortHistory,
   fetchPortPops,
   fetchPortSlotList,
+  parseMvcPortTokenFromCookieString,
 } from '../adapters/port.js';
 import { executePortalAction } from '../adapters/portals.js';
 
@@ -329,7 +331,22 @@ export function mountRemoteInside({
       detail: '',
     };
     syncSessionPillOrRenderMain();
-    const checked = await checkPortalSession(portal);
+    const checkUrlOverride =
+      portal.id === 'port' && portal.sessionCheckUrl
+        ? buildPortUrl(portal.sessionCheckUrl)
+        : '';
+    const checked = await checkPortalSession(portal, { checkUrlOverride });
+    if (
+      portal.id === 'port' &&
+      checked.state === 'iam_expired' &&
+      currentHost === 'port.fpt.net' &&
+      pageWindow &&
+      pageWindow.location &&
+      !/LoginPage\.aspx/i.test(pageWindow.location.pathname || '')
+    ) {
+      checked.detail =
+        'Bạn đã vào port.fpt.net nhưng FTTH NEW (mvcport.fpt.net) chưa kích hoạt. Bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm lại vào ô trạng thái này.';
+    }
     if (state.activePortalId === portal.id) {
       state.sessionStatus = checked;
       syncSessionPillOrRenderMain();
@@ -1716,27 +1733,11 @@ export function mountRemoteInside({
             win && win.location && win.location.hostname
               ? String(win.location.hostname).toLowerCase()
               : '';
-          if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
+          if (host !== 'fpt.net' && !host.endsWith('.fpt.net')) {
             return '';
           }
           const rawCookies = doc && typeof doc.cookie === 'string' ? doc.cookie : '';
-          if (!rawCookies) return '';
-          let baseMatch = '';
-          let suffixedMatch = '';
-          for (const part of rawCookies.split(';')) {
-            const trimmed = part.trim();
-            const eqIdx = trimmed.indexOf('=');
-            if (eqIdx <= 0) continue;
-            const name = trimmed.slice(0, eqIdx).trim();
-            const val = trimmed.slice(eqIdx + 1).trim();
-            if (!val) continue;
-            if (name === 'MVCPORT_TOKEN') {
-              baseMatch = decodeURIComponent(val);
-            } else if (name.indexOf('MVCPORT_TOKEN_') === 0) {
-              suffixedMatch = decodeURIComponent(val);
-            }
-          }
-          return suffixedMatch || baseMatch || '';
+          return parseMvcPortTokenFromCookieString(rawCookies);
         } catch {
           return '';
         }

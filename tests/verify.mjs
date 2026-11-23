@@ -66,12 +66,16 @@ import {
 } from '../src/adapters/inside.js';
 import {
   PORT_ENDPOINTS,
+  buildPortUrl,
   decodeHtmlEntities,
+  detectPortSessionExpired,
+  extractMvcPortTokenFromText,
   fetchPortContractContext,
   fetchPortHistory,
   fetchPortSlotList,
   parseConboxParamsFromLibJs,
   parseDropdownOptions,
+  parseMvcPortTokenFromCookieString,
   parsePortContractDetailHtml,
   parsePortHistoryRows,
   parsePortMutationResponse,
@@ -138,8 +142,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.8.0'),
-    'Userscript must bump @version to 0.8.0'
+    userscriptContent.includes('@version      0.8.1'),
+    'Userscript must bump @version to 0.8.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1331,6 +1335,103 @@ async function runTests() {
   assert.equal(portSerialized.includes('secret123'), false, 'Must strip frame query value');
   assert.equal(portSerialized.includes('VTAAR2393'), false, 'Must redact contract token');
   assert.equal(portSerialized.includes('abc'), false, 'Must strip link query value');
+
+  const validMvcHtmlWithInlineError =
+    '<html><body><input id="h_id" value="155123602" />' +
+    '<script>Message("Hết thời gian làm việc. Vui lòng Refesh (hoặc F5) lại trang để tiếp tục", "Thông báo");</' +
+    'script></body></html>';
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 200,
+        finalUrl: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/155123602',
+        responseText: validMvcHtmlWithInlineError,
+      },
+      'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/155123602'
+    ).expired,
+    false,
+    'Valid mvcport HTML containing dormant inline JS timeout message must not flag expired'
+  );
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 200,
+        finalUrl: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
+        responseText: '"Hết thời gian làm việc. Vui lòng Refesh"',
+      },
+      'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search'
+    ).expired,
+    true,
+    'Short non-HTML timeout text response must flag expired'
+  );
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 200,
+        finalUrl: 'http://port.fpt.net/LoginPage.aspx',
+        responseText: '<html></html>',
+      },
+      'http://mvcport.fpt.net/ftth_newport/contract/index'
+    ).expired,
+    true,
+    'Redirect to LoginPage.aspx must flag expired'
+  );
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 401,
+        finalUrl: 'http://mvcport.fpt.net/Location/LocationID',
+        responseText: '',
+      },
+      'http://mvcport.fpt.net/Location/LocationID'
+    ).expired,
+    true,
+    'HTTP 401 on mvcport must flag expired'
+  );
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 403,
+        finalUrl: 'http://mvcport.fpt.net/Location/LocationID',
+        responseText: '',
+      },
+      'http://mvcport.fpt.net/Location/LocationID'
+    ).expired,
+    true,
+    'HTTP 403 on mvcport must flag expired'
+  );
+  assert.equal(
+    detectIamRedirect({
+      status: 200,
+      finalUrl: 'http://port.fpt.net/LoginPage.aspx',
+      requestedUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
+      responseText: '<html></html>',
+    }).expired,
+    true,
+    'detectIamRedirect must flag redirect to /LoginPage.aspx'
+  );
+  assert.equal(
+    parseMvcPortTokenFromCookieString('MVCPORT_COOKIE_V2_PROD=1; MVCPORT_TOKEN=oldTok; MVCPORT_TOKEN_PROD=new%2BTok'),
+    'new+Tok'
+  );
+  assert.equal(
+    parseMvcPortTokenFromCookieString('MVCPORT_COOKIE_V2=1; MVCPORT_TOKEN=legacyTok'),
+    'legacyTok'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText('<a href="http://mvcport.fpt.net/ftth_newport/contract/index?Token=abc%2B123&x=1">Tìm kiếm</a>'),
+    'abc+123'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText('<a href="http://other.fpt.net/?Token=shouldIgnore">x</a>'),
+    ''
+  );
+  assert.equal(typeof buildPortUrl, 'function');
+  assert.ok(userscriptContent.includes('looksHtmlPage'), 'Userscript bundle must include looksHtmlPage');
+  assert.ok(
+    userscriptContent.includes('parseMvcPortTokenFromCookieString'),
+    'Userscript bundle must include parseMvcPortTokenFromCookieString'
+  );
   console.log('   OK: port.fpt.net adapter tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');

@@ -1,4 +1,4 @@
-# Remote Inside (v0.8.0)
+# Remote Inside (v0.8.1)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **điện thoại Android** và **MacBook** khi đi hiện trường.
 

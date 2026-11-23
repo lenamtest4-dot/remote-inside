@@ -36,6 +36,7 @@ import {
   extractFramesAndLinksFromHtml,
   extractInlineScriptsSanitized,
   extractNextAppChunkUrls,
+  extractSpaChunkUrls,
   scanPageStructure,
 } from '../core/inspector.js';
 import {
@@ -1538,10 +1539,17 @@ export function mountRemoteInside({
       });
 
       const VENDOR_SCRIPT_RE =
-        /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill)/i;
+        /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill|fullcalendar|vuetify|iconify|mdi)/i;
+      const perfEntries =
+        pageWindow &&
+        pageWindow.performance &&
+        typeof pageWindow.performance.getEntriesByType === 'function'
+          ? pageWindow.performance.getEntriesByType('resource')
+          : [];
       const candidateScriptUrls = [
         ...(Array.isArray(apiHints.scriptUrls) ? apiHints.scriptUrls : []),
         ...extractNextAppChunkUrls(htmlText, pageHref),
+        ...extractSpaChunkUrls(htmlText, pageHref, perfEntries),
       ];
       const seenScripts = new Set();
       const customScriptUrls = [];
@@ -1556,13 +1564,13 @@ export function mountRemoteInside({
           }
           seenScripts.add(parsed.href);
           customScriptUrls.push(parsed.href);
-          if (customScriptUrls.length >= 4) break;
+          if (customScriptUrls.length >= 35) break;
         } catch {
           // skip malformed script URL
         }
       }
 
-      const jsSnippets = [];
+      const collectedSnippets = [];
       if (isUserscriptEnv() && customScriptUrls.length > 0) {
         const settled = await Promise.allSettled(
           customScriptUrls.map((url) => requestPortal({ url, method: 'GET', timeout: 10000 }))
@@ -1571,7 +1579,7 @@ export function mountRemoteInside({
           const cUrl = customScriptUrls[i];
           const item = settled[i];
           const res = item && item.status === 'fulfilled' ? item.value : null;
-          if (!res || !res.ok || !res.responseText || res.responseText.length > 1.2 * 1024 * 1024) {
+          if (!res || !res.ok || !res.responseText || res.responseText.length > 1.5 * 1024 * 1024) {
             continue;
           }
           let jsOrigin = origin;
@@ -1583,19 +1591,28 @@ export function mountRemoteInside({
           } catch {
             // keep defaults
           }
-          jsSnippets.push({
-            origin: jsOrigin,
-            pathname: jsPath,
-            apiHints: extractApiHintsFromJs(res.responseText, contractId),
-            codeContexts: extractCodeContextsFromJs(
-              res.responseText,
-              /(?:ajax|fetch|post|get|bypass|contract|camera|recall|radius|save|update|delete|search|check|submit|url\s*:)/i,
-              contractId,
-              { maxContexts: 18, radius: 220 }
-            ),
-          });
+          const chunkApiHints = extractApiHintsFromJs(res.responseText, contractId);
+          const codeContexts = extractCodeContextsFromJs(
+            res.responseText,
+            /(?:\/api\/|x-resource-grant|resource-grant|clear[-_]?mac|update[-_]?online|\/status\/|\/equipment\/|\/contract\/|\/record\/|\/ticket|\/deployment|getContract|reveal-phone|ajax|bypass|camera|recall|radius)/i,
+            contractId,
+            { maxTotal: 14000, maxContexts: 24, radius: 260 }
+          );
+          if (chunkApiHints.length > 0 || codeContexts.length > 0) {
+            collectedSnippets.push({
+              score: chunkApiHints.length * 3 + codeContexts.length * 2,
+              snippet: {
+                origin: jsOrigin,
+                pathname: jsPath,
+                apiHints: chunkApiHints,
+                codeContexts,
+              },
+            });
+          }
         }
       }
+      collectedSnippets.sort((a, b) => b.score - a.score);
+      const jsSnippets = collectedSnippets.slice(0, 16).map((entry) => entry.snippet);
 
       state.deepScan = {
         scanKind: 'current_page_v1',

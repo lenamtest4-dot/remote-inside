@@ -39,6 +39,7 @@ import {
   extractMatchingFunctionsFromJs,
   extractNextAppChunkUrls,
   extractOpsMenuFromLeftAsp,
+  extractSpaChunkUrls,
   redactHeaders,
   redactPayload,
   redactResponseStructure,
@@ -2095,6 +2096,65 @@ async function runTests() {
     false,
     'scanPageStructure must only collect storage key names, never values'
   );
+
+  const redactedResourceHeaders = redactHeaders({
+    'x-resource-grant': 'Fe26.2**secret-grant-value',
+    accept: 'application/json',
+  });
+  assert.deepEqual(redactedResourceHeaders, { accept: 'application/json' });
+  const resourceAuthHints = summarizeSensitiveHeaders({
+    'x-resource-grant': 'Fe26.2**secret-grant-value',
+    accept: 'application/json',
+  });
+  assert.deepEqual(resourceAuthHints, {
+    sensitiveHeaderNames: ['x-resource-grant'],
+    authScheme: '',
+  });
+  assert.equal(
+    JSON.stringify({ redactedResourceHeaders, resourceAuthHints }).includes('secret-grant-value'),
+    false,
+    'x-resource-grant value must never appear in redacted headers or authHints'
+  );
+
+  const sampleMinifiedJs =
+    'async function a(e){return fetch("/app/tkbt/tk/api/equipment/clear-mac",{method:"POST",headers:{"x-resource-grant":e},body:JSON.stringify({Contract:"SGN123456"})})}';
+  const contextsFromOpts = extractCodeContextsFromJs(
+    sampleMinifiedJs,
+    /\/api\/|x-resource-grant/i,
+    'SGN123456',
+    { maxTotal: 4000, maxContexts: 10, radius: 180 }
+  );
+  assert.ok(
+    contextsFromOpts.length >= 1,
+    'extractCodeContextsFromJs must support options object and return contexts'
+  );
+  assert.ok(
+    contextsFromOpts[0].includes('/api/equipment/clear-mac') &&
+      contextsFromOpts[0].includes('x-resource-grant') &&
+      !contextsFromOpts[0].includes('SGN123456'),
+    'extractCodeContextsFromJs must preserve endpoint context and redact contractId'
+  );
+
+  const spaHtmlChunks = extractSpaChunkUrls(
+    `
+      <link rel="modulepreload" as="script" href="/app/tkbt/tk/_nuxt/ticket.js">
+      <link href="/app/tkbt/tk/_nuxt/vuetify-core.js" rel="preload">
+      <link rel="stylesheet" href="/app/tkbt/tk/_nuxt/main.css">
+      <script src="/app/tkbt/tk/_nuxt/entry.js?v=123"></script>
+      <script src="https://cdn.example.com/other-origin.js"></script>
+    `,
+    'https://fox-erp.fpt.net/app/tkbt/tk/ticket?q=1',
+    [
+      { name: 'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/ticket.js' },
+      { name: 'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/complete-modal.mjs' },
+      { name: 'https://other.fpt.net/app/cross-origin.js' },
+    ]
+  );
+  assert.deepEqual(spaHtmlChunks, [
+    'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/ticket.js',
+    'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/entry.js?v=123',
+    'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/complete-modal.mjs',
+  ]);
   console.log('   OK: FOX-ERP / Partner SPA Scanner & Recorder checks passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');

@@ -4,7 +4,7 @@
  */
 
 export const SENSITIVE_HEADER_RE =
-  /^(authorization|cookie|set-cookie|x-csrf-token|x-xsrf-token|x-auth-token|api-key|x-api-key|proxy-authorization)$/i;
+  /^(authorization|cookie|set-cookie|x-csrf-token|x-xsrf-token|x-auth-token|x-resource-grant|api-key|x-api-key|proxy-authorization)$/i;
 
 export const SENSITIVE_KEY_RE =
   /(pass|pwd|secret|token|cookie|auth|otp|pin|phone|mobile|sdt|tel|cmnd|cccd|id_card|identity|email|mail|address|dia_chi|customer_name|fullname|ho_ten|ten_kh)/i;
@@ -1651,6 +1651,98 @@ export function extractMatchingFunctionsFromJs(
 const DEFAULT_JS_CONTEXT_RE =
   /(?:fetch\s*\(|axios\.|\/api\/|connection-parameters|online-session|OLT|oltName|slot|port|ObjID|ipnat|ipv6)/gi;
 
+const SPA_VENDOR_CHUNK_RE =
+  /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill|fullcalendar|vuetify|iconify|mdi)/i;
+
+/**
+ * Trich xuat danh sach chunk JS/MJS cung origin tu HTML (<link modulepreload>, <script src>) va PerformanceResourceTiming.
+ */
+export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
+  let baseOrigin = '';
+  if (baseUrl) {
+    try {
+      baseOrigin = new URL(baseUrl).origin;
+    } catch {
+      baseOrigin = '';
+    }
+  }
+
+  const urls = [];
+  const seen = new Set();
+
+  function addCandidate(rawUrl) {
+    if (!rawUrl || typeof rawUrl !== 'string' || urls.length >= 35) {
+      return;
+    }
+    const trimmed = rawUrl.trim();
+    if (!trimmed || /^\s*(?:javascript:|data:|blob:)/i.test(trimmed)) {
+      return;
+    }
+    try {
+      const parsed = baseUrl ? new URL(trimmed, baseUrl) : new URL(trimmed);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return;
+      }
+      if (baseOrigin && parsed.origin !== baseOrigin) {
+        return;
+      }
+      if (!/\.(?:m?js)$/i.test(parsed.pathname || '')) {
+        return;
+      }
+      if (SPA_VENDOR_CHUNK_RE.test(parsed.pathname || '')) {
+        return;
+      }
+      if (!seen.has(parsed.href)) {
+        seen.add(parsed.href);
+        urls.push(parsed.href);
+      }
+    } catch {
+      // Bo qua URL khong hop le
+    }
+  }
+
+  if (typeof htmlText === 'string' && htmlText) {
+    const cleanedHtml = htmlText.replace(
+      new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+      ' '
+    );
+    const linkRe = /<link\b([^>]*)>/gi;
+    let lm;
+    while ((lm = linkRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+      const attrs = lm[1] || '';
+      const rel = getAttrValue(attrs, 'rel');
+      if (!/\b(?:modulepreload|preload|prefetch)\b/i.test(rel)) {
+        continue;
+      }
+      const href = getAttrValue(attrs, 'href');
+      if (href) {
+        addCandidate(href);
+      }
+    }
+
+    const scriptTagRe = /<script\b([^>]*)>/gi;
+    let sm;
+    while ((sm = scriptTagRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+      const src = getAttrValue(sm[1] || '', 'src');
+      if (src) {
+        addCandidate(src);
+      }
+    }
+  }
+
+  if (Array.isArray(perfEntries)) {
+    for (const entry of perfEntries) {
+      if (urls.length >= 35) break;
+      const rawName = typeof entry === 'string' ? entry : entry && entry.name;
+      if (typeof rawName === 'string' && rawName) {
+        addCandidate(rawName);
+      }
+    }
+  }
+
+  return urls;
+}
+
 /**
  * Trich xuat URL Next.js App Router chunk (app/public/partial/.../page-*.js) tu HTML/RSC payload.
  */
@@ -1693,11 +1785,19 @@ export function extractCodeContextsFromJs(
   jsText,
   keywordRe = DEFAULT_JS_CONTEXT_RE,
   contractId = '',
-  maxTotal = 10000
+  maxTotalOrOpts = 10000
 ) {
   if (!jsText || typeof jsText !== 'string') {
     return [];
   }
+  const opts =
+    typeof maxTotalOrOpts === 'object' && maxTotalOrOpts !== null
+      ? maxTotalOrOpts
+      : { maxTotal: Number(maxTotalOrOpts) || 10000 };
+  const maxTotal = Math.max(500, Number(opts.maxTotal) || 10000);
+  const maxContexts = Math.max(1, Number(opts.maxContexts) || 30);
+  const radius = Math.max(80, Number(opts.radius) || 220);
+
   const baseRe = keywordRe instanceof RegExp ? keywordRe : DEFAULT_JS_CONTEXT_RE;
   const flags = baseRe.flags.includes('g') ? baseRe.flags : `${baseRe.flags}g`;
   const re = new RegExp(baseRe.source, flags);
@@ -1705,17 +1805,18 @@ export function extractCodeContextsFromJs(
   const contexts = [];
   let remaining = maxTotal;
   let lastCenter = -1000;
+  const minSpacing = Math.max(160, Math.floor(radius * 0.9));
   let m;
 
-  while ((m = re.exec(jsText)) !== null && remaining > 0 && contexts.length < 30) {
-    if (m.index - lastCenter < 240) {
+  while ((m = re.exec(jsText)) !== null && remaining > 0 && contexts.length < maxContexts) {
+    if (m.index - lastCenter < minSpacing) {
       continue;
     }
     lastCenter = m.index;
-    const start = Math.max(0, m.index - 140);
-    const end = Math.min(jsText.length, m.index + 240);
+    const start = Math.max(0, m.index - Math.floor(radius * 0.65));
+    const end = Math.min(jsText.length, m.index + radius);
     const slice = jsText.slice(start, end);
-    const cleaned = sanitizeCodeSnippet(slice, contractId, Math.min(420, remaining));
+    const cleaned = sanitizeCodeSnippet(slice, contractId, Math.min(radius * 2, remaining));
     if (cleaned) {
       contexts.push(cleaned);
       remaining -= cleaned.length;

@@ -281,6 +281,54 @@ export function parseInsideLookupPayload({
     });
   }
 
+  const embeddedViews = [];
+  if (objID !== null && objID !== undefined && objID !== '') {
+    const encodedObjId = encodeURIComponent(objID);
+    const encodedQuery = encodeURIComponent(accountName || contractCode);
+    embeddedViews.push(
+      {
+        id: 'radius_params',
+        title: 'Thông số kết nối',
+        badge: 'Radius',
+        url: `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodedObjId}`,
+        defaultOpen: true,
+        height: 480,
+      },
+      {
+        id: 'radius_online',
+        title: 'Online Connections',
+        badge: 'Phiên mạng',
+        url: `http://radius-portal.fpt.net/public/partial/online-session?query=${encodedQuery}`,
+        defaultOpen: true,
+        height: 250,
+      },
+      {
+        id: 'radius_errors',
+        title: 'Last Access Errors',
+        badge: 'Lịch sử lỗi',
+        url: `http://radius-portal.fpt.net/public/partial/last-access-error?query=${encodedQuery}`,
+        defaultOpen: false,
+        height: 250,
+      },
+      {
+        id: 'iptv',
+        title: 'IPTV',
+        badge: 'Nếu có dùng',
+        url: `http://mvc.inside.fpt.net/iptvinfo/infobox?objid=${encodedObjId}`,
+        defaultOpen: false,
+        height: 360,
+      },
+      {
+        id: 'camera',
+        title: 'FPT Camera',
+        badge: 'Nếu có dùng',
+        url: `http://mvc.inside.fpt.net/iptvinfo/infocamera?objid=${encodedObjId}`,
+        defaultOpen: false,
+        height: 340,
+      }
+    );
+  }
+
   return {
     status: 'ok',
     mode: 'live',
@@ -290,6 +338,7 @@ export function parseInsideLookupPayload({
     accountName,
     summaryFields,
     extraSections,
+    embeddedViews,
   };
 }
 
@@ -388,11 +437,6 @@ async function lookupInsideLive(contractId) {
   }
 
   const objID = matchedRow.ID ?? null;
-  const initialAccount =
-    nonEmptyStr(matchedRow.Name) ||
-    nonEmptyStr(matchedRow.Account) ||
-    nonEmptyStr(matchedRow.UserName) ||
-    nonEmptyStr(matchedRow.Name1);
 
   const taskMap = {
     objectType: objID
@@ -408,13 +452,6 @@ async function lookupInsideLive(contractId) {
     information: objID
       ? fetchInsideEndpoint(`${ep.information}?objID=${encodeURIComponent(objID)}`, false)
       : Promise.resolve(null),
-    radiusParams: objID
-      ? fetchInsideEndpoint(`${ep.radiusParams}?ObjID=${encodeURIComponent(objID)}`, true)
-      : Promise.resolve(null),
-    radiusOnline: fetchInsideEndpoint(
-      `${ep.radiusOnline}?query=${encodeURIComponent(initialAccount || contractId)}`,
-      true
-    ),
   };
 
   const keys = Object.keys(taskMap);
@@ -435,8 +472,6 @@ async function lookupInsideLive(contractId) {
         ? values.statusRadius.json
         : null,
     infoJson: values.information && values.information.json,
-    connPartialHtml: (values.radiusParams && values.radiusParams.text) || '',
-    sessionPartialHtml: (values.radiusOnline && values.radiusOnline.text) || '',
   });
 
   INSIDE_CONTRACT_CACHE.set(contractId, {
@@ -465,6 +500,58 @@ function buildInsideMockResult(actionId, contractId) {
           { label: 'Phiên PPPoE', value: 'Đang giữ phiên • 1 giờ 42 phút' },
           { label: 'Trạng thái OSP', value: 'Đã đồng bộ port bình thường' },
           { label: 'Nguồn dữ liệu', value: 'Dữ liệu mô phỏng (chưa bật VPN/Userscript)' },
+        ],
+        embeddedViews: [
+          {
+            id: 'radius_params',
+            title: 'Thông số kết nối',
+            badge: 'Radius',
+            url: '',
+            defaultOpen: true,
+            height: 480,
+            demoNote:
+              'Khi bật VPN và cài Tampermonkey, khung này sẽ tải trực tiếp dữ liệu thật từ radius-portal.fpt.net (Tín hiệu quang, Hạ tầng OLT, Modem, IPv6/CoA).',
+          },
+          {
+            id: 'radius_online',
+            title: 'Online Connections',
+            badge: 'Phiên mạng',
+            url: '',
+            defaultOpen: true,
+            height: 250,
+            demoNote:
+              'Khi bật VPN và cài Tampermonkey, khung này sẽ tải trực tiếp phiên kết nối đang online từ radius-portal.fpt.net (BRAS, IPNAT, IPv6 PD, MAC online).',
+          },
+          {
+            id: 'radius_errors',
+            title: 'Last Access Errors',
+            badge: 'Lịch sử lỗi',
+            url: '',
+            defaultOpen: false,
+            height: 250,
+            demoNote:
+              'Khi bật VPN và cài Tampermonkey, khung này sẽ tải trực tiếp lịch sử lỗi truy cập gần nhất từ radius-portal.fpt.net.',
+          },
+          {
+            id: 'iptv',
+            title: 'IPTV',
+            badge: 'Nếu có dùng',
+            url: '',
+            defaultOpen: false,
+            height: 360,
+            demoNote:
+              'Khi bật VPN và cài Tampermonkey, khung này sẽ tải trực tiếp thông tin dịch vụ & danh sách đầu thu IPTV từ mvc.inside.fpt.net.',
+          },
+          {
+            id: 'camera',
+            title: 'FPT Camera',
+            badge: 'Nếu có dùng',
+            url: '',
+            defaultOpen: false,
+            height: 340,
+            demoNote:
+              'Khi bật VPN và cài Tampermonkey, khung này sẽ tải trực tiếp danh sách thiết bị & gói Cloud FPT Camera từ mvc.inside.fpt.net.',
+          },
         ],
       };
     case 'reset_mac':

@@ -88,8 +88,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.2.1'),
-    'Userscript must bump @version to 0.2.1'
+    userscriptContent.includes('@version      0.3.0'),
+    'Userscript must bump @version to 0.3.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -452,6 +452,20 @@ function runTests() {
   assert.equal(parsedLookup.extraSections.length, 2);
   assert.equal(parsedLookup.extraSections[0].title, 'Thông số kết nối (Radius)');
   assert.equal(parsedLookup.extraSections[1].title, 'Phiên đang online (Radius)');
+  assert.equal(parsedLookup.embeddedViews.length, 5);
+  assert.deepEqual(
+    parsedLookup.embeddedViews.map((v) => v.id),
+    ['radius_params', 'radius_online', 'radius_errors', 'iptv', 'camera']
+  );
+  assert.deepEqual(
+    parsedLookup.embeddedViews.map((v) => v.defaultOpen),
+    [true, true, false, false, false]
+  );
+  assert.ok(parsedLookup.embeddedViews[0].url.includes('ObjID=9876543'));
+  assert.ok(parsedLookup.embeddedViews[1].url.includes('query=vth_demo_user'));
+  assert.ok(parsedLookup.embeddedViews[2].url.includes('query=vth_demo_user'));
+  assert.ok(parsedLookup.embeddedViews[3].url.includes('objid=9876543'));
+  assert.ok(parsedLookup.embeddedViews[4].url.includes('objid=9876543'));
 
   const numericAndFalseRadius = parseInsideLookupPayload({
     contractId: 'VTAAR2393',

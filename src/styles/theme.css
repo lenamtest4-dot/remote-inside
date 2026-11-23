@@ -92,6 +92,22 @@
   }
 }
 
+.ri-wide-btn {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .ri-wide-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ri-shell.is-wide {
+    max-width: 960px;
+  }
+}
+
 /* Thanh top-bar 52px dinh co dinh */
 .ri-topbar {
   position: sticky;
@@ -629,6 +645,127 @@
   font-size: 13px;
   font-weight: 700;
   color: var(--ink-muted);
+}
+
+/* Cac khoi nhung chi tiet 5 muc tu he thong */
+.ri-embed-group {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-crisp);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-embed-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ri-embed-toolbar-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-embed-toolbar-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.ri-embed-card {
+  border: 1px solid var(--border-crisp);
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  overflow: hidden;
+}
+
+.ri-embed-head {
+  min-height: 44px;
+  padding: 6px 10px;
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ri-embed-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ri-embed-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-embed-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.ri-embed-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.ri-embed-open-link,
+.ri-embed-toggle {
+  min-height: 32px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ri-embed-open-link:hover,
+.ri-embed-toggle:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-embed-toggle.is-open {
+  border-color: var(--accent-signal);
+  color: var(--accent-signal-hover);
+  background: var(--accent-signal-soft);
+}
+
+.ri-embed-body {
+  border-top: 1px solid var(--border-crisp);
+  background: #FFFFFF;
+}
+
+.ri-embed-frame {
+  width: 100%;
+  border: 0;
+  display: block;
+  background: #FFFFFF;
+}
+
+.ri-embed-demo {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--ink-muted);
+  background: var(--bg-canvas);
 }
 
 /* Nhat ky thao tac */

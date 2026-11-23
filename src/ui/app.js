@@ -141,6 +141,9 @@ export function mountRemoteInside({
     },
     result: null,
     logs: [],
+    isWide: false,
+    openViews: {},
+    viewReloadKeys: {},
     confirmAction: null,
     scannerOpen: false,
     domSnapshot: null,
@@ -277,6 +280,16 @@ export function mountRemoteInside({
     try {
       const res = await executePortalAction(portal.id, action.id, contractId);
       state.result = res;
+      if (Array.isArray(res.embeddedViews)) {
+        const nextOpen = {};
+        for (const v of res.embeddedViews) {
+          nextOpen[v.id] = Boolean(v.defaultOpen);
+        }
+        state.openViews = nextOpen;
+        state.viewReloadKeys = {};
+      } else {
+        state.openViews = {};
+      }
 
       const logKind =
         res.status === 'ok'
@@ -504,7 +517,10 @@ export function mountRemoteInside({
         for (const sUrl of extracted.scriptUrls || []) {
           if (seenScripts.has(sUrl)) continue;
           seenScripts.add(sUrl);
-          if (sUrl.includes('radius-portal.fpt.net')) {
+          if (/\/chunks\/(?:4bd1b696|1684|main-app|layout|loading)-/i.test(sUrl)) {
+            continue;
+          }
+          if (/IPTVInfoBox\.js|IPTVinfoCamera\.js|\/app\/.*\/page-.*\.js/i.test(sUrl)) {
             radiusScripts.push(sUrl);
           } else {
             otherScripts.push(sUrl);
@@ -625,6 +641,16 @@ export function mountRemoteInside({
       ]
     );
 
+    const wideBtn = el('button', {
+      type: 'button',
+      className: 'ri-icon-btn ri-wide-btn',
+      text: state.isWide ? 'Thu hẹp' : 'Mở rộng',
+      onClick: () => {
+        state.isWide = !state.isWide;
+        render();
+      },
+    });
+
     const scanBtn = el('button', {
       type: 'button',
       className: 'ri-icon-btn',
@@ -635,7 +661,7 @@ export function mountRemoteInside({
       },
     });
 
-    const rightControls = [pill, scanBtn];
+    const rightControls = [pill, wideBtn, scanBtn];
     if (!standalone) {
       rightControls.push(
         el('button', {
@@ -952,6 +978,125 @@ export function mountRemoteInside({
       children.push(el('div', { className: 'ri-result-actions' }, extraBtns));
     }
 
+    if (Array.isArray(res.embeddedViews) && res.embeddedViews.length > 0) {
+      const embedCards = res.embeddedViews.map((v) => {
+        const isOpen = Boolean(state.openViews[v.id]);
+        const reloadCount = state.viewReloadKeys[v.id] || 0;
+        const headButtons = [];
+
+        if (isOpen && v.url) {
+          headButtons.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-embed-open-link',
+              text: 'Tải lại',
+              onClick: () => {
+                state.viewReloadKeys[v.id] = reloadCount + 1;
+                render();
+              },
+            })
+          );
+        }
+
+        if (v.url) {
+          headButtons.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-embed-open-link',
+              text: 'Mở riêng',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(v.url, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+
+        headButtons.push(
+          el('button', {
+            type: 'button',
+            className: `ri-embed-toggle${isOpen ? ' is-open' : ''}`,
+            text: isOpen ? 'Thu gọn' : 'Mở xem',
+            onClick: () => {
+              state.openViews[v.id] = !isOpen;
+              render();
+            },
+          })
+        );
+
+        const cardParts = [
+          el('div', { className: 'ri-embed-head' }, [
+            el('div', { className: 'ri-embed-title-wrap' }, [
+              el('span', { className: 'ri-embed-title', text: v.title }),
+              v.badge ? el('span', { className: 'ri-embed-badge', text: v.badge }) : null,
+            ]),
+            el('div', { className: 'ri-embed-actions' }, headButtons),
+          ]),
+        ];
+
+        if (isOpen) {
+          if (v.url) {
+            const frameSrc =
+              reloadCount > 0
+                ? `${v.url}${v.url.includes('?') ? '&' : '?'}_ri=${reloadCount}`
+                : v.url;
+            const iframeEl = el('iframe', {
+              className: 'ri-embed-frame',
+              src: frameSrc,
+              loading: 'lazy',
+              title: v.title,
+            });
+            iframeEl.style.height = `${v.height || 320}px`;
+            cardParts.push(el('div', { className: 'ri-embed-body' }, [iframeEl]));
+          } else {
+            cardParts.push(
+              el('div', { className: 'ri-embed-body' }, [
+                el('div', {
+                  className: 'ri-embed-demo',
+                  text: v.demoNote || 'Chưa có đường dẫn ở chế độ xem thử.',
+                }),
+              ])
+            );
+          }
+        }
+
+        return el('div', { className: 'ri-embed-card' }, cardParts);
+      });
+
+      children.push(
+        el('div', { className: 'ri-embed-group' }, [
+          el('div', { className: 'ri-embed-toolbar' }, [
+            el('span', {
+              className: 'ri-embed-toolbar-title',
+              text: `Chi tiết từ hệ thống (${res.embeddedViews.length} mục)`,
+            }),
+            el('div', { className: 'ri-embed-toolbar-btns' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Mở tất cả',
+                onClick: () => {
+                  for (const v of res.embeddedViews) state.openViews[v.id] = true;
+                  render();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Thu gọn tất cả',
+                onClick: () => {
+                  for (const v of res.embeddedViews) state.openViews[v.id] = false;
+                  render();
+                },
+              }),
+            ]),
+          ]),
+          ...embedCards,
+        ])
+      );
+    }
+
     return el('section', { className: 'ri-result-card', 'data-tone': tone }, children);
   }
 
@@ -1176,7 +1321,11 @@ export function mountRemoteInside({
       renderActivityLog(),
     ]);
 
-    const shell = el('div', { className: 'ri-shell' }, [renderTopBar(), main]);
+    const shell = el(
+      'div',
+      { className: `ri-shell${state.isWide ? ' is-wide' : ''}` },
+      [renderTopBar(), main]
+    );
 
     const frame = el(
       'div',

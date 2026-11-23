@@ -1409,6 +1409,52 @@
   background: var(--state-danger);
 }
 
+.ri-fab.is-return {
+  background: var(--state-ok);
+}
+
+.ri-recall-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ri-recall-toolbar > button {
+  flex: 1 1 140px;
+}
+
+.ri-recall-card.is-accessory {
+  margin-left: 12px;
+  border-left: 3px solid var(--accent-signal);
+}
+
+.ri-recall-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
+}
+
+.ri-recall-badge[data-tone="ok"] {
+  background: var(--state-ok-soft);
+  color: var(--state-ok);
+}
+
+.ri-recall-badge[data-tone="danger"] {
+  background: var(--state-danger-soft);
+  color: var(--state-danger);
+}
+
+.ri-recall-badge[data-tone="warn"] {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+
 .ri-fab.is-left {
   right: auto;
   left: 16px;

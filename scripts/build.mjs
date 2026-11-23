@@ -26,6 +26,7 @@ const MODULE_ORDER = [
   'adapters/inside.js',
   'adapters/deployment.js',
   'adapters/port.js',
+  'adapters/recall.js',
   'adapters/portals.js',
   'ui/app.js',
   'main.js',
@@ -59,6 +60,7 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        https://fli-mngt.fcam.vn/*
 // @match        http://fli-mngt.fcam.vn/*
 // @match        https://nextgen.fpt.net/*
+// @match        http://nextgen.fpt.net/*
 // @match        http://radius-portal.fpt.net/*
 // @match        https://radius-portal.fpt.net/*
 // @connect      inside.fpt.net

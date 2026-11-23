@@ -21,6 +21,7 @@
 // @match        https://fli-mngt.fcam.vn/*
 // @match        http://fli-mngt.fcam.vn/*
 // @match        https://nextgen.fpt.net/*
+// @match        http://nextgen.fpt.net/*
 // @match        http://radius-portal.fpt.net/*
 // @match        https://radius-portal.fpt.net/*
 // @connect      inside.fpt.net

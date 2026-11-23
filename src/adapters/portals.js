@@ -6,6 +6,7 @@ import { PORTALS, validateContractId } from '../config/portals.js';
 import { checkPortalSession, isUserscriptEnv, sleep } from '../core/transport.js';
 import { runInsideAction } from './inside.js';
 import { runPortAction } from './port.js';
+import { runRecallAction } from './recall.js';
 
 function buildPlannedDemoResult(portal, action, contractId) {
   if (action.id.startsWith('lookup') || action.id.startsWith('check')) {
@@ -48,6 +49,9 @@ export async function executePortalAction(portalId, actionId, rawContractId, ctx
   }
   if (portalId === 'port') {
     return runPortAction(actionId, rawContractId, ctx);
+  }
+  if (portalId === 'recall') {
+    return runRecallAction(actionId, rawContractId, ctx);
   }
 
   const check = validateContractId(rawContractId);

@@ -13,8 +13,10 @@ import {
   STORAGE_KEYS,
   addRecentContract,
   clearRecentContracts,
+  consumePendingRecallContract,
   getRecentContracts,
   getState,
+  setPendingRecallContract,
   setState,
 } from '../core/storage.js';
 import {
@@ -95,6 +97,21 @@ import {
   updateDeploymentConstruction,
   validateCameraPhoneNumber,
 } from '../adapters/deployment.js';
+import {
+  RECALL_ENDPOINTS,
+  findRecallSearchControls,
+  isRecallPortalLocation,
+  isRecallTicketLocation,
+  loadRecallTicketContext,
+  parseRecallTicketFromDocument,
+  triggerRecallAddAccessory,
+  triggerRecallAddEquipment,
+  triggerRecallCreateTicket,
+  triggerRecallEditEquipment,
+  triggerRecallSearchOnPage,
+  triggerRecallSelectTicket,
+  triggerRecallSubmitNote,
+} from '../adapters/recall.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function formatVndAmount(amount) {
@@ -394,6 +411,18 @@ export function mountRemoteInside({
     deployReasonUnuseCapLan: '0',
     deployBusyAction: '',
     deployArmedAction: '',
+    recallLoading: false,
+    recallError: '',
+    recallStatus: '',
+    recallMode: '',
+    recallNotice: '',
+    recallNoticeTone: 'info',
+    recallSnapshot: null,
+    recallContractMismatch: false,
+    recallNoteInput: '',
+    recallArmedCreate: false,
+    recallReturnPending: false,
+    recallReturnLabel: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -579,6 +608,21 @@ export function mountRemoteInside({
     state.deployArmedAction = '';
   }
 
+  function resetRecallModalState() {
+    state.recallLoading = false;
+    state.recallError = '';
+    state.recallStatus = '';
+    state.recallMode = '';
+    state.recallNotice = '';
+    state.recallNoticeTone = 'info';
+    state.recallSnapshot = null;
+    state.recallContractMismatch = false;
+    state.recallNoteInput = '';
+    state.recallArmedCreate = false;
+    state.recallReturnPending = false;
+    state.recallReturnLabel = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -666,6 +710,7 @@ export function mountRemoteInside({
     state.portHistoryError = '';
     state.portHistoryRows = [];
     resetDeployModalState();
+    resetRecallModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -1859,6 +1904,75 @@ export function mountRemoteInside({
     renderConfirm();
   }
 
+  async function loadRecallModal(rawContractId = state.contractInput, { clearNotice = false } = {}) {
+    state.recallLoading = true;
+    state.recallError = '';
+    if (clearNotice) {
+      state.recallNotice = '';
+      state.recallNoticeTone = 'info';
+    }
+    renderConfirm();
+
+    const cleanId = normalizeContractId(rawContractId || '');
+    try {
+      const res = await loadRecallTicketContext(cleanId, {
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') {
+        return;
+      }
+      state.recallLoading = false;
+      state.recallStatus = res.status || 'needs_recall_page';
+      state.recallMode = res.mode || 'live';
+      state.recallSnapshot = res.snapshot || null;
+      state.recallContractMismatch = Boolean(res.contractMismatch);
+      if (res.status === 'ok' && res.snapshot && res.snapshot.contract && !state.contractInput) {
+        state.contractInput = res.snapshot.contract;
+        setState(STORAGE_KEYS.LAST_CONTRACT, res.snapshot.contract);
+        renderMain();
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') {
+        return;
+      }
+      state.recallLoading = false;
+      state.recallError = err && err.message ? err.message : 'Lỗi đọc dữ liệu phiếu thu hồi.';
+    }
+    renderConfirm();
+  }
+
+  function collapseForRecallDialog(actionLabel) {
+    state.recallReturnPending = true;
+    state.recallReturnLabel = actionLabel;
+    state.recallArmedCreate = false;
+    state.recallNotice = `Đã mở "${actionLabel}" trên trang gốc. Xong việc bấm nút nổi để quay lại & làm mới.`;
+    state.recallNoticeTone = 'info';
+    state.isOpen = false;
+    render();
+  }
+
+  async function openRecallPortalWithContract(rawContractId) {
+    const clean = normalizeContractId(rawContractId || '');
+    if (clean) {
+      setPendingRecallContract(clean);
+      await copyTextSafe(clean);
+      state.recentContracts = addRecentContract(clean);
+    }
+    openExternalOrPortalUrl(RECALL_ENDPOINTS.base, {
+      mode: 'portal',
+      title: 'Thu hồi vật tư NextGen',
+      pageWindow,
+    });
+    if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+      state.recallNotice = clean
+        ? `Đã mở NextGen và gửi lệnh tự tìm HĐ ${clean} (cũng đã chép sẵn vào bộ nhớ tạm).`
+        : 'Đã mở trang Thu hồi vật tư NextGen.';
+      state.recallNoticeTone = 'ok';
+      renderConfirm();
+    }
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
@@ -1902,6 +2016,8 @@ export function mountRemoteInside({
         loadPortReleaseModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
         loadPortAssignModal(state.contractInput);
+      } else if (state.activePortalId === 'recall' && action.id === 'manage_recall') {
+        loadRecallModal(state.contractInput, { clearNotice: true });
       }
       return;
     }
@@ -1950,7 +2066,11 @@ export function mountRemoteInside({
     }
 
     try {
-      const res = await executePortalAction(portal.id, action.id, contractId, actionCtx);
+      const res = await executePortalAction(portal.id, action.id, contractId, {
+        ...actionCtx,
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      });
       state.result = res;
       if (Array.isArray(res.embeddedViews)) {
         const nextOpen = {};
@@ -2974,6 +3094,31 @@ export function mountRemoteInside({
   }
 
   function openConsole() {
+    if (state.recallReturnPending) {
+      state.recallReturnPending = false;
+      state.recallReturnLabel = '';
+      state.isOpen = true;
+      render();
+      refreshSessionStatus();
+      if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+        loadRecallModal(state.contractInput);
+      }
+      return;
+    }
+    if (
+      !standalone &&
+      isUserscriptEnv() &&
+      pageWindow &&
+      pageDocument &&
+      isRecallTicketLocation(pageWindow.location) &&
+      !state.contractInput
+    ) {
+      const liveSnap = parseRecallTicketFromDocument(pageDocument, pageWindow.location);
+      if (liveSnap && liveSnap.contract) {
+        state.contractInput = liveSnap.contract;
+        setState(STORAGE_KEYS.LAST_CONTRACT, liveSnap.contract);
+      }
+    }
     state.isOpen = true;
     render();
     refreshSessionStatus();
@@ -4073,6 +4218,7 @@ export function mountRemoteInside({
     const isInsideDeploy = portal.id === 'inside' && act.id === 'deploy_ticket';
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
+    const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
 
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
@@ -4084,6 +4230,8 @@ export function mountRemoteInside({
             ? 'Phiếu triển khai FOX-ERP'
             : isInsideBypass
             ? 'CheckList ByPass'
+            : isRecallManage
+            ? 'Phiếu thu hồi vật tư'
             : `Xác nhận ${act.label}?`,
         }),
         el('button', {
@@ -4102,6 +4250,8 @@ export function mountRemoteInside({
           ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
           : isInsideDeploy
           ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
+          : isRecallManage
+          ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
           : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
     ];
@@ -4131,7 +4281,13 @@ export function mountRemoteInside({
     const cancelBtn = el('button', {
       type: 'button',
       className: 'ri-secondary-btn',
-      text: (isInsideBox && state.boxTab === 'history') || isInsideKill || isInsideDeploy ? 'Đóng' : 'Hủy',
+      text:
+        (isInsideBox && state.boxTab === 'history') ||
+        isInsideKill ||
+        isInsideDeploy ||
+        isRecallManage
+          ? 'Đóng'
+          : 'Hủy',
       onClick: () => {
         resetConfirmState();
         render();
@@ -6043,6 +6199,559 @@ export function mountRemoteInside({
           }
         }
       }
+    } else if (isRecallManage) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.recallLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: 'Đang đọc danh sách vật tư thu hồi…' }),
+          ])
+        );
+      } else if (state.recallError) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.recallError }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadRecallModal(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus === 'on_search_page') {
+        if (state.recallNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.recallNoticeTone || 'info',
+            }, [el('div', { text: state.recallNotice })])
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text: contractId
+                ? `Bạn đang ở trang chủ Thu hồi vật tư. Bấm nút bên dưới để tự động điền và tìm phiếu cho HĐ ${contractId}.`
+                : 'Bạn đang ở trang chủ Thu hồi vật tư. Hãy nhập Mã hợp đồng ở màn hình chính rồi bấm tìm ngay trên trang.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                disabled: !contractId,
+                text: contractId ? `Tìm ${contractId} ngay trên trang` : 'Chưa nhập Mã hợp đồng',
+                onClick: () => {
+                  const sRes = triggerRecallSearchOnPage(pageDocument, contractId);
+                  if (!sRes.ok) {
+                    state.recallNotice = sRes.error;
+                    state.recallNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  addLog('Vật tư', 'Tìm phiếu thu hồi', contractId, 'ok');
+                  state.recallNotice = `Đã gửi lệnh tìm HĐ ${contractId}. Nếu trình duyệt mở tab chi tiết mới, mở Remote Inside tại tab đó.`;
+                  state.recallNoticeTone = 'ok';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Làm mới',
+                onClick: () => loadRecallModal(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus !== 'ok' || !state.recallSnapshot) {
+        if (state.recallNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.recallNoticeTone || 'info',
+            }, [el('div', { text: state.recallNotice })])
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text: contractId
+                ? `Trang hiện tại chưa phải chi tiết phiếu thu hồi NextGen. Bấm nút bên dưới để mở NextGen và tự tìm HĐ ${contractId}.`
+                : 'Trang hiện tại chưa phải chi tiết phiếu thu hồi NextGen. Bấm nút bên dưới để mở trang Thu hồi vật tư.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: contractId ? `Mở trang Thu hồi & tự tìm ${contractId}` : 'Mở trang Thu hồi NextGen',
+                onClick: () => openRecallPortalWithContract(contractId),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Làm mới',
+                onClick: () => loadRecallModal(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else {
+        const snap = state.recallSnapshot;
+        const isDemo = state.recallMode === 'demo';
+        const tickets = Array.isArray(snap.tickets) ? snap.tickets : [];
+        const items = Array.isArray(snap.items) ? snap.items : [];
+        const stats = snap.stats || {
+          totalItems: items.length,
+          importedCount: 0,
+          editableCount: 0,
+        };
+
+        if (state.recallContractMismatch && snap.contract && contractId) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: `Trang đang mở là HĐ ${snap.contract}, khác với HĐ bạn đang nhập (${contractId}).`,
+              }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: `Dùng HĐ ${snap.contract}`,
+                  onClick: () => {
+                    state.contractInput = snap.contract;
+                    setState(STORAGE_KEYS.LAST_CONTRACT, snap.contract);
+                    state.recallContractMismatch = false;
+                    renderMain();
+                    renderConfirm();
+                  },
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-primary-btn',
+                  text: `Tìm ${contractId} trên NextGen`,
+                  onClick: () => openRecallPortalWithContract(contractId),
+                }),
+              ]),
+            ])
+          );
+        }
+
+        if (state.recallNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.recallNoticeTone || 'info',
+            }, [el('div', { text: state.recallNotice })])
+          );
+        }
+
+        const createControls = state.recallArmedCreate
+          ? el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Hủy',
+                onClick: () => {
+                  state.recallArmedCreate = false;
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-danger-btn',
+                text: 'Xác nhận tạo phiếu (+)',
+                onClick: () => {
+                  state.recallArmedCreate = false;
+                  if (isDemo) {
+                    const nextNum = String(tickets.length + 1);
+                    const updatedTickets = tickets.map((t) => ({ ...t, isSelected: false }));
+                    const newTicket = {
+                      index: updatedTickets.length,
+                      ticketId: String(900001 + updatedTickets.length),
+                      ticketNumber: nextNum,
+                      unit: 'TIN/PNC',
+                      createdAt: '23/11/2026 11:00:00',
+                      createdBy: 'ktv.mau01',
+                      updatedAt: '23/11/2026 11:00:00',
+                      updatedBy: 'ktv.mau01',
+                      constructionSpec: 'HCM-ODC-01/HO/01-01-G',
+                      isSelected: true,
+                    };
+                    snap.tickets = [...updatedTickets, newTicket];
+                    snap.activeTicket = newTicket;
+                    snap.activeTicketTitle = `Phiếu số ${nextNum}`;
+                    state.recallNotice = `Đã mô phỏng tạo Phiếu số ${nextNum} (bấm nút + trực tiếp, không nhảy pop-up).`;
+                    state.recallNoticeTone = 'ok';
+                    addLog('Vật tư', 'Tạo phiếu mới (+) [Mẫu]', snap.contract || contractId, 'ok');
+                    renderConfirm();
+                    return;
+                  }
+                  const cRes = triggerRecallCreateTicket(pageDocument);
+                  if (!cRes.ok) {
+                    state.recallNotice = cRes.error;
+                    state.recallNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  addLog('Vật tư', 'Tạo phiếu thu hồi mới (+)', snap.contract || contractId, 'ok');
+                  state.recallNotice = 'Đã bấm dấu (+) tạo phiếu thu hồi mới trên trang gốc.';
+                  state.recallNoticeTone = 'ok';
+                  renderConfirm();
+                  setTimeout(() => {
+                    if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+                      loadRecallModal(state.contractInput);
+                    }
+                  }, 900);
+                },
+              }),
+            ])
+          : el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              disabled: !isDemo && !snap.canCreateTicket,
+              text: '+ Tạo phiếu mới',
+              onClick: () => {
+                state.recallArmedCreate = true;
+                renderConfirm();
+              },
+            });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-recall-toolbar' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                disabled: !isDemo && !snap.canAddEquipment,
+                text: '+ Thêm thiết bị',
+                onClick: () => {
+                  if (isDemo) {
+                    state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
+                    state.recallNoticeTone = 'ok';
+                    renderConfirm();
+                    return;
+                  }
+                  const aRes = triggerRecallAddEquipment(pageDocument);
+                  if (!aRes.ok) {
+                    state.recallNotice = aRes.error;
+                    state.recallNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  addLog('Vật tư', 'Thêm thiết bị', snap.contract || contractId, 'ok');
+                  collapseForRecallDialog('Thêm thiết bị thu hồi');
+                },
+              }),
+              createControls,
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Làm mới',
+                onClick: () => loadRecallModal(contractId),
+              }),
+            ]),
+          ])
+        );
+
+        if (tickets.length > 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', {
+                  className: 'ri-confirm-label',
+                  text: `Danh sách phiếu thu hồi (${tickets.length})`,
+                }),
+                snap.activeTicketTitle
+                  ? el('span', { className: 'ri-text-btn', text: snap.activeTicketTitle })
+                  : null,
+              ]),
+              el(
+                'div',
+                { className: 'ri-box-list' },
+                tickets.map((t) => {
+                  const subParts = [
+                    t.constructionSpec ? `TSTC: ${t.constructionSpec}` : '',
+                    t.createdAt ? `Tạo: ${t.createdAt}${t.createdBy ? ` (${t.createdBy})` : ''}` : '',
+                    t.updatedAt ? `Cập nhật: ${t.updatedAt}${t.updatedBy ? ` (${t.updatedBy})` : ''}` : '',
+                  ].filter(Boolean);
+                  return el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: `ri-box-item${t.isSelected ? ' is-selected' : ''}`,
+                      onClick: () => {
+                        if (t.isSelected) return;
+                        if (isDemo) {
+                          snap.tickets = tickets.map((item) => ({
+                            ...item,
+                            isSelected: item.index === t.index,
+                          }));
+                          snap.activeTicket = { ...t, isSelected: true };
+                          snap.activeTicketTitle = `Phiếu số ${t.ticketNumber}`;
+                          state.recallNotice = `Đã chuyển sang Phiếu số ${t.ticketNumber}.`;
+                          state.recallNoticeTone = 'ok';
+                          renderConfirm();
+                          return;
+                        }
+                        const swRes = triggerRecallSelectTicket(pageDocument, t.index);
+                        if (!swRes.ok) {
+                          state.recallNotice = swRes.error;
+                          state.recallNoticeTone = 'error';
+                          renderConfirm();
+                          return;
+                        }
+                        state.recallNotice = `Đang chuyển sang Phiếu số ${t.ticketNumber}…`;
+                        state.recallNoticeTone = 'info';
+                        renderConfirm();
+                        setTimeout(() => {
+                          if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+                            loadRecallModal(state.contractInput);
+                          }
+                        }, 700);
+                      },
+                    },
+                    [
+                      el('div', { className: 'ri-box-item-main' }, [
+                        el('div', {
+                          className: 'ri-box-mac',
+                          text: `Phiếu số ${t.ticketNumber}${t.unit ? ` • ${t.unit}` : ''}`,
+                        }),
+                        subParts.length > 0
+                          ? el('div', { className: 'ri-box-sub', text: subParts.join(' • ') })
+                          : null,
+                      ]),
+                      el('span', {
+                        className: 'ri-tab-badge',
+                        text: t.isSelected ? 'Đang xem' : 'Chọn',
+                      }),
+                    ]
+                  );
+                })
+              ),
+            ])
+          );
+        }
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `Thiết bị thu hồi (${stats.totalItems})`,
+              }),
+              el('span', {
+                className: 'ri-field-hint',
+                text: `${stats.importedCount} đã nhập kho • ${stats.editableCount} sửa được`,
+              }),
+            ]),
+            items.length === 0
+              ? el('div', { className: 'ri-sheet-status' }, [
+                  el('div', {
+                    text: 'Chưa có thiết bị thu hồi nào trên phiếu này. Bấm "+ Thêm thiết bị" phía trên để thêm mới.',
+                  }),
+                ])
+              : el(
+                  'div',
+                  { className: 'ri-session-list' },
+                  items.map((item) => {
+                    const statusTone = /đã nhập kho/i.test(item.recallStatus)
+                      ? 'ok'
+                      : /không thành công/i.test(item.recallStatus)
+                      ? 'danger'
+                      : item.recallStatus
+                      ? 'warn'
+                      : 'neutral';
+
+                    const metaLines = [
+                      [item.deviceType, `SL: ${item.quantity || '1'}`, item.mac ? `MAC: ${item.mac}` : '']
+                        .filter(Boolean)
+                        .join(' • '),
+                      item.accessoryStatus ? `Phụ kiện: ${item.accessoryStatus}` : '',
+                      item.reason || item.deviceCondition
+                        ? [item.reason, item.deviceCondition].filter(Boolean).join(' • ')
+                        : '',
+                      item.collector || item.collectDate
+                        ? `Thu hồi: ${[item.collector, item.collectDate].filter(Boolean).join(' • ')}`
+                        : '',
+                    ].filter(Boolean);
+
+                    const itemButtons = [];
+                    if (item.canEdit) {
+                      itemButtons.push(
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-primary-btn',
+                          text: 'Sửa vật tư',
+                          onClick: () => {
+                            if (isDemo) {
+                              state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
+                              state.recallNoticeTone = 'ok';
+                              renderConfirm();
+                              return;
+                            }
+                            const eRes = triggerRecallEditEquipment(pageDocument, item.rowIndex);
+                            if (!eRes.ok) {
+                              state.recallNotice = eRes.error;
+                              state.recallNoticeTone = 'error';
+                              renderConfirm();
+                              return;
+                            }
+                            addLog('Vật tư', 'Sửa vật tư', item.name, 'ok');
+                            collapseForRecallDialog(`Sửa: ${item.name}`);
+                          },
+                        })
+                      );
+                    }
+                    if (item.canAddAccessory) {
+                      itemButtons.push(
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-secondary-btn',
+                          text: '+ TB phụ',
+                          onClick: () => {
+                            if (isDemo) {
+                              state.recallNotice = `Đã mô phỏng bấm "+ Thêm thiết bị phụ" cho "${item.name}".`;
+                              state.recallNoticeTone = 'ok';
+                              renderConfirm();
+                              return;
+                            }
+                            const subRes = triggerRecallAddAccessory(pageDocument, item.rowIndex);
+                            if (!subRes.ok) {
+                              state.recallNotice = subRes.error;
+                              state.recallNoticeTone = 'error';
+                              renderConfirm();
+                              return;
+                            }
+                            addLog('Vật tư', 'Thêm TB phụ', item.name, 'ok');
+                            collapseForRecallDialog(`Thêm TB phụ: ${item.name}`);
+                          },
+                        })
+                      );
+                    }
+                    if (item.mac) {
+                      itemButtons.push(
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-secondary-btn',
+                          text: 'Chép MAC',
+                          onClick: async () => {
+                            await copyTextSafe(item.mac);
+                            state.recallNotice = `Đã chép MAC ${item.mac}.`;
+                            state.recallNoticeTone = 'ok';
+                            renderConfirm();
+                          },
+                        })
+                      );
+                    }
+
+                    return el(
+                      'div',
+                      {
+                        className: `ri-session-card ri-recall-card${item.isAccessory ? ' is-accessory' : ''}`,
+                      },
+                      [
+                        el('div', { className: 'ri-inline-head' }, [
+                          el('div', {
+                            className: 'ri-session-ip',
+                            text: item.isAccessory ? `↳ ${item.name}` : item.name,
+                          }),
+                          el('div', { className: 'ri-embed-actions' }, [
+                            item.isAccessory
+                              ? el('span', { className: 'ri-embed-badge', text: 'TB phụ' })
+                              : null,
+                            el('span', {
+                              className: 'ri-recall-badge',
+                              'data-tone': statusTone,
+                              text: item.recallStatus || 'Chưa rõ trạng thái',
+                            }),
+                          ]),
+                        ]),
+                        ...metaLines.map((line) => el('div', { className: 'ri-session-meta', text: line })),
+                        itemButtons.length > 0
+                          ? el('div', { className: 'ri-session-actions' }, itemButtons)
+                          : el('div', {
+                              className: 'ri-field-hint',
+                              text: 'Đã khóa chỉnh sửa (đã nhập kho).',
+                            }),
+                      ]
+                    );
+                  })
+                ),
+          ])
+        );
+
+        const noteInputEl = el('input', {
+          type: 'text',
+          className: 'ri-confirm-input',
+          id: 'ri-recall-note-input',
+          placeholder: 'Thêm ghi chú mới…',
+          autocomplete: 'off',
+          value: state.recallNoteInput,
+        });
+        noteInputEl.value = state.recallNoteInput;
+        noteInputEl.addEventListener('input', (e) => {
+          state.recallNoteInput = e.target.value;
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-recall-note-input',
+              text: 'Ghi chú phiếu thu hồi',
+            }),
+            el('div', { className: 'ri-contract-row' }, [
+              noteInputEl,
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                disabled: !isDemo && !snap.canAddNote,
+                text: 'Gửi ghi chú',
+                onClick: () => {
+                  const text = String(state.recallNoteInput || '').trim();
+                  if (!text) {
+                    state.recallNotice = 'Vui lòng nhập nội dung ghi chú trước khi gửi.';
+                    state.recallNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  if (isDemo) {
+                    state.recallNoteInput = '';
+                    state.recallNotice = `Đã mô phỏng gửi ghi chú: "${text}".`;
+                    state.recallNoticeTone = 'ok';
+                    addLog('Vật tư', 'Gửi ghi chú [Mẫu]', snap.contract || contractId, 'ok');
+                    renderConfirm();
+                    return;
+                  }
+                  const nRes = triggerRecallSubmitNote(pageDocument, text);
+                  if (!nRes.ok) {
+                    state.recallNotice = nRes.error;
+                    state.recallNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  addLog('Vật tư', 'Gửi ghi chú', snap.contract || contractId, 'ok');
+                  state.recallNoteInput = '';
+                  state.recallNotice = 'Đã gửi ghi chú lên phiếu thu hồi.';
+                  state.recallNoticeTone = 'ok';
+                  renderConfirm();
+                  setTimeout(() => {
+                    if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+                      loadRecallModal(state.contractInput);
+                    }
+                  }, 700);
+                },
+              }),
+            ]),
+          ])
+        );
+      }
     } else if (isPortRelease) {
       confirmBtn.textContent = 'Xác nhận Thu hồi Port';
 
@@ -6811,6 +7520,12 @@ export function mountRemoteInside({
           }),
           el('button', {
             type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập Vật tư (NextGen)',
+            onClick: () => openLogin(RECALL_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
+          }),
+          el('button', {
+            type: 'button',
             className: 'ri-secondary-btn',
             text: 'Kiểm tra / Tải bản mới (.apk)',
             onClick: () => {
@@ -6866,11 +7581,14 @@ export function mountRemoteInside({
     if (!state.isOpen && !standalone) {
       const fabLabel = state.isRecording
         ? `Đang ghi mẫu (${state.recordedEntries.length}) — Bấm để dừng`
+        : state.recallReturnPending
+        ? 'Xong — Quay lại Phiếu thu hồi'
         : fabLabelDefault;
 
       const fabClasses = [
         'ri-fab',
         state.isRecording ? 'is-recording' : '',
+        state.recallReturnPending ? 'is-return' : '',
         fabPosition === 'bottom-left' ? 'is-left' : '',
       ]
         .filter(Boolean)
@@ -7047,6 +7765,29 @@ export function mountRemoteInside({
   render();
   if (standalone) {
     refreshSessionStatus();
+  } else if (isUserscriptEnv() && pageWindow && pageDocument) {
+    const loc = pageWindow.location;
+    if (isRecallPortalLocation(loc) && !isRecallTicketLocation(loc)) {
+      const pendingRecallContract = consumePendingRecallContract();
+      if (pendingRecallContract) {
+        state.contractInput = pendingRecallContract;
+        setState(STORAGE_KEYS.LAST_CONTRACT, pendingRecallContract);
+        let recallSearchAttempts = 0;
+        const recallSearchTimer = setInterval(() => {
+          recallSearchAttempts += 1;
+          const ctrls = findRecallSearchControls(pageDocument);
+          if (ctrls.input) {
+            clearInterval(recallSearchTimer);
+            const sRes = triggerRecallSearchOnPage(pageDocument, pendingRecallContract);
+            if (sRes.ok) {
+              addLog('Vật tư', 'Tự tìm phiếu thu hồi', pendingRecallContract, 'ok');
+            }
+          } else if (recallSearchAttempts >= 20) {
+            clearInterval(recallSearchTimer);
+          }
+        }, 400);
+      }
+    }
   }
 
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {

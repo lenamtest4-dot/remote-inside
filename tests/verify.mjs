@@ -14,8 +14,10 @@ import {
   STORAGE_KEYS,
   addRecentContract,
   clearRecentContracts,
+  consumePendingRecallContract,
   getRecentContracts,
   getState,
+  setPendingRecallContract,
   setState,
 } from '../src/core/storage.js';
 import {
@@ -129,6 +131,24 @@ import {
   runPortAction,
   triggerPortFtthMenuAction,
 } from '../src/adapters/port.js';
+import {
+  RECALL_ENDPOINTS,
+  buildDemoRecallSnapshot,
+  isRecallPortalLocation,
+  isRecallTicketLocation,
+  loadRecallTicketContext,
+  parseRecallEquipmentRow,
+  parseRecallTicketCardElement,
+  parseRecallTicketFromDocument,
+  runRecallAction,
+  triggerRecallAddAccessory,
+  triggerRecallAddEquipment,
+  triggerRecallCreateTicket,
+  triggerRecallEditEquipment,
+  triggerRecallSearchOnPage,
+  triggerRecallSelectTicket,
+  triggerRecallSubmitNote,
+} from '../src/adapters/recall.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2527,6 +2547,360 @@ async function runTests() {
     'Built deployment ticket bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: FOX-ERP Phiếu triển khai tests passed.');
+
+  console.log('19. Testing Vật tư thu hồi (NextGen Blazor DOM bridge) adapter & bundles...');
+  assert.equal(PORTALS.recall.status, 'priority');
+  assert.ok(PORTALS.recall.actions.some((a) => a.id === 'manage_recall'));
+  assert.equal(
+    isRecallPortalLocation({ hostname: 'nextgen.fpt.net', pathname: '/resource/recall/' }),
+    true
+  );
+  assert.equal(
+    isRecallTicketLocation({ hostname: 'nextgen.fpt.net', pathname: '/resource/recall/recall-ticket' }),
+    true
+  );
+  assert.equal(
+    isRecallTicketLocation({ hostname: 'nextgen.fpt.net', pathname: '/resource/recall/' }),
+    false
+  );
+
+  // Pending recall contract storage handoff (set, consume once, expired rejected)
+  const recallStore = new Map();
+  const recallStorageAdapter = {
+    get: (k) => (recallStore.has(k) ? recallStore.get(k) : null),
+    set: (k, v) => recallStore.set(k, v),
+  };
+  assert.equal(setPendingRecallContract('  sgn 123456 ', recallStorageAdapter), true);
+  assert.equal(consumePendingRecallContract(180000, recallStorageAdapter), 'SGN123456');
+  assert.equal(consumePendingRecallContract(180000, recallStorageAdapter), '');
+  recallStorageAdapter.set(STORAGE_KEYS.RECALL_PENDING_CONTRACT, {
+    contractId: 'SGN123456',
+    ts: Date.now() - 300000,
+  });
+  assert.equal(consumePendingRecallContract(180000, recallStorageAdapter), '');
+
+  // Build lightweight mock Blazor DOM matching nextgen.fpt.net/resource/recall/recall-ticket
+  const clicks = [];
+  const makeMockBtn = (label, { ariaLabel = '', cls = 'rz-button', disabled = false, id = '' } = {}) => ({
+    id,
+    innerText: label,
+    className: cls,
+    disabled,
+    getAttribute: (k) => (k === 'aria-label' ? ariaLabel : ''),
+    click: () => clicks.push(id || label),
+  });
+
+  const makeMockRow = ({
+    cells,
+    editableName = '',
+    hasAddSubBtn = false,
+    rowIdx = 0,
+  }) => {
+    const tdNodes = cells.map((text) => ({ innerText: text }));
+    const editableSpan = editableName
+      ? {
+          id: 'equipmentname',
+          innerText: editableName,
+          click: () => clicks.push(`edit:${rowIdx}:${editableName}`),
+        }
+      : null;
+    const addSubBtn = hasAddSubBtn
+      ? makeMockBtn('add Thêm thiết bị phụ', { id: `addSub:${rowIdx}` })
+      : null;
+    return {
+      querySelectorAll: (sel) => {
+        if (sel === 'td') return tdNodes;
+        if (sel === 'button') return addSubBtn ? [addSubBtn] : [];
+        return [];
+      },
+      querySelector: (sel) => {
+        if (sel.includes('equipmentname')) return editableSpan;
+        return null;
+      },
+    };
+  };
+
+  const ticket0Inner = {
+    id: '900001',
+    className: 'Card-Ticket Card-Ticket-Selected',
+    click: () => clicks.push('ticket:0'),
+  };
+  const ticket1Inner = {
+    id: '900002',
+    className: 'Card-Ticket',
+    click: () => clicks.push('ticket:1'),
+  };
+  const ticketCards = [
+    {
+      innerText:
+        '1 TIN/PNC Ngày tạo phiếu: 09/11/2026 09:00:00 Người tạo phiếu: ktv.mau01 Ngày cập nhật:23/11/2026 10:30:00 Người cập nhật:ktv.mau02 Thông số thi công:HCM-ODC-01/HO/01-01-G',
+      className: 'ticketinf Card-Ticket-Selected',
+      querySelector: (sel) => {
+        if (sel === '.Card-Ticket') return ticket0Inner;
+        if (sel.includes('.rounded-full')) return { innerText: '1' };
+        if (sel === '.text-base') return { innerText: 'TIN/PNC' };
+        return null;
+      },
+    },
+    {
+      innerText:
+        '2 TIN/PNC Ngày tạo phiếu: 23/11/2026 11:00:00 Người tạo phiếu: ktv.mau01 Ngày cập nhật:23/11/2026 11:05:00 Người cập nhật:ktv.mau01 Thông số thi công:HCM-ODC-01/HO/01-01-G',
+      className: 'ticketinf',
+      querySelector: (sel) => {
+        if (sel === '.Card-Ticket') return ticket1Inner;
+        if (sel.includes('.rounded-full')) return { innerText: '2' };
+        if (sel === '.text-base') return { innerText: 'TIN/PNC' };
+        return null;
+      },
+    },
+  ];
+
+  const mockRows = [
+    makeMockRow({
+      rowIdx: 0,
+      editableName: '',
+      hasAddSubBtn: true,
+      cells: [
+        'Access Point AX3000 (Mẫu)',
+        'add Thêm thiết bị phụ',
+        'Modem',
+        '001122334455',
+        '1',
+        'Đã nhập kho',
+        'Không đầy đủ',
+        'ktv.mau02',
+        '23/11/2026 10:30:00',
+        'Thanh lý hợp đồng tại nhà',
+        'Hàng tái sử dụng',
+        'Hàng tái sử dụng Xem flow Tái-xuất',
+        'Có',
+        'SR',
+      ],
+    }),
+    makeMockRow({
+      rowIdx: 1,
+      editableName: 'FPT Play Box 650 (Mẫu)',
+      hasAddSubBtn: true,
+      cells: [
+        'FPT Play Box 650 (Mẫu)',
+        'add Thêm thiết bị phụ',
+        'Box OTT',
+        '',
+        '1',
+        'Thu hồi không thành công',
+        '',
+        '',
+        '',
+        'Thanh lý hợp đồng tại nhà',
+        'Hàng nhập lại',
+        'Hàng tái sử dụng',
+        'Có',
+        'SR',
+      ],
+    }),
+    makeMockRow({
+      rowIdx: 2,
+      editableName: 'HDMI',
+      hasAddSubBtn: false,
+      cells: [
+        '',
+        'HDMI',
+        'Vật tư thu hồi khác',
+        '',
+        '1',
+        'Thu hồi không thành công',
+        '',
+        '',
+        '',
+        'Thanh lý hợp đồng tại nhà',
+        'Hàng nhập lại',
+        'Hàng tái sử dụng',
+        'Có',
+        'SR',
+      ],
+    }),
+    makeMockRow({
+      rowIdx: 3,
+      editableName: 'Nguồn Box 650',
+      hasAddSubBtn: false,
+      cells: [
+        '',
+        'Nguồn Box 650',
+        'Vật tư thu hồi khác',
+        '',
+        '1',
+        'Thu hồi không thành công',
+        '',
+        '',
+        '',
+        'Thanh lý hợp đồng tại nhà',
+        'Hàng nhập lại',
+        'Hàng tái sử dụng',
+        'Có',
+        'SR',
+      ],
+    }),
+  ];
+
+  const createTicketPlusBtn = makeMockBtn('add_circle_outline', {
+    ariaLabel: 'Button',
+    id: 'createPlus',
+  });
+  const createTicketMenuBtn = makeMockBtn('arrow_drop_down', {
+    ariaLabel: 'Open',
+    id: 'createMenu',
+  });
+  const addEquipBtn = makeMockBtn('Thêm thiết bị', {
+    cls: 'mud-button-root',
+    id: 'addEquip',
+  });
+  const sendNoteBtn = makeMockBtn('send', { id: 'sendNote' });
+  const searchBtn = makeMockBtn('search', { cls: 'rz-button', id: 'searchSubmit' });
+
+  const dispatchedEvents = [];
+  const noteInput = {
+    value: '',
+    dispatchEvent: (e) => dispatchedEvents.push(`note:${e.type}`),
+  };
+  const searchInput = {
+    value: '',
+    parentElement: {
+      querySelectorAll: (sel) => (sel === 'button' ? [searchBtn] : []),
+    },
+    dispatchEvent: (e) => dispatchedEvents.push(`search:${e.type}`),
+  };
+
+  const mockRecallDoc = {
+    title: 'SGN123456',
+    body: { innerText: 'DANH SÁCH PHIẾU THU HỒI - SGN123456' },
+    querySelector: (sel) => {
+      if (sel === '.rz-data-grid') {
+        return {
+          querySelectorAll: (sub) => (sub === 'tbody tr' ? mockRows : []),
+        };
+      }
+      if (sel === '.rz-splitbutton') {
+        return {
+          querySelector: (sub) => (sub.includes('Button') ? createTicketPlusBtn : null),
+          querySelectorAll: (sub) =>
+            sub === 'button' ? [createTicketPlusBtn, createTicketMenuBtn] : [],
+        };
+      }
+      if (sel.includes('Nhập số hợp đồng')) return searchInput;
+      if (sel === '.rz-dialog.rz-open') return null;
+      return null;
+    },
+    querySelectorAll: (sel) => {
+      if (sel.includes('h1')) return [{ innerText: 'Phiếu số 1' }];
+      if (sel === '.ticketinf') return ticketCards;
+      if (sel === '.rz-form-field') {
+        return [
+          {
+            querySelector: (sub) => {
+              if (sub.includes('label')) return { innerText: 'Thêm ghi chú mới..' };
+              if (sub.includes('input')) return noteInput;
+              return null;
+            },
+          },
+        ];
+      }
+      if (sel === 'button') {
+        return [createTicketPlusBtn, createTicketMenuBtn, addEquipBtn, sendNoteBtn, searchBtn];
+      }
+      return [];
+    },
+  };
+
+  const parsedSnap = parseRecallTicketFromDocument(mockRecallDoc, {
+    hostname: 'nextgen.fpt.net',
+    pathname: '/resource/recall/recall-ticket',
+  });
+  assert.equal(parsedSnap.onRecallTicketPage, true);
+  assert.equal(parsedSnap.contract, 'SGN123456');
+  assert.equal(parsedSnap.activeTicketTitle, 'Phiếu số 1');
+  assert.equal(parsedSnap.tickets.length, 2);
+  assert.equal(parsedSnap.activeTicket.ticketNumber, '1');
+  assert.equal(parsedSnap.activeTicket.constructionSpec, 'HCM-ODC-01/HO/01-01-G');
+  assert.equal(parsedSnap.items.length, 4);
+  assert.equal(parsedSnap.items[0].canEdit, false);
+  assert.equal(parsedSnap.items[0].canAddAccessory, true);
+  assert.equal(parsedSnap.items[0].ruleCondition, 'Hàng tái sử dụng');
+  assert.equal(parsedSnap.items[1].canEdit, true);
+  assert.equal(parsedSnap.items[1].isAccessory, false);
+  assert.equal(parsedSnap.items[2].isAccessory, true);
+  assert.equal(parsedSnap.items[2].canEdit, true);
+  assert.equal(parsedSnap.items[2].canAddAccessory, false);
+  assert.deepEqual(parsedSnap.stats, {
+    totalItems: 4,
+    importedCount: 1,
+    editableCount: 3,
+    pendingCount: 3,
+  });
+
+  // Trigger DOM bridge actions and verify exact elements clicked
+  assert.equal(triggerRecallEditEquipment(mockRecallDoc, 0).ok, false, 'Must reject non-editable imported row');
+  const editRes = triggerRecallEditEquipment(mockRecallDoc, 1);
+  assert.equal(editRes.ok, true);
+  assert.equal(editRes.itemName, 'FPT Play Box 650 (Mẫu)');
+  assert.equal(triggerRecallEditEquipment(mockRecallDoc, 2).ok, true);
+  assert.equal(triggerRecallAddEquipment(mockRecallDoc).ok, true);
+  assert.equal(triggerRecallAddAccessory(mockRecallDoc, 0).ok, true);
+  assert.equal(triggerRecallCreateTicket(mockRecallDoc).ok, true);
+  assert.equal(triggerRecallSelectTicket(mockRecallDoc, 1).ok, true);
+  assert.equal(triggerRecallSubmitNote(mockRecallDoc, '').ok, false);
+  assert.equal(triggerRecallSubmitNote(mockRecallDoc, '  Khach hen chieu  ').ok, true);
+  assert.equal(noteInput.value, 'Khach hen chieu');
+  assert.equal(triggerRecallSearchOnPage(mockRecallDoc, ' sgn123456 ').ok, true);
+  assert.equal(searchInput.value, 'SGN123456');
+
+  assert.deepEqual(clicks, [
+    'edit:1:FPT Play Box 650 (Mẫu)',
+    'edit:2:HDMI',
+    'addEquip',
+    'addSub:0',
+    'createPlus',
+    'ticket:1',
+    'sendNote',
+    'searchSubmit',
+  ]);
+  assert.ok(dispatchedEvents.includes('note:input') && dispatchedEvents.includes('note:change'));
+  assert.ok(dispatchedEvents.includes('search:input') && dispatchedEvents.includes('search:change'));
+
+  // Demo mode checks
+  const demoRecallSnap = buildDemoRecallSnapshot('sgn123456');
+  assert.equal(demoRecallSnap.contract, 'SGN123456');
+  assert.equal(demoRecallSnap.items.length, 4);
+  const demoCtx = await loadRecallTicketContext('SGN123456', { forceDemo: true });
+  assert.equal(demoCtx.status, 'ok');
+  assert.equal(demoCtx.mode, 'demo');
+  const demoSummaryRes = await executePortalAction('recall', 'lookup_recall', 'SGN123456', {
+    forceDemo: true,
+  });
+  assert.equal(demoSummaryRes.status, 'ok');
+  assert.equal(demoSummaryRes.mode, 'demo');
+  const badRecallRes = await runRecallAction('lookup_recall', 'ab', { forceDemo: true });
+  assert.equal(badRecallRes.status, 'validation_error');
+
+  // Verify recall adapter & UI tokens in built bundles + 0 forbiddenDemoDataRe matches
+  for (const token of [
+    'RECALL_PENDING_CONTRACT',
+    'manage_recall',
+    'triggerRecallEditEquipment',
+    'triggerRecallCreateTicket',
+    'triggerRecallAddEquipment',
+    'triggerRecallSubmitNote',
+    'equipmentname',
+    RECALL_ENDPOINTS.base,
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Built recall bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: Vật tư thu hồi (NextGen Blazor DOM bridge) tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

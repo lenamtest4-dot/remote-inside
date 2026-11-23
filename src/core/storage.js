@@ -9,6 +9,7 @@ export const STORAGE_KEYS = {
   RECENT_CONTRACTS: 'ri_recent_contracts',
   ACTIVE_PORTAL: 'ri_active_portal',
   LAST_CONTRACT: 'ri_last_contract',
+  RECALL_PENDING_CONTRACT: 'ri_recall_pending_contract',
 };
 
 const MAX_RECENT_CONTRACTS = 12;
@@ -127,4 +128,39 @@ export function addRecentContract(rawId, storageAdapter = null) {
 export function clearRecentContracts(storageAdapter = null) {
   setState(STORAGE_KEYS.RECENT_CONTRACTS, [], storageAdapter);
   return [];
+}
+
+/**
+ * Luu tam Ma Hop Dong cho trang Thu hoi vat tu (chuyen trang tu dong tim).
+ */
+export function setPendingRecallContract(rawId, storageAdapter = null) {
+  const cleanId = normalizeContractId(rawId);
+  if (!cleanId) {
+    return false;
+  }
+  return setState(
+    STORAGE_KEYS.RECALL_PENDING_CONTRACT,
+    { contractId: cleanId, ts: Date.now() },
+    storageAdapter
+  );
+}
+
+/**
+ * Doc va xoa ngay Ma Hop Dong cho trang Thu hoi vat tu neu con trong thoi han hop le.
+ */
+export function consumePendingRecallContract(maxAgeMs = 180000, storageAdapter = null) {
+  const entry = getState(STORAGE_KEYS.RECALL_PENDING_CONTRACT, null, storageAdapter);
+  setState(STORAGE_KEYS.RECALL_PENDING_CONTRACT, null, storageAdapter);
+  if (!entry || typeof entry !== 'object') {
+    return '';
+  }
+  const cleanId = normalizeContractId(String(entry.contractId || ''));
+  if (!cleanId) {
+    return '';
+  }
+  const ts = Number(entry.ts || 0);
+  if (!Number.isFinite(ts) || Date.now() - ts > maxAgeMs) {
+    return '';
+  }
+  return cleanId;
 }

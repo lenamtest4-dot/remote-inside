@@ -33,7 +33,7 @@ const JS_ENDPOINT_RE =
 
 const MAX_STR_LEN = 80;
 const MAX_CONTROLS = 80;
-const MAX_RECORDED_REQUESTS = 40;
+const MAX_RECORDED_REQUESTS = 120;
 
 function truncateStr(str, maxLen = MAX_STR_LEN) {
   if (typeof str !== 'string') {
@@ -84,6 +84,45 @@ export function redactHeaders(headers) {
     safe[key] = truncateStr(String(v ?? ''));
   }
   return safe;
+}
+
+/**
+ * Chi ghi nhan ten header nhay cam va loai auth (Bearer/Basic/Custom), tuyet doi khong luu token.
+ */
+export function summarizeSensitiveHeaders(headers) {
+  if (!headers || typeof headers !== 'object') {
+    return { sensitiveHeaderNames: [], authScheme: '' };
+  }
+  const names = new Set();
+  let authScheme = '';
+  const entries =
+    typeof headers.entries === 'function'
+      ? Array.from(headers.entries())
+      : Object.entries(headers);
+
+  for (const [k, v] of entries) {
+    const rawKey = String(k || '').trim();
+    if (!rawKey) continue;
+    const lowerKey = rawKey.toLowerCase();
+    if (SENSITIVE_HEADER_RE.test(lowerKey)) {
+      names.add(lowerKey);
+      if (lowerKey === 'authorization' && !authScheme) {
+        const val = String(v ?? '').trim();
+        if (/^bearer\s+/i.test(val)) {
+          authScheme = 'Bearer';
+        } else if (/^basic\s+/i.test(val)) {
+          authScheme = 'Basic';
+        } else if (val) {
+          authScheme = 'Custom';
+        }
+      }
+    }
+  }
+
+  return {
+    sensitiveHeaderNames: Array.from(names).sort(),
+    authScheme,
+  };
 }
 
 /**
@@ -214,7 +253,7 @@ function summarizeJsonShape(node, contractId, depth) {
   if (node === null || node === undefined) {
     return null;
   }
-  if (depth > 4) {
+  if (depth > 5) {
     return '[DEPTH_LIMIT]';
   }
   if (Array.isArray(node)) {
@@ -224,7 +263,7 @@ function summarizeJsonShape(node, contractId, depth) {
   }
   if (typeof node === 'object') {
     const out = {};
-    for (const [k, v] of Object.entries(node).slice(0, 25)) {
+    for (const [k, v] of Object.entries(node).slice(0, 60)) {
       if (isSensitiveKey(k)) {
         out[k] = '[REDACTED]';
       } else if (typeof v === 'object' && v !== null) {
@@ -524,6 +563,49 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
     // Bo qua neu khong doc duoc inline script
   }
 
+  const storageKeyNames = { local: [], session: [] };
+  try {
+    const storageWin =
+      (doc && doc.defaultView) ||
+      (typeof window !== 'undefined' ? window : null);
+    if (
+      storageWin &&
+      storageWin.localStorage &&
+      typeof storageWin.localStorage.length === 'number' &&
+      typeof storageWin.localStorage.key === 'function'
+    ) {
+      for (
+        let i = 0;
+        i < storageWin.localStorage.length && storageKeyNames.local.length < 50;
+        i++
+      ) {
+        const keyName = storageWin.localStorage.key(i);
+        if (keyName) {
+          storageKeyNames.local.push(truncateStr(String(keyName)));
+        }
+      }
+    }
+    if (
+      storageWin &&
+      storageWin.sessionStorage &&
+      typeof storageWin.sessionStorage.length === 'number' &&
+      typeof storageWin.sessionStorage.key === 'function'
+    ) {
+      for (
+        let i = 0;
+        i < storageWin.sessionStorage.length && storageKeyNames.session.length < 50;
+        i++
+      ) {
+        const keyName = storageWin.sessionStorage.key(i);
+        if (keyName) {
+          storageKeyNames.session.push(truncateStr(String(keyName)));
+        }
+      }
+    }
+  } catch {
+    // Bo qua neu khong doc duoc danh sach key storage
+  }
+
   return {
     scannedAt: new Date().toISOString(),
     origin: (loc && loc.origin) || '',
@@ -537,6 +619,7 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
     forms,
     actionControls,
     ajaxCalls: ajaxCollector.getCalls(),
+    storageKeyNames,
     scriptHints: {
       frameworks,
       externalFiles: externalScripts,
@@ -554,7 +637,7 @@ function isTargetFptHost(rawUrl, currentOrigin) {
     if (currentOrigin && u.origin === currentOrigin) {
       return true;
     }
-    return /(\.fpt\.net|\.fcam\.vn)$/i.test(u.hostname);
+    return /(\.fpt\.net|\.fpt\.vn|\.fpt\.com\.vn|\.fcam\.vn)$/i.test(u.hostname);
   } catch {
     return false;
   }
@@ -599,7 +682,9 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
           try {
             const contractId = getContractId ? getContractId() : '';
             const u = new URL(rawUrl, currentOrigin);
-            const reqHeaders = redactHeaders((init && init.headers) || {});
+            const rawReqHeaders = (init && init.headers) || (input && input.headers) || {};
+            const reqHeaders = redactHeaders(rawReqHeaders);
+            const authHints = summarizeSensitiveHeaders(rawReqHeaders);
             const reqCt = reqHeaders['content-type'] || reqHeaders['Content-Type'] || '';
             const clone = res.clone();
             const resCt = (res.headers && res.headers.get && res.headers.get('content-type')) || '';
@@ -615,6 +700,7 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
                   queryParamNames: Array.from(new Set(u.searchParams.keys())),
                   requestContentType: reqCt,
                   requestHeaders: reqHeaders,
+                  authHints,
                   requestSchema: redactPayload(init ? init.body : null, contractId),
                   status: res.status,
                   responseContentType: resCt,
@@ -671,13 +757,24 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
             try {
               const contractId = getContractId ? getContractId() : '';
               const u = new URL(meta.url, currentOrigin);
-              const reqHeaders = redactHeaders(meta.rawHeaders || {});
+              const rawReqHeaders = meta.rawHeaders || {};
+              const reqHeaders = redactHeaders(rawReqHeaders);
+              const authHints = summarizeSensitiveHeaders(rawReqHeaders);
               const reqCt = reqHeaders['content-type'] || reqHeaders['Content-Type'] || '';
               const resCt = this.getResponseHeader('content-type') || '';
-              const bodyText =
-                this.responseType === '' || this.responseType === 'text'
-                  ? this.responseText
-                  : '';
+              let bodyText = '';
+              if (this.responseType === '' || this.responseType === 'text') {
+                bodyText = this.responseText || '';
+              } else if (this.responseType === 'json') {
+                try {
+                  bodyText =
+                    this.response !== null && this.response !== undefined
+                      ? JSON.stringify(this.response)
+                      : '';
+                } catch {
+                  bodyText = '';
+                }
+              }
               pushEntry({
                 time: new Date().toISOString(),
                 transport: 'xhr',
@@ -687,6 +784,7 @@ export function createNetworkRecorder(targetWindow, getContractId = () => '') {
                 queryParamNames: Array.from(new Set(u.searchParams.keys())),
                 requestContentType: reqCt,
                 requestHeaders: reqHeaders,
+                authHints,
                 requestSchema: redactPayload(body, contractId),
                 status: this.status,
                 responseContentType: resCt,

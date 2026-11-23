@@ -43,6 +43,7 @@ import {
   redactPayload,
   redactResponseStructure,
   scanPageStructure,
+  summarizeSensitiveHeaders,
 } from '../src/core/inspector.js';
 import {
   BYPASS_CHOICE_OPTIONS,
@@ -1973,6 +1974,128 @@ async function runTests() {
     );
   }
   console.log('   OK: Android App Native Bridge & Packaging checks passed.');
+
+  console.log('17. Testing FOX-ERP / Partner SPA Scanner & Recorder...');
+  assert.ok(
+    PORTALS.inside.hosts.includes('fox-erp.fpt.net') &&
+      PORTALS.inside.hosts.includes('partner.fpt.net'),
+    'PORTALS.inside.hosts must include fox-erp.fpt.net and partner.fpt.net'
+  );
+  for (const spaDomain of ['fox-erp.fpt.net', 'partner.fpt.net']) {
+    assert.ok(
+      userscriptContent.includes(`@match        https://${spaDomain}/*`) &&
+        userscriptContent.includes(`@match        http://${spaDomain}/*`),
+      `Userscript must include @match for ${spaDomain}`
+    );
+    assert.ok(
+      userscriptContent.includes(`@connect      ${spaDomain}`),
+      `Userscript must include @connect for ${spaDomain}`
+    );
+  }
+
+  const headerSummary = summarizeSensitiveHeaders({
+    Authorization: 'Bearer super-secret-jwt-123',
+    'X-Api-Key': 'abc',
+    'Content-Type': 'application/json',
+  });
+  assert.deepEqual(headerSummary, {
+    sensitiveHeaderNames: ['authorization', 'x-api-key'],
+    authScheme: 'Bearer',
+  });
+  const headerSummaryText = JSON.stringify(headerSummary);
+  assert.equal(
+    headerSummaryText.includes('super-secret') || headerSummaryText.includes('abc'),
+    false,
+    'summarizeSensitiveHeaders must never expose header values'
+  );
+
+  function MockXhr() {
+    this._listeners = {};
+    this.responseType = 'json';
+    this.status = 200;
+    this.response = { ok: true, items: [{ ticketCode: 'TK1', phone: '0901234567' }] };
+  }
+  MockXhr.prototype.open = function open() {};
+  MockXhr.prototype.setRequestHeader = function setRequestHeader() {};
+  MockXhr.prototype.getResponseHeader = function getResponseHeader() {
+    return 'application/json';
+  };
+  MockXhr.prototype.addEventListener = function addEventListener(evt, fn) {
+    this._listeners[evt] = this._listeners[evt] || [];
+    this._listeners[evt].push(fn);
+  };
+  MockXhr.prototype.send = function send() {
+    for (const fn of this._listeners.loadend || []) {
+      fn.call(this);
+    }
+  };
+
+  const mockSpaWindow = {
+    location: { origin: 'https://fox-erp.fpt.net' },
+    XMLHttpRequest: MockXhr,
+  };
+  const spaRec = createNetworkRecorder(mockSpaWindow, () => 'SGN123456');
+  assert.equal(spaRec.start(), true);
+  const spaXhr = new mockSpaWindow.XMLHttpRequest();
+  spaXhr.open('POST', 'https://api-erp.fpt.vn/tkbt/tk/ticket/detail');
+  spaXhr.setRequestHeader('Authorization', 'Bearer ultra-secret-token-value');
+  spaXhr.setRequestHeader('Content-Type', 'application/json');
+  spaXhr.send(JSON.stringify({ contract: 'SGN123456', phone: '0909998888' }));
+  spaRec.stop();
+
+  const xhrEntries = spaRec.getEntries();
+  assert.equal(xhrEntries.length, 1);
+  assert.equal(xhrEntries[0].transport, 'xhr');
+  assert.equal(xhrEntries[0].pathname, '/tkbt/tk/ticket/detail');
+  assert.deepEqual(xhrEntries[0].authHints, {
+    sensitiveHeaderNames: ['authorization'],
+    authScheme: 'Bearer',
+  });
+  assert.equal(xhrEntries[0].responseSchema.ok, 'boolean');
+  assert.equal(xhrEntries[0].responseSchema.items[1].phone, '[REDACTED]');
+  const recJson = JSON.stringify(xhrEntries);
+  assert.equal(
+    recJson.includes('ultra-secret-token-value') || recJson.includes('0901234567'),
+    false,
+    'Recorder JSON must never expose tokens or sensitive field values'
+  );
+
+  const mockStorageWin = {
+    localStorage: {
+      length: 2,
+      key: (i) => ['fox_user_prefs', 'access_token'][i],
+      getItem: () => 'TOP_SECRET_VALUE',
+    },
+    sessionStorage: {
+      length: 1,
+      key: (i) => ['erp_tab_state'][i],
+      getItem: () => 'TOP_SECRET_SESSION',
+    },
+  };
+  const spaSnap = scanPageStructure(
+    {
+      title: 'Chi tiet phieu SGN123456',
+      defaultView: mockStorageWin,
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    },
+    {
+      origin: 'https://fox-erp.fpt.net',
+      pathname: '/app/tkbt/tk/ticket',
+      href: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket?q=opaque',
+    },
+    'SGN123456'
+  );
+  assert.deepEqual(spaSnap.storageKeyNames, {
+    local: ['fox_user_prefs', 'access_token'],
+    session: ['erp_tab_state'],
+  });
+  assert.equal(
+    JSON.stringify(spaSnap).includes('TOP_SECRET'),
+    false,
+    'scanPageStructure must only collect storage key names, never values'
+  );
+  console.log('   OK: FOX-ERP / Partner SPA Scanner & Recorder checks passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

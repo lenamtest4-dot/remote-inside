@@ -10,7 +10,7 @@ export const PORTALS = {
     label: 'Inside',
     fullName: 'inside.fpt.net',
     url: 'http://inside.fpt.net/default.asp',
-    hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
+    hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
     status: 'priority',
     statusLabel: 'Đủ 6 lệnh',
     description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',

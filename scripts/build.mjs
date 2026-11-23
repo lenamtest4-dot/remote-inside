@@ -47,6 +47,10 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        http://inside.fpt.net/*
 // @match        http://mvc.inside.fpt.net/*
 // @match        https://mvc.inside.fpt.net/*
+// @match        https://fox-erp.fpt.net/*
+// @match        http://fox-erp.fpt.net/*
+// @match        https://partner.fpt.net/*
+// @match        http://partner.fpt.net/*
 // @match        https://port.fpt.net/*
 // @match        http://port.fpt.net/*
 // @match        https://mvcport.fpt.net/*
@@ -58,6 +62,8 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        https://radius-portal.fpt.net/*
 // @connect      inside.fpt.net
 // @connect      mvc.inside.fpt.net
+// @connect      fox-erp.fpt.net
+// @connect      partner.fpt.net
 // @connect      port.fpt.net
 // @connect      mvcport.fpt.net
 // @connect      fli-mngt.fcam.vn

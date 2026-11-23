@@ -60,7 +60,14 @@ export function detectIamRedirect({
   }
 
   if (typeof responseText === 'string' && responseText.length > 0) {
-    if (LOGIN_PASSWORD_INPUT_RE.test(responseText) || LOGIN_TITLE_RE.test(responseText)) {
+    const isPortLoggedInFrameset =
+      /<frameset\b/i.test(responseText) &&
+      /LeftMenu\.aspx/i.test(responseText) &&
+      !LOGIN_PASSWORD_INPUT_RE.test(responseText);
+    if (
+      LOGIN_PASSWORD_INPUT_RE.test(responseText) ||
+      (!isPortLoggedInFrameset && LOGIN_TITLE_RE.test(responseText))
+    ) {
       return {
         expired: true,
         reason: 'Phát hiện màn hình đăng nhập IAM trong phản hồi.',
@@ -190,7 +197,7 @@ export async function checkPortalSession(portal, { checkUrlOverride = '' } = {})
     return {
       state: 'iam_expired',
       label: 'Cần đăng nhập IAM',
-      loginUrl: res.finalUrl || portal.url,
+      loginUrl: portal.url,
       detail: iamCheck.reason,
     };
   }

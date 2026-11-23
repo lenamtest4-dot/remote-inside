@@ -144,8 +144,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.8.2'),
-    'Userscript must bump @version to 0.8.2'
+    userscriptContent.includes('@version      0.8.3'),
+    'Userscript must bump @version to 0.8.3'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1498,6 +1498,57 @@ async function runTests() {
   assert.ok(
     userscriptContent.toLowerCase().includes('leftmenu.aspx'),
     'Userscript bundle must reference LeftMenu.aspx'
+  );
+
+  const loggedInPortIndexHtml =
+    '<html><head><title>Đăng nhập Hệ Thống Port</title></head>' +
+    '<frameset cols="200,*">' +
+    '<frame name="leftFrame" src="LeftMenu.aspx?mvct=tok%2B123&amp;mvcu=1" />' +
+    '<frame name="mainFrame" src="Default1.aspx" />' +
+    '</frameset></html>';
+  assert.equal(
+    detectIamRedirect({
+      status: 200,
+      finalUrl: 'http://port.fpt.net/Index.aspx',
+      requestedUrl: 'http://port.fpt.net/Index.aspx',
+      responseText: loggedInPortIndexHtml,
+    }).expired,
+    false,
+    'Logged-in port.fpt.net/Index.aspx frameset with title "Đăng nhập Hệ Thống Port" must not trigger IAM expired'
+  );
+  assert.equal(
+    detectPortSessionExpired(
+      {
+        status: 200,
+        finalUrl: 'http://port.fpt.net/Index.aspx',
+        responseText: loggedInPortIndexHtml,
+      },
+      'http://port.fpt.net/Index.aspx'
+    ).expired,
+    false,
+    'detectPortSessionExpired must not flag logged-in port.fpt.net/Index.aspx frameset as expired'
+  );
+  assert.equal(
+    detectIamRedirect({
+      status: 200,
+      finalUrl: 'http://port.fpt.net/Other.aspx',
+      requestedUrl: 'http://port.fpt.net/Other.aspx',
+      responseText: '<html><head><title>Đăng nhập Hệ Thống Port</title></head><body>Login</body></html>',
+    }).expired,
+    true,
+    'Non-frameset HTML with login title must still trigger IAM expired'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText('src="/AnyMenu.aspx?foo=1&amp;mvct=tok%2B99"'),
+    'tok+99'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText('<a href="http://other.fpt.net/?Token=shouldIgnore">x</a>'),
+    ''
+  );
+  assert.ok(
+    userscriptContent.includes('isPortLoggedInFrameset'),
+    'Userscript bundle must include isPortLoggedInFrameset'
   );
   console.log('   OK: port.fpt.net adapter tests passed.');
 

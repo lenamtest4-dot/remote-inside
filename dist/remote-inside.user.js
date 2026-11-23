@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.8.2
+// @version      0.8.3
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -444,7 +444,14 @@ function detectIamRedirect({
   }
 
   if (typeof responseText === 'string' && responseText.length > 0) {
-    if (LOGIN_PASSWORD_INPUT_RE.test(responseText) || LOGIN_TITLE_RE.test(responseText)) {
+    const isPortLoggedInFrameset =
+      /<frameset\b/i.test(responseText) &&
+      /LeftMenu\.aspx/i.test(responseText) &&
+      !LOGIN_PASSWORD_INPUT_RE.test(responseText);
+    if (
+      LOGIN_PASSWORD_INPUT_RE.test(responseText) ||
+      (!isPortLoggedInFrameset && LOGIN_TITLE_RE.test(responseText))
+    ) {
       return {
         expired: true,
         reason: 'Phát hiện màn hình đăng nhập IAM trong phản hồi.',
@@ -574,7 +581,7 @@ async function checkPortalSession(portal, { checkUrlOverride = '' } = {}) {
     return {
       state: 'iam_expired',
       label: 'Cần đăng nhập IAM',
-      loginUrl: res.finalUrl || portal.url,
+      loginUrl: portal.url,
       detail: iamCheck.reason,
     };
   }
@@ -4800,6 +4807,10 @@ function extractMvcPortTokenFromText(text) {
   if (leftMenuMatch && leftMenuMatch[1]) {
     return safeDecodeToken(leftMenuMatch[1]);
   }
+  const mvctParamMatch = text.match(/(?:[?&]|&amp;)mvct=([^"'&<>\s#\\]+)/i);
+  if (mvctParamMatch && mvctParamMatch[1]) {
+    return safeDecodeToken(mvctParamMatch[1]);
+  }
   return '';
 }
 
@@ -5011,14 +5022,24 @@ async function bootstrapMvcPortSession() {
       const idxRes = await requestPortal({
         url: PORT_ENDPOINTS.portIndexPage,
         method: 'GET',
-        timeout: 10000,
+        timeout: 8000,
       });
-      if (idxRes && idxRes.ok && !detectPortSessionExpired(idxRes, PORT_ENDPOINTS.portIndexPage).expired) {
-        const extracted = extractMvcPortTokenFromText(idxRes.responseText || '');
-        if (extracted) {
-          cachedMvcPortToken = extracted;
-          return extracted;
-        }
+      if (!idxRes || !idxRes.ok) {
+        return '';
+      }
+      const idxFinalUrl = String(idxRes.finalUrl || '');
+      const idxBody = String(idxRes.responseText || '');
+      if (
+        /\/LoginPage\.aspx(?:\?|$|#)/i.test(idxFinalUrl) ||
+        /https?:\/\/[^/]*(?:iam|sso|login|auth|signin|oauth|cas)/i.test(idxFinalUrl) ||
+        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody)
+      ) {
+        return '';
+      }
+      const extracted = extractMvcPortTokenFromText(idxBody);
+      if (extracted) {
+        cachedMvcPortToken = extracted;
+        return extracted;
       }
       return '';
     }

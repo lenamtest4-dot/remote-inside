@@ -169,6 +169,10 @@ export function extractMvcPortTokenFromText(text) {
   if (leftMenuMatch && leftMenuMatch[1]) {
     return safeDecodeToken(leftMenuMatch[1]);
   }
+  const mvctParamMatch = text.match(/(?:[?&]|&amp;)mvct=([^"'&<>\s#\\]+)/i);
+  if (mvctParamMatch && mvctParamMatch[1]) {
+    return safeDecodeToken(mvctParamMatch[1]);
+  }
   return '';
 }
 
@@ -382,14 +386,24 @@ export async function bootstrapMvcPortSession() {
       const idxRes = await requestPortal({
         url: PORT_ENDPOINTS.portIndexPage,
         method: 'GET',
-        timeout: 10000,
+        timeout: 8000,
       });
-      if (idxRes && idxRes.ok && !detectPortSessionExpired(idxRes, PORT_ENDPOINTS.portIndexPage).expired) {
-        const extracted = extractMvcPortTokenFromText(idxRes.responseText || '');
-        if (extracted) {
-          cachedMvcPortToken = extracted;
-          return extracted;
-        }
+      if (!idxRes || !idxRes.ok) {
+        return '';
+      }
+      const idxFinalUrl = String(idxRes.finalUrl || '');
+      const idxBody = String(idxRes.responseText || '');
+      if (
+        /\/LoginPage\.aspx(?:\?|$|#)/i.test(idxFinalUrl) ||
+        /https?:\/\/[^/]*(?:iam|sso|login|auth|signin|oauth|cas)/i.test(idxFinalUrl) ||
+        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody)
+      ) {
+        return '';
+      }
+      const extracted = extractMvcPortTokenFromText(idxBody);
+      if (extracted) {
+        cachedMvcPortToken = extracted;
+        return extracted;
       }
       return '';
     }

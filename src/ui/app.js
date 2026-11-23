@@ -29,7 +29,9 @@ import {
   extractAjaxSignaturesFromHtml,
   extractApiHintsFromHtml,
   extractApiHintsFromJs,
-  extractOpsMenuFromLeftAsp,
+  extractFormControlsMeta,
+  extractInlineScriptsSanitized,
+  extractMatchingFunctionsFromJs,
   scanPageStructure,
 } from '../core/inspector.js';
 import { getCachedInsideContract, runInsideAction } from '../adapters/inside.js';
@@ -602,33 +604,92 @@ export function mountRemoteInside({
 
     state.isDeepScanning = true;
     state.copyNotice =
-      'Đang đọc cấu trúc Reset MAC (Modem & Box), Kill Session và Menu Left.Asp (chỉ đọc, không chạy lệnh)…';
+      'Đang đọc mã lệnh Replace MAC Box và Clear Serial / MonitorOLT (chỉ đọc, không chạy lệnh)…';
     render();
 
     try {
       const contractId = normalizeContractId(state.contractInput);
       const targets = [
         {
-          key: 'reset_mac_modem',
-          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
-        },
-        {
-          key: 'kill_session',
-          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
-        },
-        {
           key: 'replace_mac_box',
           url: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC',
         },
         {
-          key: 'check_mac_box',
-          url: 'http://mvc.inside.fpt.net/Contract/CheckMACBox',
+          key: 'monitor_olt',
+          url: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/',
         },
         {
-          key: 'left_menu',
-          url: 'http://inside.fpt.net/Left.Asp',
+          key: 'clear_serial',
+          url: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
         },
       ];
+
+      function analyzeHtmlPage(key, url, res) {
+        let pathname = '';
+        try {
+          pathname = new URL(url).pathname;
+        } catch {
+          pathname = '';
+        }
+
+        if (!res || !res.ok || !res.responseText) {
+          return {
+            key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          };
+        }
+
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: url,
+        });
+        const hints = extractApiHintsFromHtml(res.responseText, url, contractId);
+        const sigs = extractAjaxSignaturesFromHtml(res.responseText, url, contractId);
+        const controlsMeta = extractFormControlsMeta(res.responseText, contractId);
+        const inlineScripts = extractInlineScriptsSanitized(res.responseText, contractId);
+
+        return {
+          key,
+          pathname,
+          status: res.status,
+          iamExpired: iam.expired,
+          ajaxCalls: sigs.ajaxCalls,
+          controlsMeta,
+          forms: hints.forms,
+          fields: hints.fields,
+          buttons: hints.buttons,
+          scriptUrls: hints.scriptUrls,
+          apiHints: hints.apiHints,
+          inlineScripts,
+        };
+      }
+
+      function pickSampleSelectValue(selects, nameRe, skipAllText = false) {
+        for (const sel of selects || []) {
+          if (!nameRe.test(`${sel.id || ''} ${sel.name || ''}`)) continue;
+          const isValidOpt = (val, text = '') => {
+            const v = String(val || '').trim();
+            if (!v || v === '0' || v === '-1') return false;
+            if (skipAllText && /^(?:tat\s*ca|tất\s*cả|all)$/i.test(String(text || '').trim())) {
+              return false;
+            }
+            return true;
+          };
+          if (isValidOpt(sel.selectedValue)) {
+            return sel.selectedValue;
+          }
+          for (const opt of sel.sampleOptions || []) {
+            if (isValidOpt(opt.value, opt.text)) {
+              return opt.value;
+            }
+          }
+        }
+        return '';
+      }
 
       const settled = await Promise.allSettled(
         targets.map((t) =>
@@ -642,76 +703,117 @@ export function mountRemoteInside({
       );
 
       const pages = [];
-      let leftMenuOps = [];
-
       for (let i = 0; i < targets.length; i += 1) {
         const t = targets[i];
         const item = settled[i];
         const res = item && item.status === 'fulfilled' ? item.value : null;
-        let pathname = '';
+        pages.push(analyzeHtmlPage(t.key, t.url, res));
+      }
+
+      // Stage 2: thu doc 1 lan ViewPortPON.Asp voi tham so Location/OLT mau (neu tim thay) de thay danh sach Port/checkbox
+      const oltPage = pages.find((p) => p.key === 'monitor_olt');
+      const clearPage = pages.find((p) => p.key === 'clear_serial');
+      const candidateSelects = [
+        ...((clearPage && clearPage.controlsMeta && clearPage.controlsMeta.selects) || []),
+        ...((oltPage && oltPage.controlsMeta && oltPage.controlsMeta.selects) || []),
+      ];
+      const sampleLocation = pickSampleSelectValue(candidateSelects, /location/i, false);
+      const sampleOlt = pickSampleSelectValue(candidateSelects, /olt/i, true);
+
+      if (sampleLocation || sampleOlt) {
+        const qp = new URLSearchParams();
+        if (sampleLocation) qp.set('fLocationID', sampleLocation);
+        if (sampleOlt) qp.set('fOLT', sampleOlt);
+        const popUrl = `http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp?${qp.toString()}`;
         try {
-          pathname = new URL(t.url).pathname;
+          const popRes = await requestPortal({
+            url: popUrl,
+            method: 'GET',
+            headers: { Accept: 'text/html, */*' },
+            timeout: 12000,
+          });
+          const popAnalyzed = analyzeHtmlPage('clear_serial_populated', popUrl, popRes);
+          popAnalyzed.queryParamNames = Array.from(qp.keys());
+          pages.push(popAnalyzed);
         } catch {
-          pathname = '';
+          // Bo qua neu khong tai duoc trang populated
         }
+      }
 
-        if (!res || !res.ok || !res.responseText) {
-          pages.push({
-            key: t.key,
-            pathname,
-            status: (res && res.status) || 0,
-            error: (res && res.error) || 'REQUEST_FAILED',
-          });
-          continue;
+      // Stage 3: doc toi da 3 file JS ngoai (Library.js, jquery.isc.js, custom scripts) neu can ham ClearSerial/ReplaceMAC
+      const clearPopPage = pages.find((p) => p.key === 'clear_serial_populated');
+      const hasClearSerialInline = [clearPage, clearPopPage].some(
+        (p) =>
+          p &&
+          Array.isArray(p.inlineScripts) &&
+          p.inlineScripts.some((sc) => /ClearSerial/i.test(sc.code || ''))
+      );
+
+      const scriptPriority = (url) => {
+        if (!hasClearSerialInline && /(?:MonitorOLT|Library\.js|jquery\.isc\.js)/i.test(url)) {
+          return 2;
         }
+        if (/(?:IPTV|ReplaceMAC|Swap|MonitorOLT|PowerDSL|Library\.js|jquery\.isc\.js)/i.test(url)) {
+          return 1;
+        }
+        return 0;
+      };
 
-        const iam = detectIamRedirect({
-          status: res.status,
-          finalUrl: res.finalUrl,
-          responseText: res.responseText,
-          requestedUrl: t.url,
-        });
+      const uniqueScriptUrls = [];
+      const seenScripts = new Set();
+      for (const p of [clearPopPage, clearPage, oltPage, pages.find((x) => x.key === 'replace_mac_box')]) {
+        if (!p || !Array.isArray(p.scriptUrls)) continue;
+        for (const sUrl of p.scriptUrls) {
+          if (!seenScripts.has(sUrl)) {
+            seenScripts.add(sUrl);
+            uniqueScriptUrls.push(sUrl);
+          }
+        }
+      }
+      uniqueScriptUrls.sort((a, b) => scriptPriority(b) - scriptPriority(a));
+      const candidateScripts = uniqueScriptUrls.slice(0, 3);
 
-        if (t.key === 'left_menu') {
-          leftMenuOps = extractOpsMenuFromLeftAsp(res.responseText, t.url);
-          pages.push({
-            key: t.key,
-            pathname,
-            status: res.status,
-            iamExpired: iam.expired,
-            menuOpsCount: leftMenuOps.length,
-          });
-        } else {
-          const hints = extractApiHintsFromHtml(res.responseText, t.url, contractId);
-          const sigs = extractAjaxSignaturesFromHtml(res.responseText, t.url, contractId);
-          pages.push({
-            key: t.key,
-            pathname,
-            status: res.status,
-            iamExpired: iam.expired,
-            ajaxCalls: sigs.ajaxCalls,
-            selects: sigs.selects,
-            forms: hints.forms,
-            fields: hints.fields,
-            buttons: hints.buttons,
-            apiHints: hints.apiHints,
+      const externalScriptSnippets = [];
+      if (candidateScripts.length > 0) {
+        const jsSettled = await Promise.allSettled(
+          candidateScripts.map((url) =>
+            requestPortal({ url, method: 'GET', timeout: 12000 })
+          )
+        );
+        for (let i = 0; i < candidateScripts.length; i += 1) {
+          const sUrl = candidateScripts[i];
+          const item = jsSettled[i];
+          const res = item && item.status === 'fulfilled' ? item.value : null;
+          if (!res || !res.ok || !res.responseText || res.responseText.length > 1024 * 1024) {
+            continue;
+          }
+          let sOrigin = '';
+          let sPath = sUrl;
+          try {
+            const parsed = new URL(sUrl);
+            sOrigin = parsed.origin;
+            sPath = parsed.pathname;
+          } catch {
+            // keep raw string
+          }
+          externalScriptSnippets.push({
+            origin: sOrigin,
+            pathname: sPath,
+            functions: extractMatchingFunctionsFromJs(res.responseText, undefined, contractId),
+            apiHints: extractApiHintsFromJs(res.responseText, contractId),
           });
         }
       }
 
       state.deepScan = {
-        scanKind: 'ops_signatures',
+        scanKind: 'ops_box_osp_v2',
         scannedAt: new Date().toISOString(),
         pages,
-        leftMenuOps,
+        externalScriptSnippets,
       };
 
-      const okCount = pages.filter((p) => p.status >= 200 && p.status < 400 && !p.iamExpired).length;
-      const callCount = pages.reduce(
-        (acc, p) => acc + (Array.isArray(p.ajaxCalls) ? p.ajaxCalls.length : 0),
-        0
-      );
-      state.copyNotice = `Đã quét xong ${okCount}/${targets.length} trang (bắt được ${callCount} lệnh AJAX và ${leftMenuOps.length} mục menu). Hãy bấm "Tải file JSON" lưu vào thư mục Dự án mới/Remote inside/scans và nhắn mình "đã lưu file"!`;
+      state.copyNotice =
+        'Đã quét xong chi tiết Reset MAC Box & Clear Serial! Bấm "Tải file JSON" lưu vào thư mục Remote inside/scans rồi nhắn mình "đã lưu file" nhé.';
     } catch (err) {
       state.copyNotice = `Có lỗi khi quét tham số: ${
         err && err.message ? err.message : 'Không rõ nguyên nhân'
@@ -1432,8 +1534,8 @@ export function mountRemoteInside({
             className: 'ri-primary-btn',
             disabled: state.isDeepScanning,
             text: state.isDeepScanning
-              ? 'Đang đọc tham số lệnh…'
-              : '4. Quét chi tiết tham số Reset MAC (Modem & Box) + Kill Session + Clear OSP',
+              ? 'Đang đọc mã lệnh Box & OLT…'
+              : '4. Quét chi tiết mã lệnh Reset MAC Box & Clear Serial (1 chạm)',
             onClick: handleOpsSignatureScan,
           }),
         ]),

@@ -25,6 +25,9 @@ import {
   extractAjaxSignaturesFromHtml,
   extractApiHintsFromHtml,
   extractApiHintsFromJs,
+  extractFormControlsMeta,
+  extractInlineScriptsSanitized,
+  extractMatchingFunctionsFromJs,
   extractOpsMenuFromLeftAsp,
   redactHeaders,
   redactPayload,
@@ -91,8 +94,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.4.0'),
-    'Userscript must bump @version to 0.4.0'
+    userscriptContent.includes('@version      0.4.1'),
+    'Userscript must bump @version to 0.4.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -632,6 +635,110 @@ function runTests() {
   assert.equal(mutHttpErr.status, 'error');
   assert.ok(mutHttpErr.title.includes('500'));
   console.log('   OK: Inside live mutation response parser passed.');
+
+  console.log('10. Testing sanitized inline scripts, form controls meta, and JS function extractors...');
+  const sampleBoxOltHtml = `
+    <script src="/Scripts/jquery.min.js"></script>
+    <script src="/Scripts/jquery.isc.js"></script>
+    <script src="/Functions/NetAdmin/PowerDSL/MonitorOLT/Library.js"></script>
+    <input type="hidden" id="__VIEWSTATE" name="__VIEWSTATE" value="super-secret-viewstate" />
+    <input type="hidden" id="fDeviceType" name="fDeviceType" value="GPON" />
+    <select id="fOLT" name="fOLT" onchange="loadPort()">
+      <option value="0">Tat ca</option>
+      <option value="VTU-OLT-01" selected>VTU-OLT-01 (Vung Tau)</option>
+      <option value="VTU-OLT-02">VTU-OLT-02</option>
+    </select>
+    <input type="checkbox" id="chkPort1" name="chkPort" class="pon-cb" value="0/1/1" onclick="togglePort(this)" />
+    <script>
+      function SaveSwapping() {
+        const cfg = {
+          contract: 'VTAAR2393',
+          headers: { Authorization: 'Bearer top-secret-jwt' },
+          password: 'pw123',
+          contact: '0901234567',
+          mail: 'tech@example.com',
+          kendoTransport: { update: { url: '/Contract/IPTVReplaceMAC/SwappingMAC?token=secret123' } }
+        };
+        $.post('/Contract/IPTVReplaceMAC/SwappingMAC', cfg);
+      }
+      function ClearSerial() {
+        var url = '/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxClearSerial.asp?contract=VTAAR2393';
+        return url;
+      }
+    </script>
+  `;
+
+  const inlineScripts = extractInlineScriptsSanitized(sampleBoxOltHtml, 'VTAAR2393');
+  assert.equal(inlineScripts.length, 1);
+  const inlineCode = inlineScripts[0].code;
+  assert.ok(inlineCode.includes('SaveSwapping'), 'Must preserve SaveSwapping function');
+  assert.ok(inlineCode.includes('transport') || inlineCode.includes('SwappingMAC'), 'Must preserve Kendo transport update URL');
+  assert.ok(inlineCode.includes('ClearSerial'), 'Must preserve ClearSerial function');
+  assert.ok(inlineCode.includes('<CONTRACT_ID>'), 'Must replace contract ID with <CONTRACT_ID>');
+  assert.equal(inlineCode.includes('VTAAR2393'), false, 'Must redact literal contract ID');
+  assert.equal(inlineCode.includes('top-secret-jwt'), false, 'Must redact Bearer token');
+  assert.equal(inlineCode.includes('secret123'), false, 'Must redact query token value');
+  assert.equal(inlineCode.includes('pw123'), false, 'Must redact password literal');
+  assert.equal(inlineCode.includes('0901234567'), false, 'Must redact mobile phone number');
+  assert.equal(inlineCode.includes('tech@example.com'), false, 'Must redact email address');
+
+  const controlsMeta = extractFormControlsMeta(sampleBoxOltHtml, 'VTAAR2393');
+  assert.equal(controlsMeta.selects.length, 1);
+  assert.equal(controlsMeta.selects[0].id, 'fOLT');
+  assert.equal(controlsMeta.selects[0].onchange, 'loadPort()');
+  assert.equal(controlsMeta.selects[0].optionCount, 3);
+  assert.equal(controlsMeta.selects[0].selectedValue, 'VTU-OLT-01');
+  assert.equal(controlsMeta.selects[0].sampleOptions.length, 3);
+  assert.equal(controlsMeta.selects[0].sampleOptions[1].selected, true);
+
+  assert.equal(controlsMeta.checkboxes.length, 1);
+  assert.equal(controlsMeta.checkboxes[0].value, '0/1/1');
+  assert.equal(controlsMeta.checkboxes[0].onclick, 'togglePort(this)');
+
+  const vsHidden = controlsMeta.hiddenInputs.find((h) => h.name === '__VIEWSTATE');
+  const devHidden = controlsMeta.hiddenInputs.find((h) => h.name === 'fDeviceType');
+  assert.equal(vsHidden.value, '[REDACTED]', 'Must redact __VIEWSTATE hidden input');
+  assert.equal(devHidden.value, 'GPON', 'Must preserve safe fDeviceType hidden input');
+
+  const externalJsSample = `
+    function formatDate(d) { return String(d); }
+    function ClearSerial(olt, portID) {
+      $.post('/AjaxClear.asp?token=secret999', { olt: olt, portID: portID, contract: 'VTAAR2393' });
+    }
+    var loadPort = function(olt) {
+      return '/ViewPortPON.Asp?fOLT=' + olt;
+    };
+    function unrelatedHelper() { return 42; }
+  `;
+  const matchedFns = extractMatchingFunctionsFromJs(externalJsSample, undefined, 'VTAAR2393');
+  const fnNames = matchedFns.map((f) => f.name);
+  assert.ok(fnNames.includes('ClearSerial'), 'Must extract ClearSerial function');
+  assert.ok(fnNames.includes('loadPort'), 'Must extract var loadPort = function');
+  assert.equal(fnNames.includes('formatDate'), false, 'Must ignore unrelated formatDate');
+  assert.equal(fnNames.includes('unrelatedHelper'), false, 'Must ignore unrelatedHelper');
+  const serializedFns = JSON.stringify(matchedFns);
+  assert.equal(serializedFns.includes('secret999'), false, 'Must redact token in external JS');
+  assert.equal(serializedFns.includes('VTAAR2393'), false, 'Must redact contract ID in external JS');
+
+  const hintsWithIsc = extractApiHintsFromHtml(
+    sampleBoxOltHtml,
+    'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
+    'VTAAR2393'
+  );
+  assert.equal(
+    hintsWithIsc.scriptUrls.some((u) => u.includes('jquery.min.js')),
+    false,
+    'Must still skip jquery.min.js'
+  );
+  assert.ok(
+    hintsWithIsc.scriptUrls.some((u) => u.includes('jquery.isc.js')),
+    'Must keep FPT internal jquery.isc.js'
+  );
+  assert.ok(
+    hintsWithIsc.scriptUrls.some((u) => u.includes('Library.js')),
+    'Must keep MonitorOLT Library.js'
+  );
+  console.log('   OK: Sanitized inline scripts, form controls meta, and JS function extractors passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

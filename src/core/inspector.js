@@ -23,7 +23,7 @@ const OPS_KEYWORD_RE =
   /(mac|reset|kill|session|osp|port|ipnat|ipv6|tra|tìm|search|thu\s*hồi|camera|clear|submit|cấp|xem|kiểm\s*tra|cập\s*nhật|hợp\s*đồng|tình\s*trạng|kỹ\s*thuật|contract|inside)/i;
 
 const VENDOR_SCRIPT_RE =
-  /(jquery|bootstrap|kendo|popper|jszip|moment|fontawesome|lodash|polyfill)/i;
+  /(jquery(?!\.isc\b)|bootstrap|kendo|popper|jszip|moment|fontawesome|lodash|polyfill|angular|amcharts|spin\.min|ladda\.min|filesaver|canvg|rgbcolor)/i;
 
 const API_PATH_HINT_RE =
   /(?:\/api\/|\/public\/|\/iptvinfo\/|\/Contract\/|\/DSLLLine\/|\/KillSession\/|\/networkConnection|\/radius)/i;
@@ -1212,6 +1212,238 @@ export function extractOpsMenuFromLeftAsp(htmlText, baseUrl = 'http://inside.fpt
   }
 
   return items;
+}
+
+const DEFAULT_JS_FN_KEYWORD_RE =
+  /(?:ClearSerial|testOID|ViewPort|MonitorOLT|Swap|ReplaceMAC|GetMac|Ajax|OLT|Port)/i;
+
+function sanitizeCodeSnippet(code, contractId = '', maxLen = 12000) {
+  if (!code || typeof code !== 'string') {
+    return '';
+  }
+  let out = code;
+  if (contractId && contractId.length >= 4) {
+    const re = new RegExp(escapeRegExp(contractId), 'gi');
+    out = out.replace(re, '<CONTRACT_ID>');
+  }
+  out = out.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]');
+  out = out.replace(
+    /(["']?(?:pass|pwd|secret|token|cookie|auth|otp|api_?key)[a-z0-9_-]*["']?\s*[:=]\s*)(['"`])[^'"`]{1,200}\2/gi,
+    '$1$2[REDACTED]$2'
+  );
+  out = out.replace(
+    /([?&](?:vR\d+|token|auth|secret|key|pass|pwd)=)[^&'"`\s]+/gi,
+    '$1[REDACTED]'
+  );
+  out = out.replace(/\b0[35789]\d{8}\b/g, '[REDACTED_PHONE]');
+  out = out.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]');
+  out = out.trim();
+  if (maxLen > 0 && out.length > maxLen) {
+    return `${out.slice(0, maxLen)}\n/* ...truncated... */`;
+  }
+  return out;
+}
+
+/**
+ * Trich xuat va lam sach cac doan inline script de xem ro cach trang goi API / submit.
+ */
+export function extractInlineScriptsSanitized(
+  htmlText,
+  contractId = '',
+  { maxPerScript = 12000, maxTotal = 28000 } = {}
+) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+  const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
+
+  const scripts = [];
+  let remaining = maxTotal;
+  let inlineIndex = 0;
+  let sm;
+
+  while ((sm = scriptRe.exec(withoutStyles)) !== null && remaining > 0) {
+    const attrs = sm[1] || '';
+    if (getAttrValue(attrs, 'src')) {
+      continue;
+    }
+    const rawBody = sm[2] || '';
+    if (!rawBody.trim()) {
+      inlineIndex += 1;
+      continue;
+    }
+    const limit = Math.min(maxPerScript, remaining);
+    const cleaned = sanitizeCodeSnippet(rawBody, contractId, limit);
+    if (cleaned) {
+      scripts.push({
+        index: inlineIndex,
+        originalLength: rawBody.length,
+        code: cleaned,
+      });
+      remaining -= cleaned.length;
+    }
+    inlineIndex += 1;
+  }
+
+  return scripts;
+}
+
+/**
+ * Trich xuat thong tin cau truc the select, checkbox/radio va hidden input (da loc gia tri nhay cam).
+ */
+export function extractFormControlsMeta(htmlText, contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { selects: [], checkboxes: [], hiddenInputs: [] };
+  }
+
+  const cleanedHtml = htmlText
+    .replace(new RegExp('<script\\b[^>]*>[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+    .replace(new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'), ' ');
+
+  const selects = [];
+  const selectRe = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi;
+  let slm;
+  while ((slm = selectRe.exec(cleanedHtml)) !== null && selects.length < 15) {
+    const attrs = slm[1] || '';
+    const inner = slm[2] || '';
+    const id = getAttrValue(attrs, 'id');
+    const name = getAttrValue(attrs, 'name');
+    const sensitiveSelect = isSensitiveKey(name) || isSensitiveKey(id);
+    const onchange = replaceContractToken(getAttrValue(attrs, 'onchange'), contractId, 160);
+
+    const optRe = /<option\b([^>]*)>([\s\S]*?)(?=<option\b|<\/option>|<\/select>|$)/gi;
+    let optionCount = 0;
+    let selectedValue = '';
+    const sampleOptions = [];
+    let om;
+
+    while ((om = optRe.exec(inner)) !== null) {
+      optionCount += 1;
+      const optAttrs = om[1] || '';
+      const isSelected = /\bselected\b/i.test(optAttrs);
+      const rawOptVal = getAttrValue(optAttrs, 'value');
+      const rawOptText = om[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      const safeVal = sensitiveSelect
+        ? '[REDACTED]'
+        : replaceContractToken(rawOptVal, contractId, 60);
+      const safeText = sensitiveSelect
+        ? '[REDACTED]'
+        : replaceContractToken(rawOptText, contractId, 60);
+
+      if (isSelected && !selectedValue) {
+        selectedValue = safeVal;
+      }
+      if (sampleOptions.length < 12) {
+        sampleOptions.push({
+          value: safeVal,
+          text: safeText,
+          selected: isSelected,
+        });
+      }
+    }
+
+    selects.push({
+      id,
+      name,
+      onchange,
+      optionCount,
+      selectedValue,
+      sampleOptions,
+    });
+  }
+
+  const checkboxes = [];
+  const hiddenInputs = [];
+  const inputRe = /<input\b([^>]*)>/gi;
+  let im;
+  while ((im = inputRe.exec(cleanedHtml)) !== null) {
+    if (checkboxes.length >= 15 && hiddenInputs.length >= 15) {
+      break;
+    }
+    const attrs = im[1] || '';
+    const type = getAttrValue(attrs, 'type').toLowerCase();
+    const id = getAttrValue(attrs, 'id');
+    const name = getAttrValue(attrs, 'name');
+    const rawVal = getAttrValue(attrs, 'value');
+
+    if ((type === 'checkbox' || type === 'radio') && checkboxes.length < 15) {
+      const sensitiveField = isSensitiveKey(name) || isSensitiveKey(id);
+      checkboxes.push({
+        type,
+        id,
+        name,
+        className: truncateStr(getAttrValue(attrs, 'class'), 60),
+        value: sensitiveField ? '[REDACTED]' : replaceContractToken(rawVal, contractId, 60),
+        onclick: replaceContractToken(getAttrValue(attrs, 'onclick'), contractId, 160),
+        onchange: replaceContractToken(getAttrValue(attrs, 'onchange'), contractId, 160),
+      });
+    } else if (type === 'hidden' && hiddenInputs.length < 15) {
+      const sensitiveHidden =
+        isSensitiveKey(name) ||
+        isSensitiveKey(id) ||
+        /viewstate|eventvalidation|requestverification|antiforgery|token|vr\d+/i.test(
+          `${name} ${id}`
+        );
+      hiddenInputs.push({
+        id,
+        name,
+        value: sensitiveHidden ? '[REDACTED]' : replaceContractToken(rawVal, contractId, 60),
+      });
+    }
+  }
+
+  return { selects, checkboxes, hiddenInputs };
+}
+
+/**
+ * Trich xuat cac ham JS lien quan den ClearSerial / ReplaceMAC / OLT / Port tu file JS ben ngoai.
+ */
+export function extractMatchingFunctionsFromJs(
+  jsText,
+  keywordRe = DEFAULT_JS_FN_KEYWORD_RE,
+  contractId = '',
+  maxTotal = 12000
+) {
+  if (!jsText || typeof jsText !== 'string') {
+    return [];
+  }
+  const re = keywordRe instanceof RegExp ? keywordRe : DEFAULT_JS_FN_KEYWORD_RE;
+  const fnRe =
+    /(?:function\s+([A-Za-z0-9_$]+)\s*\([^)]*\)|(?:(?:var|let|const)\s+)?([A-Za-z0-9_$]+)\s*=\s*(?:async\s+)?function\s*\([^)]*\))\s*\{/g;
+
+  const functions = [];
+  const seenNames = new Set();
+  let remaining = maxTotal;
+  let m;
+
+  while ((m = fnRe.exec(jsText)) !== null && remaining > 0) {
+    const name = m[1] || m[2] || '';
+    if (!name || seenNames.has(name)) {
+      continue;
+    }
+    const braceIdx = m.index + m[0].length - 1;
+    const block = extractBalancedBraces(jsText, braceIdx, 4500);
+    if (!re.test(name) && !re.test(block)) {
+      continue;
+    }
+    seenNames.add(name);
+    const fullCode = jsText.slice(m.index, braceIdx) + block;
+    const cleaned = sanitizeCodeSnippet(fullCode, contractId, Math.min(4500, remaining));
+    if (cleaned) {
+      functions.push({
+        name,
+        code: cleaned,
+      });
+      remaining -= cleaned.length;
+    }
+  }
+
+  return functions;
 }
 
 /**

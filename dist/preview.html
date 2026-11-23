@@ -290,6 +290,7 @@ const STORAGE_KEYS = {
   ACTIVE_PORTAL: 'ri_active_portal',
   LAST_CONTRACT: 'ri_last_contract',
   RECALL_PENDING_CONTRACT: 'ri_recall_pending_contract',
+  EQUIPMENT_DEBT_FILTER: 'ri_equip_debt_filter',
 };
 
 const MAX_RECENT_CONTRACTS = 12;
@@ -438,6 +439,43 @@ function consumePendingRecallContract(maxAgeMs = 180000, storageAdapter = null) 
     return '';
   }
   return cleanId;
+}
+
+/**
+ * Doc bo loc co dinh (Vung / Tinh thanh / Doi tac) cho Bao cao ton no vat tu KTV.
+ */
+function getEquipmentDebtFilter(storageAdapter = null) {
+  const saved = getState(STORAGE_KEYS.EQUIPMENT_DEBT_FILTER, null, storageAdapter);
+  if (!saved || typeof saved !== 'object') {
+    return null;
+  }
+  const region = String(saved.region || '').trim();
+  const province = String(saved.province || '').trim();
+  const partner = String(saved.partner || '').trim();
+  if (!region || !province || !partner) {
+    return null;
+  }
+  return { region, province, partner };
+}
+
+/**
+ * Luu hoac xoa bo loc co dinh cho Bao cao ton no vat tu KTV.
+ */
+function setEquipmentDebtFilter(filter, storageAdapter = null) {
+  if (!filter) {
+    return setState(STORAGE_KEYS.EQUIPMENT_DEBT_FILTER, null, storageAdapter);
+  }
+  const region = String(filter.region || '').trim();
+  const province = String(filter.province || '').trim();
+  const partner = String(filter.partner || '').trim();
+  if (!region || !province || !partner) {
+    return false;
+  }
+  return setState(
+    STORAGE_KEYS.EQUIPMENT_DEBT_FILTER,
+    { region, province, partner },
+    storageAdapter
+  );
 }
 
 // --- core/transport.js ---
@@ -9542,6 +9580,14 @@ function cleanEquipmentText(raw) {
     .replace(/\s+/g, ' ')
     .trim();
 }
+function normalizeEquipmentMatchKey(raw) {
+  const text = cleanEquipmentText(raw);
+  try {
+    return text.normalize('NFC').toLowerCase();
+  } catch {
+    return text.toLowerCase();
+  }
+}
 
 function getEquipmentElText(el) {
   if (!el) return '';
@@ -9613,8 +9659,47 @@ function findEquipmentReportMenuBtn(doc) {
     ) || null
   );
 }
+
+function findEquipmentFilterField(doc, fieldKind) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  const labelRe =
+    fieldKind === 'region'
+      ? /^vùng$/i
+      : fieldKind === 'province'
+      ? /^tỉnh thành$/i
+      : fieldKind === 'partner'
+      ? /^đối tác$/i
+      : null;
+  if (!labelRe) return null;
+  const fields = Array.from(doc.querySelectorAll('.rz-form-field'));
+  for (const field of fields) {
+    if (!field || typeof field.querySelector !== 'function') continue;
+    const labelEl = field.querySelector('label, .rz-form-field-label');
+    if (labelRe.test(getEquipmentElText(labelEl))) {
+      return field;
+    }
+  }
+  return null;
+}
+
+function findEquipmentFilterDropdownAndPanel(doc, fieldKind) {
+  const field = findEquipmentFilterField(doc, fieldKind);
+  if (!field || typeof field.querySelector !== 'function') {
+    return { field: null, dd: null, panel: null };
+  }
+  const dd = field.querySelector('.rz-dropdown, .rz-multiselect');
+  const ddId = dd && dd.id ? dd.id : '';
+  let panel = null;
+  if (ddId && typeof doc.getElementById === 'function') {
+    panel = doc.getElementById(`popup-${ddId}`) || doc.getElementById(`popup${ddId}`);
+  }
+  return { field, dd, panel };
+}
 function readEquipmentFilterState(doc) {
   const result = {
+    region: '',
+    province: '',
+    partner: '',
     hasRegion: false,
     hasProvince: false,
     hasPartner: false,
@@ -9635,15 +9720,169 @@ function readEquipmentFilterState(doc) {
     const ddCls = String((dd && dd.className) || '');
     const ddText = dd ? getEquipmentElText(dd) : '';
     const hasVal = Boolean(ddText && !/rz-state-empty/i.test(ddCls));
-    if (/^vùng$/i.test(labelText)) result.hasRegion = hasVal;
-    if (/^tỉnh thành$/i.test(labelText)) result.hasProvince = hasVal;
-    if (/^đối tác$/i.test(labelText)) result.hasPartner = hasVal;
+    if (/^vùng$/i.test(labelText)) {
+      result.hasRegion = hasVal;
+      result.region = hasVal ? ddText : '';
+    }
+    if (/^tỉnh thành$/i.test(labelText)) {
+      result.hasProvince = hasVal;
+      result.province = hasVal ? ddText : '';
+    }
+    if (/^đối tác$/i.test(labelText)) {
+      result.hasPartner = hasVal;
+      result.partner = hasVal ? ddText : '';
+    }
   }
 
   if (sawAnyField) {
     result.missingRequired = !(result.hasRegion && result.hasProvince && result.hasPartner);
   }
   return result;
+}
+function readEquipmentFilterOptions(doc, fieldKind) {
+  const { dd, panel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd) {
+    return { current: '', options: [] };
+  }
+  const ddCls = String(dd.className || '');
+  const rawCurrent = getEquipmentElText(dd);
+  const current = rawCurrent && !/rz-state-empty/i.test(ddCls) ? rawCurrent : '';
+
+  const seen = new Set();
+  const options = [];
+  if (panel && typeof panel.querySelectorAll === 'function') {
+    const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+    for (const item of items) {
+      const txt = getEquipmentElText(item);
+      if (!txt) continue;
+      const norm = normalizeEquipmentMatchKey(txt);
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      options.push(txt);
+    }
+  }
+  return { current, options };
+}
+async function selectEquipmentFilterOption(
+  doc,
+  fieldKind,
+  targetText,
+  { waitNextKind = '', waitTimeoutMs = 4500 } = {}
+) {
+  const targetNorm = normalizeEquipmentMatchKey(targetText);
+  if (!targetNorm) {
+    return { ok: false, error: 'Giá trị bộ lọc cần chọn đang trống.' };
+  }
+
+  const { dd, panel: initialPanel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd) {
+    return { ok: false, error: `Không tìm thấy ô chọn "${fieldKind}" trên trang Báo cáo nợ.` };
+  }
+
+  const ddCls = String(dd.className || '');
+  const curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
+  if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
+    if (waitNextKind) {
+      const existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      if (existingNext.options.length > 0) {
+        return { ok: true, skipped: true, picked: curText };
+      }
+    } else {
+      return { ok: true, skipped: true, picked: curText };
+    }
+  }
+
+  const clearBtn =
+    typeof dd.querySelector === 'function' ? dd.querySelector('.rz-dropdown-clear-icon') : null;
+  if (curText && clearBtn && typeof clearBtn.click === 'function') {
+    clearBtn.click();
+    await sleep(200);
+  }
+
+  if (typeof dd.click === 'function') {
+    dd.click();
+    await sleep(180);
+  }
+
+  const panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  if (!panel || typeof panel.querySelectorAll !== 'function') {
+    return { ok: false, error: `Không mở được danh sách chọn cho "${fieldKind}".` };
+  }
+
+  const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+  let match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm);
+  if (!match) {
+    match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm));
+  }
+  if (!match || typeof match.click !== 'function') {
+    return { ok: false, error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".` };
+  }
+
+  const picked = getEquipmentElText(match);
+  match.click();
+  await sleep(150);
+
+  // Neu Radzen multi-select popup van mo sau khi chon, dong gon lai
+  try {
+    if (
+      typeof getComputedStyle === 'function' &&
+      panel.offsetParent !== null &&
+      getComputedStyle(panel).display !== 'none' &&
+      typeof dd.click === 'function'
+    ) {
+      dd.click();
+      await sleep(100);
+    }
+  } catch {
+    // Bo qua trong moi truong mock Node
+  }
+
+  if (waitNextKind) {
+    const deadline = Date.now() + waitTimeoutMs;
+    while (Date.now() < deadline) {
+      await sleep(150);
+      const nextOpts = readEquipmentFilterOptions(doc, waitNextKind);
+      if (nextOpts.options.length > 0) {
+        await sleep(150);
+        break;
+      }
+    }
+  }
+
+  return { ok: true, picked };
+}
+async function applyEquipmentDebtFilterToPage(doc, filter, { onProgress = null } = {}) {
+  const region = cleanEquipmentText(filter && filter.region);
+  const province = cleanEquipmentText(filter && filter.province);
+  const partner = cleanEquipmentText(filter && filter.partner);
+  if (!region || !province || !partner) {
+    return { ok: false, error: 'Bộ lọc cố định cần đủ Vùng, Tỉnh thành và Đối tác.' };
+  }
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Vùng cố định…');
+  const rRes = await selectEquipmentFilterOption(doc, 'region', region, {
+    waitNextKind: 'province',
+  });
+  if (!rRes.ok) return rRes;
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Tỉnh thành cố định…');
+  const pRes = await selectEquipmentFilterOption(doc, 'province', province, {
+    waitNextKind: 'partner',
+  });
+  if (!pRes.ok) return pRes;
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Đối tác cố định…');
+  const prRes = await selectEquipmentFilterOption(doc, 'partner', partner);
+  if (!prRes.ok) return prRes;
+
+  return {
+    ok: true,
+    applied: {
+      region: rRes.picked,
+      province: pRes.picked,
+      partner: prRes.picked,
+    },
+  };
 }
 function parseEquipmentDebtPagerInfo(scopeEl) {
   const fallback = { currentPage: 1, totalPages: 1, totalItems: 0, rawText: '' };
@@ -10274,6 +10513,12 @@ async function loadEquipmentDebtContext(ctx = {}) {
   const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
   const realRows = getEquipmentRealBodyRows(table);
   const columns = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+  const filterState = readEquipmentFilterState(doc);
+  const currentFilter = {
+    region: filterState.region,
+    province: filterState.province,
+    partner: filterState.partner,
+  };
 
   if (
     !ctrls.hasDebtTab ||
@@ -10284,14 +10529,14 @@ async function loadEquipmentDebtContext(ctx = {}) {
     columns.materials.length === 0
   ) {
     const hasReportMenuBtn = Boolean(findEquipmentReportMenuBtn(doc));
-    const filterState = readEquipmentFilterState(doc);
+    const regionOptions = readEquipmentFilterOptions(doc, 'region').options;
     let message =
       'Bạn đang ở màn hình khác trên Quản lý vật tư (chưa mở Báo cáo → Báo cáo nợ). Bấm nút bên dưới để mở đúng trang Báo cáo nợ.';
     if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
       message = 'Đang ở Báo cáo nợ nhưng chưa chọn tab "Tồn công nợ theo NV". Bấm chuyển tab bên dưới.';
     } else if (ctrls.hasDebtTab && filterState.missingRequired) {
       message =
-        'Chưa chọn Vùng / Tỉnh thành / Đối tác trên trang Báo cáo nợ. Bấm "Thu gọn để chọn bộ lọc", chọn xong rồi bấm Xem danh sách.';
+        'Chọn Vùng / Tỉnh thành / Đối tác 1 lần bên dưới — Remote Inside sẽ lưu cố định và tự chọn ở những lần sau.';
     } else if (ctrls.hasDebtTab && ctrls.viewListBtn) {
       message =
         'Bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để chạy "Xem danh sách" và gom KTV.';
@@ -10305,15 +10550,21 @@ async function loadEquipmentDebtContext(ctx = {}) {
       hasViewListBtn: Boolean(ctrls.viewListBtn),
       hasReportMenuBtn,
       filterMissing: filterState.missingRequired,
+      currentFilter,
+      regionOptions,
       message,
     };
   }
 
-  return collectEquipmentDebtFromDocument(doc, {
+  const collected = await collectEquipmentDebtFromDocument(doc, {
     onProgress: ctx.onProgress,
     maxPages: ctx.maxPages || 30,
     waitMs: ctx.waitMs || 5500,
   });
+  return {
+    ...collected,
+    currentFilter,
+  };
 }
 
 // --- adapters/portals.js ---
@@ -10755,6 +11006,15 @@ function mountRemoteInside({
     equipDebtHasViewBtn: false,
     equipDebtHasReportMenu: false,
     equipDebtFilterMissing: false,
+    equipDebtFilterEditOpen: false,
+    equipDebtFilterBusy: false,
+    equipDebtDraftRegion: '',
+    equipDebtDraftProvince: '',
+    equipDebtDraftPartner: '',
+    equipDebtRegionOpts: [],
+    equipDebtProvinceOpts: [],
+    equipDebtPartnerOpts: [],
+    equipDebtSavedFilter: null,
     equipDebtViewMode: 'by_material',
     equipDebtGroup: '',
     equipDebtOnlyNonZero: true,
@@ -10976,6 +11236,15 @@ function mountRemoteInside({
     state.equipDebtHasViewBtn = false;
     state.equipDebtHasReportMenu = false;
     state.equipDebtFilterMissing = false;
+    state.equipDebtFilterEditOpen = false;
+    state.equipDebtFilterBusy = false;
+    state.equipDebtDraftRegion = '';
+    state.equipDebtDraftProvince = '';
+    state.equipDebtDraftPartner = '';
+    state.equipDebtRegionOpts = [];
+    state.equipDebtProvinceOpts = [];
+    state.equipDebtPartnerOpts = [];
+    state.equipDebtSavedFilter = null;
     state.equipDebtViewMode = 'by_material';
     state.equipDebtGroup = '';
     state.equipDebtOnlyNonZero = true;
@@ -12341,45 +12610,130 @@ function mountRemoteInside({
     }
   }
 
-  async function loadEquipmentDebtModal() {
+  function syncEquipDebtDraftFromPage() {
+    if (!pageDocument) return;
+    const rInfo = readEquipmentFilterOptions(pageDocument, 'region');
+    const pInfo = readEquipmentFilterOptions(pageDocument, 'province');
+    const prInfo = readEquipmentFilterOptions(pageDocument, 'partner');
+    const saved = getEquipmentDebtFilter();
+    state.equipDebtSavedFilter = saved;
+    state.equipDebtRegionOpts = rInfo.options || [];
+    state.equipDebtProvinceOpts = pInfo.options || [];
+    state.equipDebtPartnerOpts = prInfo.options || [];
+    state.equipDebtDraftRegion =
+      rInfo.current || (saved && saved.region) || state.equipDebtDraftRegion || '';
+    state.equipDebtDraftProvince =
+      pInfo.current || (saved && saved.province) || state.equipDebtDraftProvince || '';
+    state.equipDebtDraftPartner =
+      prInfo.current || (saved && saved.partner) || state.equipDebtDraftPartner || '';
+  }
+
+  async function loadEquipmentDebtModal({ allowAutoSetup = true, autoDepth = 0 } = {}) {
+    const savedFilter = getEquipmentDebtFilter();
+    state.equipDebtSavedFilter = savedFilter;
     state.equipDebtLoading = true;
     state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
     state.equipDebtError = '';
     state.equipDebtNotice = '';
     renderConfirm();
 
+    const setModalProgress = (msg) => {
+      if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+      if (msg && msg !== state.equipDebtProgress) {
+        state.equipDebtProgress = msg;
+        renderConfirm();
+      }
+    };
+
     try {
       const res = await loadEquipmentDebtContext({
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
         onProgress: (p) => {
-          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
-            return;
-          }
           const nextMsg = `Đang gom trang ${p.currentPage}/${p.totalPages} (${p.collectedStaff}${
             p.totalItems ? `/${p.totalItems}` : ''
           } KTV)…`;
-          if (nextMsg !== state.equipDebtProgress) {
-            state.equipDebtProgress = nextMsg;
-            renderConfirm();
-          }
+          setModalProgress(nextMsg);
         },
       });
       if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
         return;
       }
-      state.equipDebtLoading = false;
-      state.equipDebtProgress = '';
-      state.equipDebtStatus = res.status || 'needs_equipment_page';
-      state.equipDebtMode = res.mode || 'live';
+
       state.equipDebtHasTab = Boolean(res.hasDebtTab);
       state.equipDebtTabActive = Boolean(res.isDebtTabActive);
       state.equipDebtHasViewBtn = Boolean(res.hasViewListBtn);
       state.equipDebtHasReportMenu = Boolean(res.hasReportMenuBtn);
       state.equipDebtFilterMissing = Boolean(res.filterMissing);
+
+      // Tu dong dieu huong & nap du lieu theo bo loc co dinh (neu chua bi chan boi depth)
+      if (res.status === 'needs_report_loaded' && allowAutoSetup && autoDepth < 3 && pageDocument) {
+        if (!res.hasDebtTab && res.hasReportMenuBtn) {
+          setModalProgress('Đang tự mở Báo cáo → Báo cáo nợ…');
+          const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+          if (mRes.ok) {
+            await waitForEquipmentDebtTabOpen(pageDocument, { timeoutMs: 4500 });
+            if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+            return loadEquipmentDebtModal({ allowAutoSetup: true, autoDepth: autoDepth + 1 });
+          }
+        } else if (res.hasDebtTab && !res.isDebtTabActive) {
+          setModalProgress('Đang chuyển sang tab Tồn công nợ theo NV…');
+          const tRes = triggerEquipmentDebtTab(pageDocument);
+          if (tRes.ok) {
+            await new Promise((r) => setTimeout(r, 700));
+            if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+            return loadEquipmentDebtModal({ allowAutoSetup: true, autoDepth: autoDepth + 1 });
+          }
+        } else if (res.hasDebtTab && res.isDebtTabActive) {
+          if (res.filterMissing && savedFilter) {
+            const applyRes = await applyEquipmentDebtFilterToPage(pageDocument, savedFilter, {
+              onProgress: setModalProgress,
+            });
+            if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+            if (!applyRes.ok) {
+              state.equipDebtLoading = false;
+              state.equipDebtProgress = '';
+              state.equipDebtStatus = 'needs_report_loaded';
+              state.equipDebtNotice = `${applyRes.error} Hãy chọn lại bộ lọc cố định bên dưới.`;
+              state.equipDebtNoticeTone = 'warn';
+              syncEquipDebtDraftFromPage();
+              state.equipDebtFilterEditOpen = true;
+              renderConfirm();
+              return;
+            }
+          }
+
+          const postFilterMissing = res.filterMissing && !savedFilter;
+          if (!postFilterMissing && res.hasViewListBtn) {
+            setModalProgress('Đang bấm "Xem danh sách" & chờ bảng tải…');
+            const vRes = triggerEquipmentDebtViewList(pageDocument);
+            if (vRes.ok) {
+              await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 18000 });
+              if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+              return loadEquipmentDebtModal({ allowAutoSetup: false, autoDepth: autoDepth + 1 });
+            }
+          }
+        }
+      }
+
+      state.equipDebtLoading = false;
+      state.equipDebtProgress = '';
+      state.equipDebtStatus = res.status || 'needs_equipment_page';
+      state.equipDebtMode = res.mode || 'live';
       state.equipDebtError = '';
 
       if (res.status === 'ok' && res.dataset) {
+        if (
+          !savedFilter &&
+          res.currentFilter &&
+          res.currentFilter.region &&
+          res.currentFilter.province &&
+          res.currentFilter.partner
+        ) {
+          setEquipmentDebtFilter(res.currentFilter);
+          state.equipDebtSavedFilter = res.currentFilter;
+        }
         state.equipDebtDataset = res.dataset;
         const mats = res.dataset.materials || [];
         const hasCurrentMat = mats.some((m) => m.key === state.equipDebtSelectedKey);
@@ -12402,6 +12756,9 @@ function mountRemoteInside({
         );
       } else {
         state.equipDebtDataset = null;
+        if (res.status === 'needs_report_loaded' && res.hasDebtTab) {
+          syncEquipDebtDraftFromPage();
+        }
         if (res.status !== 'ok' && res.message) {
           state.equipDebtNotice = res.message;
           state.equipDebtNoticeTone = 'warn';
@@ -17212,6 +17569,223 @@ function mountRemoteInside({
       showConfirmBtn = false;
       cancelBtn.textContent = 'Đóng';
 
+      function buildEquipFilterPickerBlock({ showCloseBtn = false } = {}) {
+        const busy = state.equipDebtFilterBusy;
+        const regSel = el(
+          'select',
+          {
+            className: 'ri-select',
+            id: 'ri-debt-fixed-region',
+            disabled: busy,
+            'aria-label': 'Chọn Vùng cố định',
+          },
+          [
+            el('option', {
+              value: '',
+              text:
+                state.equipDebtRegionOpts.length > 0
+                  ? '-- Chọn Vùng --'
+                  : 'Chưa thấy danh sách Vùng (Mở trang Báo cáo nợ trước)',
+            }),
+            ...state.equipDebtRegionOpts.map((opt) => {
+              const o = el('option', { value: opt, text: opt });
+              if (opt === state.equipDebtDraftRegion) o.selected = true;
+              return o;
+            }),
+          ]
+        );
+        regSel.value = state.equipDebtDraftRegion || '';
+        regSel.addEventListener('change', async (e) => {
+          const val = e.target.value;
+          state.equipDebtDraftRegion = val;
+          state.equipDebtDraftProvince = '';
+          state.equipDebtDraftPartner = '';
+          state.equipDebtProvinceOpts = [];
+          state.equipDebtPartnerOpts = [];
+          if (!val || !pageDocument) {
+            renderConfirm();
+            return;
+          }
+          state.equipDebtFilterBusy = true;
+          renderConfirm();
+          await selectEquipmentFilterOption(pageDocument, 'region', val, {
+            waitNextKind: 'province',
+          });
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+          state.equipDebtProvinceOpts = readEquipmentFilterOptions(pageDocument, 'province').options;
+          state.equipDebtFilterBusy = false;
+          renderConfirm();
+        });
+
+        const provSel = el(
+          'select',
+          {
+            className: 'ri-select',
+            id: 'ri-debt-fixed-province',
+            disabled: busy || state.equipDebtProvinceOpts.length === 0,
+            'aria-label': 'Chọn Tỉnh thành cố định',
+          },
+          [
+            el('option', {
+              value: '',
+              text:
+                state.equipDebtProvinceOpts.length > 0
+                  ? '-- Chọn Tỉnh thành --'
+                  : '-- Chọn Vùng trước --',
+            }),
+            ...state.equipDebtProvinceOpts.map((opt) => {
+              const o = el('option', { value: opt, text: opt });
+              if (opt === state.equipDebtDraftProvince) o.selected = true;
+              return o;
+            }),
+          ]
+        );
+        provSel.value = state.equipDebtDraftProvince || '';
+        provSel.addEventListener('change', async (e) => {
+          const val = e.target.value;
+          state.equipDebtDraftProvince = val;
+          state.equipDebtDraftPartner = '';
+          state.equipDebtPartnerOpts = [];
+          if (!val || !pageDocument) {
+            renderConfirm();
+            return;
+          }
+          state.equipDebtFilterBusy = true;
+          renderConfirm();
+          await selectEquipmentFilterOption(pageDocument, 'province', val, {
+            waitNextKind: 'partner',
+          });
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+          state.equipDebtPartnerOpts = readEquipmentFilterOptions(pageDocument, 'partner').options;
+          state.equipDebtFilterBusy = false;
+          renderConfirm();
+        });
+
+        const partnerSel = el(
+          'select',
+          {
+            className: 'ri-select',
+            id: 'ri-debt-fixed-partner',
+            disabled: busy || state.equipDebtPartnerOpts.length === 0,
+            'aria-label': 'Chọn Đối tác cố định',
+          },
+          [
+            el('option', {
+              value: '',
+              text:
+                state.equipDebtPartnerOpts.length > 0
+                  ? '-- Chọn Đối tác --'
+                  : '-- Chọn Tỉnh thành trước --',
+            }),
+            ...state.equipDebtPartnerOpts.map((opt) => {
+              const o = el('option', { value: opt, text: opt });
+              if (opt === state.equipDebtDraftPartner) o.selected = true;
+              return o;
+            }),
+          ]
+        );
+        partnerSel.value = state.equipDebtDraftPartner || '';
+        partnerSel.addEventListener('change', async (e) => {
+          const val = e.target.value;
+          state.equipDebtDraftPartner = val;
+          if (!val || !pageDocument) {
+            renderConfirm();
+            return;
+          }
+          state.equipDebtFilterBusy = true;
+          renderConfirm();
+          await selectEquipmentFilterOption(pageDocument, 'partner', val);
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+          state.equipDebtFilterBusy = false;
+          renderConfirm();
+        });
+
+        const canSave =
+          !busy &&
+          Boolean(state.equipDebtDraftRegion && state.equipDebtDraftProvince && state.equipDebtDraftPartner);
+
+        const pickerActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            disabled: !canSave,
+            text: busy ? 'Đang tải lựa chọn…' : 'Lưu cố định & Xem tồn nợ',
+            onClick: async () => {
+              const nextFilter = {
+                region: state.equipDebtDraftRegion,
+                province: state.equipDebtDraftProvince,
+                partner: state.equipDebtDraftPartner,
+              };
+              setEquipmentDebtFilter(nextFilter);
+              state.equipDebtSavedFilter = nextFilter;
+              state.equipDebtFilterEditOpen = false;
+              state.equipDebtLoading = true;
+              state.equipDebtProgress = 'Đang áp dụng bộ lọc cố định & tải dữ liệu…';
+              renderConfirm();
+              if (pageDocument) {
+                const aRes = await applyEquipmentDebtFilterToPage(pageDocument, nextFilter, {
+                  onProgress: (m) => {
+                    if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                      state.equipDebtProgress = m;
+                      renderConfirm();
+                    }
+                  },
+                });
+                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                if (aRes.ok) {
+                  triggerEquipmentDebtViewList(pageDocument);
+                  await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 18000 });
+                }
+              }
+              if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+              loadEquipmentDebtModal({ allowAutoSetup: false });
+            },
+          }),
+        ];
+
+        if (state.equipDebtSavedFilter) {
+          pickerActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              disabled: busy,
+              text: 'Xóa cố định',
+              onClick: () => {
+                setEquipmentDebtFilter(null);
+                state.equipDebtSavedFilter = null;
+                state.equipDebtNotice = 'Đã xóa bộ lọc cố định đã lưu trên máy.';
+                state.equipDebtNoticeTone = 'info';
+                renderConfirm();
+              },
+            })
+          );
+        }
+
+        if (showCloseBtn) {
+          pickerActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              disabled: busy,
+              text: 'Ẩn bộ lọc',
+              onClick: () => {
+                state.equipDebtFilterEditOpen = false;
+                renderConfirm();
+              },
+            })
+          );
+        }
+
+        return el('div', { className: 'ri-sheet-status', 'data-tone': 'info' }, [
+          el('div', {
+            className: 'ri-debt-summary-title',
+            text: 'Bộ lọc cố định (lưu trên máy, lần sau tự điền)',
+          }),
+          el('div', { className: 'ri-debt-picker' }, [regSel, provSel, partnerSel]),
+          el('div', { className: 'ri-result-actions' }, pickerActions),
+        ]);
+      }
+
       if (state.equipDebtLoading) {
         sheetParts.push(
           el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
@@ -17264,117 +17838,130 @@ function mountRemoteInside({
           ])
         );
       } else if (state.equipDebtStatus === 'needs_report_loaded') {
-        const promptBtns = [];
-        if (!state.equipDebtHasTab && state.equipDebtHasReportMenu) {
-          promptBtns.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-primary-btn',
-              text: 'Mở Báo cáo → Báo cáo nợ',
-              onClick: async () => {
-                state.equipDebtLoading = true;
-                state.equipDebtProgress = 'Đang mở trang Báo cáo nợ…';
-                renderConfirm();
-                const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
-                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-                if (!mRes.ok) {
-                  state.equipDebtLoading = false;
-                  state.equipDebtProgress = '';
-                  state.equipDebtNotice = mRes.error;
-                  state.equipDebtNoticeTone = 'error';
-                  renderConfirm();
-                  return;
-                }
-                await waitForEquipmentDebtTabOpen(pageDocument, { timeoutMs: 4500 });
-                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-                loadEquipmentDebtModal();
-              },
-            })
+        if (state.equipDebtHasDebtTab && (state.equipDebtFilterMissing || state.equipDebtFilterEditOpen)) {
+          if (state.equipDebtNotice) {
+            sheetParts.push(
+              el('div', {
+                className: 'ri-sheet-status',
+                'data-tone': state.equipDebtNoticeTone || 'warn',
+                'aria-live': 'polite',
+              }, [el('div', { text: state.equipDebtNotice })])
+            );
+          }
+          sheetParts.push(buildEquipFilterPickerBlock({ showCloseBtn: false }));
+          sheetParts.push(
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Đọc lại dữ liệu',
+                onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thu gọn để thao tác',
+                onClick: () => {
+                  state.isOpen = false;
+                  render();
+                },
+              }),
+            ])
           );
-        } else if (state.equipDebtHasTab && !state.equipDebtTabActive) {
-          promptBtns.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-primary-btn',
-              text: 'Chuyển tab Tồn công nợ theo NV',
-              onClick: () => {
-                const tRes = triggerEquipmentDebtTab(pageDocument);
-                if (!tRes.ok) {
-                  state.equipDebtNotice = tRes.error;
-                  state.equipDebtNoticeTone = 'error';
+        } else {
+          const promptBtns = [];
+          if (!state.equipDebtHasTab && state.equipDebtHasReportMenu) {
+            promptBtns.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Mở Báo cáo → Báo cáo nợ',
+                onClick: async () => {
+                  state.equipDebtLoading = true;
+                  state.equipDebtProgress = 'Đang mở trang Báo cáo nợ…';
                   renderConfirm();
-                  return;
-                }
-                state.equipDebtLoading = true;
-                state.equipDebtProgress = 'Đang chuyển sang tab Tồn công nợ theo NV…';
-                renderConfirm();
-                setTimeout(() => {
-                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
-                    loadEquipmentDebtModal();
+                  const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
+                  if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                  if (!mRes.ok) {
+                    state.equipDebtLoading = false;
+                    state.equipDebtProgress = '';
+                    state.equipDebtNotice = mRes.error;
+                    state.equipDebtNoticeTone = 'error';
+                    renderConfirm();
+                    return;
                   }
-                }, 800);
-              },
-            })
-          );
-        } else if (state.equipDebtHasViewBtn && !state.equipDebtFilterMissing) {
+                  await waitForEquipmentDebtTabOpen(pageDocument, { timeoutMs: 4500 });
+                  if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                  loadEquipmentDebtModal({ allowAutoSetup: true });
+                },
+              })
+            );
+          } else if (state.equipDebtHasTab && !state.equipDebtTabActive) {
+            promptBtns.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Chuyển tab Tồn công nợ theo NV',
+                onClick: () => {
+                  const tRes = triggerEquipmentDebtTab(pageDocument);
+                  if (!tRes.ok) {
+                    state.equipDebtNotice = tRes.error;
+                    state.equipDebtNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  state.equipDebtLoading = true;
+                  state.equipDebtProgress = 'Đang chuyển sang tab Tồn công nợ theo NV…';
+                  renderConfirm();
+                  setTimeout(() => {
+                    if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                      loadEquipmentDebtModal({ allowAutoSetup: true });
+                    }
+                  }, 800);
+                },
+              })
+            );
+          } else if (state.equipDebtHasViewBtn) {
+            promptBtns.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Bấm "Xem danh sách" & gom dữ liệu',
+                onClick: async () => {
+                  const vRes = triggerEquipmentDebtViewList(pageDocument);
+                  if (!vRes.ok) {
+                    state.equipDebtNotice = vRes.error;
+                    state.equipDebtNoticeTone = 'error';
+                    renderConfirm();
+                    return;
+                  }
+                  state.equipDebtLoading = true;
+                  state.equipDebtProgress = 'Đang chờ NextGen tải bảng tồn nợ KTV…';
+                  renderConfirm();
+                  const ok = await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 18000 });
+                  if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                  if (!ok) {
+                    state.equipDebtLoading = false;
+                    state.equipDebtProgress = '';
+                    state.equipDebtNotice =
+                      'Chưa thấy bảng dữ liệu xuất hiện. Kiểm tra lại bộ lọc Vùng/Tỉnh thành/Đối tác rồi bấm Đọc lại.';
+                    state.equipDebtNoticeTone = 'warn';
+                    renderConfirm();
+                    return;
+                  }
+                  loadEquipmentDebtModal({ allowAutoSetup: false });
+                },
+              })
+            );
+          }
+
           promptBtns.push(
             el('button', {
               type: 'button',
-              className: 'ri-primary-btn',
-              text: 'Bấm "Xem danh sách" & gom dữ liệu',
-              onClick: async () => {
-                const vRes = triggerEquipmentDebtViewList(pageDocument);
-                if (!vRes.ok) {
-                  state.equipDebtNotice = vRes.error;
-                  state.equipDebtNoticeTone = 'error';
-                  renderConfirm();
-                  return;
-                }
-                state.equipDebtLoading = true;
-                state.equipDebtProgress = 'Đang chờ NextGen tải bảng tồn nợ KTV…';
-                renderConfirm();
-                const ok = await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 15000 });
-                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-                if (!ok) {
-                  state.equipDebtLoading = false;
-                  state.equipDebtProgress = '';
-                  state.equipDebtNotice =
-                    'Chưa thấy bảng dữ liệu xuất hiện. Kiểm tra lại bộ lọc Vùng/Tỉnh thành/Đối tác rồi bấm Đọc lại.';
-                  state.equipDebtNoticeTone = 'warn';
-                  renderConfirm();
-                  return;
-                }
-                loadEquipmentDebtModal();
-              },
-            })
-          );
-        }
-
-        if (state.equipDebtFilterMissing) {
-          promptBtns.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-primary-btn',
-              text: 'Thu gọn để chọn bộ lọc',
-              onClick: () => {
-                state.isOpen = false;
-                render();
-              },
-            })
-          );
-        }
-
-        promptBtns.push(
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            text: 'Đọc lại dữ liệu',
-            onClick: () => loadEquipmentDebtModal(),
-          })
-        );
-
-        if (!state.equipDebtFilterMissing) {
-          promptBtns.push(
+              className: 'ri-secondary-btn',
+              text: 'Đọc lại dữ liệu',
+              onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
+            }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
@@ -17385,18 +17972,18 @@ function mountRemoteInside({
               },
             })
           );
-        }
 
-        sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn', 'aria-live': 'polite' }, [
-            el('div', {
-              text:
-                state.equipDebtNotice ||
-                'Trên trang Quản lý vật tư, bạn bấm Báo cáo → Báo cáo nợ → Xem danh sách rồi bấm Đọc lại dữ liệu.',
-            }),
-            el('div', { className: 'ri-result-actions' }, promptBtns),
-          ])
-        );
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn', 'aria-live': 'polite' }, [
+              el('div', {
+                text:
+                  state.equipDebtNotice ||
+                  'Trên trang Quản lý vật tư, bạn bấm Báo cáo → Báo cáo nợ → Xem danh sách rồi bấm Đọc lại dữ liệu.',
+              }),
+              el('div', { className: 'ri-result-actions' }, promptBtns),
+            ])
+          );
+        }
       } else if (state.equipDebtStatus === 'ok' && state.equipDebtDataset) {
         const ds = state.equipDebtDataset;
         const meta = ds.meta || {};
@@ -17407,6 +17994,35 @@ function mountRemoteInside({
         ]
           .filter(Boolean)
           .join(' • ');
+
+        const topRightBtns = [];
+        if (state.equipDebtMode === 'live') {
+          topRightBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Bộ lọc',
+              title: state.equipDebtSavedFilter
+                ? `Đang cố định: ${state.equipDebtSavedFilter.region} • ${state.equipDebtSavedFilter.partner}`
+                : 'Chọn hoặc đổi bộ lọc cố định',
+              onClick: () => {
+                if (!state.equipDebtFilterEditOpen) {
+                  syncEquipDebtDraftFromPage();
+                }
+                state.equipDebtFilterEditOpen = !state.equipDebtFilterEditOpen;
+                renderConfirm();
+              },
+            })
+          );
+        }
+        topRightBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Tải lại',
+            onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
+          })
+        );
 
         sheetParts.push(
           el('div', { className: 'ri-debt-topbar' }, [
@@ -17436,15 +18052,14 @@ function mountRemoteInside({
             ]),
             el('div', { className: 'ri-debt-meta-row' }, [
               el('span', { className: 'ri-field-hint', text: statsLabel }),
-              el('button', {
-                type: 'button',
-                className: 'ri-text-btn',
-                text: 'Tải lại',
-                onClick: () => loadEquipmentDebtModal(),
-              }),
+              el('div', { className: 'ri-embed-actions' }, topRightBtns),
             ]),
           ])
         );
+
+        if (state.equipDebtFilterEditOpen && state.equipDebtMode === 'live') {
+          sheetParts.push(buildEquipFilterPickerBlock({ showCloseBtn: true }));
+        }
 
         if (state.equipDebtNotice) {
           sheetParts.push(

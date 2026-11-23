@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   ACTIVE_PORTAL: 'ri_active_portal',
   LAST_CONTRACT: 'ri_last_contract',
   RECALL_PENDING_CONTRACT: 'ri_recall_pending_contract',
+  EQUIPMENT_DEBT_FILTER: 'ri_equip_debt_filter',
 };
 
 const MAX_RECENT_CONTRACTS = 12;
@@ -163,4 +164,41 @@ export function consumePendingRecallContract(maxAgeMs = 180000, storageAdapter =
     return '';
   }
   return cleanId;
+}
+
+/**
+ * Doc bo loc co dinh (Vung / Tinh thanh / Doi tac) cho Bao cao ton no vat tu KTV.
+ */
+export function getEquipmentDebtFilter(storageAdapter = null) {
+  const saved = getState(STORAGE_KEYS.EQUIPMENT_DEBT_FILTER, null, storageAdapter);
+  if (!saved || typeof saved !== 'object') {
+    return null;
+  }
+  const region = String(saved.region || '').trim();
+  const province = String(saved.province || '').trim();
+  const partner = String(saved.partner || '').trim();
+  if (!region || !province || !partner) {
+    return null;
+  }
+  return { region, province, partner };
+}
+
+/**
+ * Luu hoac xoa bo loc co dinh cho Bao cao ton no vat tu KTV.
+ */
+export function setEquipmentDebtFilter(filter, storageAdapter = null) {
+  if (!filter) {
+    return setState(STORAGE_KEYS.EQUIPMENT_DEBT_FILTER, null, storageAdapter);
+  }
+  const region = String(filter.region || '').trim();
+  const province = String(filter.province || '').trim();
+  const partner = String(filter.partner || '').trim();
+  if (!region || !province || !partner) {
+    return false;
+  }
+  return setState(
+    STORAGE_KEYS.EQUIPMENT_DEBT_FILTER,
+    { region, province, partner },
+    storageAdapter
+  );
 }

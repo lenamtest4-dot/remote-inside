@@ -15,8 +15,10 @@ import {
   addRecentContract,
   clearRecentContracts,
   consumePendingRecallContract,
+  getEquipmentDebtFilter,
   getRecentContracts,
   getState,
+  setEquipmentDebtFilter,
   setPendingRecallContract,
   setState,
 } from '../src/core/storage.js';
@@ -151,6 +153,7 @@ import {
 } from '../src/adapters/recall.js';
 import {
   EQUIPMENT_ENDPOINTS,
+  applyEquipmentDebtFilterToPage,
   buildDemoEquipmentDebtDataset,
   buildEquipmentDebtDataset,
   collectEquipmentDebtFromDocument,
@@ -160,12 +163,14 @@ import {
   getEquipmentRealBodyRows,
   isEquipmentPortalLocation,
   loadEquipmentDebtContext,
+  normalizeEquipmentMatchKey,
   parseEquipmentDebtColumns,
   parseEquipmentDebtNumber,
   parseEquipmentDebtPageRows,
   parseEquipmentDebtPagerInfo,
   queryEquipmentDebtByStaff,
   queryEquipmentDebtHolders,
+  readEquipmentFilterOptions,
   readEquipmentFilterState,
 } from '../src/adapters/equipment.js';
 import { executePortalAction } from '../src/adapters/portals.js';
@@ -3293,6 +3298,131 @@ async function runTests() {
     }
   }
 
+  // Saved fixed equipment filter storage + NFD/NFC match + live 3-dropdown cascade
+  const filterStore = new Map();
+  const filterAdapter = {
+    get: (k) => (filterStore.has(k) ? filterStore.get(k) : null),
+    set: (k, v) => filterStore.set(k, v),
+  };
+  assert.equal(getEquipmentDebtFilter(filterAdapter), null);
+  assert.equal(setEquipmentDebtFilter({ region: '01.Vung Mau' }, filterAdapter), false);
+  assert.equal(
+    setEquipmentDebtFilter(
+      { region: '01.Vung Mau', province: 'Tinh Mau', partner: 'Doi Tac Mau' },
+      filterAdapter
+    ),
+    true
+  );
+  assert.deepEqual(getEquipmentDebtFilter(filterAdapter), {
+    region: '01.Vung Mau',
+    province: 'Tinh Mau',
+    partner: 'Doi Tac Mau',
+  });
+  assert.equal(setEquipmentDebtFilter(null, filterAdapter), true);
+  assert.equal(getEquipmentDebtFilter(filterAdapter), null);
+
+  assert.equal(
+    normalizeEquipmentMatchKey('01.Vu\u0303ng M\u00e2\u0303u'),
+    normalizeEquipmentMatchKey('01.Vũng Mẫu'),
+    'Must normalize NFD vs NFC Vietnamese accents identically'
+  );
+
+  let cascadeReg = '';
+  let cascadeProv = '';
+  let cascadePartner = '';
+  let provLoaded = false;
+  let partnerLoaded = false;
+  const makeCascadeField = (labelText, ddId, getCur, itemsFn) => ({
+    querySelector: (sel) => {
+      if (sel.includes('label')) return { innerText: labelText };
+      if (sel.includes('rz-dropdown')) {
+        return {
+          id: ddId,
+          get className() {
+            return getCur() ? 'rz-dropdown rz-clear' : 'rz-dropdown rz-state-empty rz-clear';
+          },
+          get innerText() {
+            return getCur();
+          },
+          querySelector: () => null,
+          click: () => {},
+        };
+      }
+      return null;
+    },
+  });
+  const cascadeDoc = {
+    querySelectorAll: (sel) => {
+      if (sel === '.rz-form-field') {
+        return [
+          makeCascadeField('Vùng', 'cReg', () => cascadeReg),
+          makeCascadeField('Tỉnh thành', 'cProv', () => cascadeProv),
+          makeCascadeField('Đối tác', 'cPart', () => cascadePartner),
+        ];
+      }
+      return [];
+    },
+    getElementById: (id) => {
+      if (id === 'popup-cReg') {
+        return {
+          querySelectorAll: () => [
+            {
+              innerText: '01.V\u0169ng M\u00e2\u0303u',
+              click: () => {
+                cascadeReg = '01.V\u0169ng M\u00e2\u0303u';
+                setTimeout(() => {
+                  provLoaded = true;
+                }, 40);
+              },
+            },
+          ],
+        };
+      }
+      if (id === 'popup-cProv') {
+        return {
+          querySelectorAll: () =>
+            provLoaded
+              ? [
+                  {
+                    innerText: 'Ti\u0309nh M\u00e2\u0303u',
+                    click: () => {
+                      cascadeProv = 'Ti\u0309nh M\u00e2\u0303u';
+                      setTimeout(() => {
+                        partnerLoaded = true;
+                      }, 40);
+                    },
+                  },
+                ]
+              : [],
+        };
+      }
+      if (id === 'popup-cPart') {
+        return {
+          querySelectorAll: () =>
+            partnerLoaded
+              ? [
+                  {
+                    innerText: 'Doi Tac Mau',
+                    click: () => {
+                      cascadePartner = 'Doi Tac Mau';
+                    },
+                  },
+                ]
+              : [],
+        };
+      }
+      return null;
+    },
+  };
+  const applyRes = await applyEquipmentDebtFilterToPage(cascadeDoc, {
+    region: '01.Vũng Mẫu',
+    province: 'Tỉnh Mẫu',
+    partner: 'Doi Tac Mau',
+  });
+  assert.equal(applyRes.ok, true);
+  assert.equal(cascadeReg.length > 0 && cascadeProv.length > 0 && cascadePartner === 'Doi Tac Mau', true);
+  assert.equal(readEquipmentFilterOptions(cascadeDoc, 'partner').current, 'Doi Tac Mau');
+
   for (const token of [
     'equipment_debt',
     'collectEquipmentDebtFromDocument',
@@ -3300,6 +3430,8 @@ async function runTests() {
     'formatEquipmentDebtClipboardText',
     'getEquipmentRealBodyRows',
     'waitForEquipmentDebtTabOpen',
+    'EQUIPMENT_DEBT_FILTER',
+    'applyEquipmentDebtFilterToPage',
     EQUIPMENT_ENDPOINTS.base,
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);

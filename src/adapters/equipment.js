@@ -22,6 +22,15 @@ export function cleanEquipmentText(raw) {
     .trim();
 }
 
+export function normalizeEquipmentMatchKey(raw) {
+  const text = cleanEquipmentText(raw);
+  try {
+    return text.normalize('NFC').toLowerCase();
+  } catch {
+    return text.toLowerCase();
+  }
+}
+
 function getEquipmentElText(el) {
   if (!el) return '';
   return cleanEquipmentText(el.innerText !== undefined ? el.innerText : el.textContent);
@@ -97,8 +106,47 @@ function findEquipmentReportMenuBtn(doc) {
   );
 }
 
+function findEquipmentFilterField(doc, fieldKind) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  const labelRe =
+    fieldKind === 'region'
+      ? /^vùng$/i
+      : fieldKind === 'province'
+      ? /^tỉnh thành$/i
+      : fieldKind === 'partner'
+      ? /^đối tác$/i
+      : null;
+  if (!labelRe) return null;
+  const fields = Array.from(doc.querySelectorAll('.rz-form-field'));
+  for (const field of fields) {
+    if (!field || typeof field.querySelector !== 'function') continue;
+    const labelEl = field.querySelector('label, .rz-form-field-label');
+    if (labelRe.test(getEquipmentElText(labelEl))) {
+      return field;
+    }
+  }
+  return null;
+}
+
+function findEquipmentFilterDropdownAndPanel(doc, fieldKind) {
+  const field = findEquipmentFilterField(doc, fieldKind);
+  if (!field || typeof field.querySelector !== 'function') {
+    return { field: null, dd: null, panel: null };
+  }
+  const dd = field.querySelector('.rz-dropdown, .rz-multiselect');
+  const ddId = dd && dd.id ? dd.id : '';
+  let panel = null;
+  if (ddId && typeof doc.getElementById === 'function') {
+    panel = doc.getElementById(`popup-${ddId}`) || doc.getElementById(`popup${ddId}`);
+  }
+  return { field, dd, panel };
+}
+
 export function readEquipmentFilterState(doc) {
   const result = {
+    region: '',
+    province: '',
+    partner: '',
     hasRegion: false,
     hasProvince: false,
     hasPartner: false,
@@ -119,15 +167,172 @@ export function readEquipmentFilterState(doc) {
     const ddCls = String((dd && dd.className) || '');
     const ddText = dd ? getEquipmentElText(dd) : '';
     const hasVal = Boolean(ddText && !/rz-state-empty/i.test(ddCls));
-    if (/^vùng$/i.test(labelText)) result.hasRegion = hasVal;
-    if (/^tỉnh thành$/i.test(labelText)) result.hasProvince = hasVal;
-    if (/^đối tác$/i.test(labelText)) result.hasPartner = hasVal;
+    if (/^vùng$/i.test(labelText)) {
+      result.hasRegion = hasVal;
+      result.region = hasVal ? ddText : '';
+    }
+    if (/^tỉnh thành$/i.test(labelText)) {
+      result.hasProvince = hasVal;
+      result.province = hasVal ? ddText : '';
+    }
+    if (/^đối tác$/i.test(labelText)) {
+      result.hasPartner = hasVal;
+      result.partner = hasVal ? ddText : '';
+    }
   }
 
   if (sawAnyField) {
     result.missingRequired = !(result.hasRegion && result.hasProvince && result.hasPartner);
   }
   return result;
+}
+
+export function readEquipmentFilterOptions(doc, fieldKind) {
+  const { dd, panel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd) {
+    return { current: '', options: [] };
+  }
+  const ddCls = String(dd.className || '');
+  const rawCurrent = getEquipmentElText(dd);
+  const current = rawCurrent && !/rz-state-empty/i.test(ddCls) ? rawCurrent : '';
+
+  const seen = new Set();
+  const options = [];
+  if (panel && typeof panel.querySelectorAll === 'function') {
+    const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+    for (const item of items) {
+      const txt = getEquipmentElText(item);
+      if (!txt) continue;
+      const norm = normalizeEquipmentMatchKey(txt);
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      options.push(txt);
+    }
+  }
+  return { current, options };
+}
+
+export async function selectEquipmentFilterOption(
+  doc,
+  fieldKind,
+  targetText,
+  { waitNextKind = '', waitTimeoutMs = 4500 } = {}
+) {
+  const targetNorm = normalizeEquipmentMatchKey(targetText);
+  if (!targetNorm) {
+    return { ok: false, error: 'Giá trị bộ lọc cần chọn đang trống.' };
+  }
+
+  const { dd, panel: initialPanel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd) {
+    return { ok: false, error: `Không tìm thấy ô chọn "${fieldKind}" trên trang Báo cáo nợ.` };
+  }
+
+  const ddCls = String(dd.className || '');
+  const curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
+  if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
+    if (waitNextKind) {
+      const existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      if (existingNext.options.length > 0) {
+        return { ok: true, skipped: true, picked: curText };
+      }
+    } else {
+      return { ok: true, skipped: true, picked: curText };
+    }
+  }
+
+  const clearBtn =
+    typeof dd.querySelector === 'function' ? dd.querySelector('.rz-dropdown-clear-icon') : null;
+  if (curText && clearBtn && typeof clearBtn.click === 'function') {
+    clearBtn.click();
+    await sleep(200);
+  }
+
+  if (typeof dd.click === 'function') {
+    dd.click();
+    await sleep(180);
+  }
+
+  const panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  if (!panel || typeof panel.querySelectorAll !== 'function') {
+    return { ok: false, error: `Không mở được danh sách chọn cho "${fieldKind}".` };
+  }
+
+  const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+  let match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm);
+  if (!match) {
+    match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm));
+  }
+  if (!match || typeof match.click !== 'function') {
+    return { ok: false, error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".` };
+  }
+
+  const picked = getEquipmentElText(match);
+  match.click();
+  await sleep(150);
+
+  // Neu Radzen multi-select popup van mo sau khi chon, dong gon lai
+  try {
+    if (
+      typeof getComputedStyle === 'function' &&
+      panel.offsetParent !== null &&
+      getComputedStyle(panel).display !== 'none' &&
+      typeof dd.click === 'function'
+    ) {
+      dd.click();
+      await sleep(100);
+    }
+  } catch {
+    // Bo qua trong moi truong mock Node
+  }
+
+  if (waitNextKind) {
+    const deadline = Date.now() + waitTimeoutMs;
+    while (Date.now() < deadline) {
+      await sleep(150);
+      const nextOpts = readEquipmentFilterOptions(doc, waitNextKind);
+      if (nextOpts.options.length > 0) {
+        await sleep(150);
+        break;
+      }
+    }
+  }
+
+  return { ok: true, picked };
+}
+
+export async function applyEquipmentDebtFilterToPage(doc, filter, { onProgress = null } = {}) {
+  const region = cleanEquipmentText(filter && filter.region);
+  const province = cleanEquipmentText(filter && filter.province);
+  const partner = cleanEquipmentText(filter && filter.partner);
+  if (!region || !province || !partner) {
+    return { ok: false, error: 'Bộ lọc cố định cần đủ Vùng, Tỉnh thành và Đối tác.' };
+  }
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Vùng cố định…');
+  const rRes = await selectEquipmentFilterOption(doc, 'region', region, {
+    waitNextKind: 'province',
+  });
+  if (!rRes.ok) return rRes;
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Tỉnh thành cố định…');
+  const pRes = await selectEquipmentFilterOption(doc, 'province', province, {
+    waitNextKind: 'partner',
+  });
+  if (!pRes.ok) return pRes;
+
+  if (typeof onProgress === 'function') onProgress('Đang chọn Đối tác cố định…');
+  const prRes = await selectEquipmentFilterOption(doc, 'partner', partner);
+  if (!prRes.ok) return prRes;
+
+  return {
+    ok: true,
+    applied: {
+      region: rRes.picked,
+      province: pRes.picked,
+      partner: prRes.picked,
+    },
+  };
 }
 
 export function parseEquipmentDebtPagerInfo(scopeEl) {
@@ -774,6 +979,12 @@ export async function loadEquipmentDebtContext(ctx = {}) {
   const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
   const realRows = getEquipmentRealBodyRows(table);
   const columns = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+  const filterState = readEquipmentFilterState(doc);
+  const currentFilter = {
+    region: filterState.region,
+    province: filterState.province,
+    partner: filterState.partner,
+  };
 
   if (
     !ctrls.hasDebtTab ||
@@ -784,14 +995,14 @@ export async function loadEquipmentDebtContext(ctx = {}) {
     columns.materials.length === 0
   ) {
     const hasReportMenuBtn = Boolean(findEquipmentReportMenuBtn(doc));
-    const filterState = readEquipmentFilterState(doc);
+    const regionOptions = readEquipmentFilterOptions(doc, 'region').options;
     let message =
       'Bạn đang ở màn hình khác trên Quản lý vật tư (chưa mở Báo cáo → Báo cáo nợ). Bấm nút bên dưới để mở đúng trang Báo cáo nợ.';
     if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
       message = 'Đang ở Báo cáo nợ nhưng chưa chọn tab "Tồn công nợ theo NV". Bấm chuyển tab bên dưới.';
     } else if (ctrls.hasDebtTab && filterState.missingRequired) {
       message =
-        'Chưa chọn Vùng / Tỉnh thành / Đối tác trên trang Báo cáo nợ. Bấm "Thu gọn để chọn bộ lọc", chọn xong rồi bấm Xem danh sách.';
+        'Chọn Vùng / Tỉnh thành / Đối tác 1 lần bên dưới — Remote Inside sẽ lưu cố định và tự chọn ở những lần sau.';
     } else if (ctrls.hasDebtTab && ctrls.viewListBtn) {
       message =
         'Bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để chạy "Xem danh sách" và gom KTV.';
@@ -805,13 +1016,19 @@ export async function loadEquipmentDebtContext(ctx = {}) {
       hasViewListBtn: Boolean(ctrls.viewListBtn),
       hasReportMenuBtn,
       filterMissing: filterState.missingRequired,
+      currentFilter,
+      regionOptions,
       message,
     };
   }
 
-  return collectEquipmentDebtFromDocument(doc, {
+  const collected = await collectEquipmentDebtFromDocument(doc, {
     onProgress: ctx.onProgress,
     maxPages: ctx.maxPages || 30,
     waitMs: ctx.waitMs || 5500,
   });
+  return {
+    ...collected,
+    currentFilter,
+  };
 }

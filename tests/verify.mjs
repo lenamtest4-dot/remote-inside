@@ -144,8 +144,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.8.3'),
-    'Userscript must bump @version to 0.8.3'
+    userscriptContent.includes('@version      0.8.4'),
+    'Userscript must bump @version to 0.8.4'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1549,6 +1549,14 @@ async function runTests() {
   assert.ok(
     userscriptContent.includes('isPortLoggedInFrameset'),
     'Userscript bundle must include isPortLoggedInFrameset'
+  );
+  assert.ok(
+    userscriptContent.includes('handleCurrentPageDeepScan'),
+    'Userscript bundle must include handleCurrentPageDeepScan'
+  );
+  assert.ok(
+    userscriptContent.includes('current_page_v1'),
+    'Userscript bundle must include current_page_v1 scan kind'
   );
   console.log('   OK: port.fpt.net adapter tests passed.');
 

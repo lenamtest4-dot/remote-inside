@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.8.3
+// @version      0.8.4
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -7750,6 +7750,119 @@ function mountRemoteInside({
     renderScanner();
   }
 
+  async function handleCurrentPageDeepScan() {
+    if (state.isDeepScanning) return;
+    state.isDeepScanning = true;
+    state.copyNotice =
+      'Đang quét sâu mã JS & danh sách chọn của trang đang mở (chỉ đọc, đã lọc thông tin nhạy cảm)…';
+    renderScanner();
+
+    try {
+      const contractId = normalizeContractId(state.contractInput);
+      const loc = pageWindow && pageWindow.location ? pageWindow.location : undefined;
+      state.domSnapshot = scanPageStructure(pageDocument, loc, contractId);
+
+      const pageHref = (loc && loc.href) || '';
+      const origin = (loc && loc.origin && loc.origin !== 'null' ? loc.origin : '') || '';
+      const pathname = (loc && loc.pathname) || '';
+      const htmlText =
+        (pageDocument && pageDocument.documentElement && pageDocument.documentElement.outerHTML) ||
+        '';
+
+      const controlsMeta = extractFormControlsMeta(htmlText, contractId);
+      const ajaxSigs = extractAjaxSignaturesFromHtml(htmlText, pageHref, contractId);
+      const apiHints = extractApiHintsFromHtml(htmlText, pageHref, contractId);
+      const inlineScripts = extractInlineScriptsSanitized(htmlText, contractId, {
+        maxPerScript: 45000,
+        maxTotal: 90000,
+      });
+
+      const VENDOR_SCRIPT_RE =
+        /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill)/i;
+      const candidateScriptUrls = [
+        ...(Array.isArray(apiHints.scriptUrls) ? apiHints.scriptUrls : []),
+        ...extractNextAppChunkUrls(htmlText, pageHref),
+      ];
+      const seenScripts = new Set();
+      const customScriptUrls = [];
+      for (const rawUrl of candidateScriptUrls) {
+        if (!rawUrl || seenScripts.has(rawUrl) || VENDOR_SCRIPT_RE.test(rawUrl)) {
+          continue;
+        }
+        try {
+          const parsed = new URL(rawUrl, pageHref || undefined);
+          if (origin && parsed.origin !== origin) {
+            continue;
+          }
+          seenScripts.add(parsed.href);
+          customScriptUrls.push(parsed.href);
+          if (customScriptUrls.length >= 4) break;
+        } catch {
+          // skip malformed script URL
+        }
+      }
+
+      const jsSnippets = [];
+      if (isUserscriptEnv() && customScriptUrls.length > 0) {
+        const settled = await Promise.allSettled(
+          customScriptUrls.map((url) => requestPortal({ url, method: 'GET', timeout: 10000 }))
+        );
+        for (let i = 0; i < customScriptUrls.length; i += 1) {
+          const cUrl = customScriptUrls[i];
+          const item = settled[i];
+          const res = item && item.status === 'fulfilled' ? item.value : null;
+          if (!res || !res.ok || !res.responseText || res.responseText.length > 1.2 * 1024 * 1024) {
+            continue;
+          }
+          let jsOrigin = origin;
+          let jsPath = cUrl;
+          try {
+            const parsed = new URL(cUrl);
+            jsOrigin = parsed.origin;
+            jsPath = parsed.pathname;
+          } catch {
+            // keep defaults
+          }
+          jsSnippets.push({
+            origin: jsOrigin,
+            pathname: jsPath,
+            apiHints: extractApiHintsFromJs(res.responseText, contractId),
+            codeContexts: extractCodeContextsFromJs(
+              res.responseText,
+              /(?:ajax|fetch|post|get|bypass|contract|camera|recall|radius|save|update|delete|search|check|submit|url\s*:)/i,
+              contractId,
+              { maxContexts: 18, radius: 220 }
+            ),
+          });
+        }
+      }
+
+      state.deepScan = {
+        scanKind: 'current_page_v1',
+        scannedAt: new Date().toISOString(),
+        origin,
+        pathname,
+        title: (state.domSnapshot && state.domSnapshot.title) || '',
+        controlsMeta,
+        ajaxCalls: ajaxSigs.ajaxCalls || [],
+        apiHints: apiHints.apiHints || [],
+        scriptUrls: apiHints.scriptUrls || [],
+        inlineScripts,
+        jsSnippets,
+      };
+      state.copyNotice = `Đã quét sâu trang hiện tại: ${inlineScripts.length} đoạn mã JS, ${
+        controlsMeta.selects.length
+      } danh sách chọn, ${(ajaxSigs.ajaxCalls || []).length} lệnh mạng. Hãy bấm "Tải file JSON" bên dưới.`;
+    } catch (err) {
+      state.copyNotice = `Có lỗi khi quét sâu trang hiện tại: ${
+        err && err.message ? err.message : 'Không rõ nguyên nhân'
+      }`;
+    } finally {
+      state.isDeepScanning = false;
+      renderScanner();
+    }
+  }
+
   function handleToggleRecording() {
     if (!state.isRecording) {
       recorder.clear();
@@ -10855,6 +10968,15 @@ function mountRemoteInside({
         className: 'ri-secondary-btn',
         text: '1. Chụp nhanh giao diện trang hiện tại',
         onClick: handleTakeDomSnapshot,
+      }),
+      el('button', {
+        type: 'button',
+        className: 'ri-primary-btn',
+        disabled: state.isDeepScanning,
+        text: state.isDeepScanning
+          ? 'Đang quét sâu trang hiện tại…'
+          : '1b. Quét sâu trang đang mở (mã JS + mục chọn)',
+        onClick: handleCurrentPageDeepScan,
       }),
       el('button', {
         type: 'button',

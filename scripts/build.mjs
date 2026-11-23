@@ -14,6 +14,7 @@ const MODULE_ORDER = [
   'core/transport.js',
   'core/inspector.js',
   'adapters/inside.js',
+  'adapters/port.js',
   'adapters/portals.js',
   'ui/app.js',
   'main.js',
@@ -22,7 +23,7 @@ const MODULE_ORDER = [
 const USERSCRIPT_HEADER = `// ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.6.1
+// @version      0.7.0
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -30,6 +31,8 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @match        https://mvc.inside.fpt.net/*
 // @match        https://port.fpt.net/*
 // @match        http://port.fpt.net/*
+// @match        https://mvcport.fpt.net/*
+// @match        http://mvcport.fpt.net/*
 // @match        https://fli-mngt.fcam.vn/*
 // @match        http://fli-mngt.fcam.vn/*
 // @match        https://nextgen.fpt.net/*
@@ -38,6 +41,7 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @connect      inside.fpt.net
 // @connect      mvc.inside.fpt.net
 // @connect      port.fpt.net
+// @connect      mvcport.fpt.net
 // @connect      fli-mngt.fcam.vn
 // @connect      nextgen.fpt.net
 // @connect      radius-portal.fpt.net

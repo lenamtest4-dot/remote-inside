@@ -412,6 +412,11 @@
   color: var(--accent-signal-hover);
 }
 
+.ri-tab.is-active .ri-tab-badge[data-tier="in_progress"] {
+  background: #FEF3C7;
+  color: var(--state-warn);
+}
+
 /* Bang nut lenh thao tac */
 .ri-portal-head {
   display: flex;

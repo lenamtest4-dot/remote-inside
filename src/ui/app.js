@@ -142,8 +142,19 @@ export function mountRemoteInside({
   pageWindow = typeof window !== 'undefined' ? window : null,
   pageDocument = typeof document !== 'undefined' ? document : null,
 }) {
+  const currentHost =
+    pageWindow && pageWindow.location && pageWindow.location.hostname
+      ? pageWindow.location.hostname.toLowerCase()
+      : '';
+  const matchedPortalId = currentHost
+    ? PORTAL_ORDER.find(
+        (id) =>
+          Array.isArray(PORTALS[id].hosts) &&
+          PORTALS[id].hosts.some((h) => h.toLowerCase() === currentHost)
+      )
+    : '';
   const savedPortal = getState(STORAGE_KEYS.ACTIVE_PORTAL, 'inside');
-  const initialPortal = PORTALS[savedPortal] ? savedPortal : 'inside';
+  const initialPortal = matchedPortalId || (PORTALS[savedPortal] ? savedPortal : 'inside');
   const initialContract = getState(STORAGE_KEYS.LAST_CONTRACT, '') || '';
 
   const state = {
@@ -1496,6 +1507,7 @@ export function mountRemoteInside({
             state.activePortalId = id;
             state.result = null;
             setState(STORAGE_KEYS.ACTIVE_PORTAL, id);
+            renderMain();
             refreshSessionStatus();
           },
         },
@@ -3003,6 +3015,45 @@ export function mountRemoteInside({
     const reqCount = state.recordedEntries.length;
     const hasData = Boolean(state.domSnapshot) || reqCount > 0 || Boolean(state.deepScan);
 
+    const scannerActionBtns = [
+      el('button', {
+        type: 'button',
+        className: 'ri-secondary-btn',
+        text: '1. Chụp nhanh giao diện trang hiện tại',
+        onClick: handleTakeDomSnapshot,
+      }),
+      el('button', {
+        type: 'button',
+        className: state.isRecording ? 'ri-danger-btn' : 'ri-primary-btn',
+        text: state.isRecording
+          ? `Dừng ghi thao tác (${reqCount})`
+          : '2. Bật ghi thao tác mạng',
+        onClick: handleToggleRecording,
+      }),
+    ];
+    if (state.activePortalId === 'inside') {
+      scannerActionBtns.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-secondary-btn',
+          disabled: state.isDeepScanning,
+          text: state.isDeepScanning
+            ? 'Đang quét 7 trang phụ…'
+            : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
+          onClick: handleDeepScan,
+        }),
+        el('button', {
+          type: 'button',
+          className: 'ri-primary-btn',
+          disabled: state.isDeepScanning,
+          text: state.isDeepScanning
+            ? 'Đang đọc mã Kill Session & Radius…'
+            : '4. Quét mã Kill Session (IP) & Thông số kết nối (OLT tự động)',
+          onClick: handleOpsSignatureScan,
+        })
+      );
+    }
+
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { className: 'ri-sheet' }, [
         el('div', { className: 'ri-log-head' }, [
@@ -3026,40 +3077,7 @@ export function mountRemoteInside({
             text: 'Bảo vệ thông tin: Công cụ tự động bỏ qua mật khẩu, cookie, mã OTP và thông tin cá nhân khách hàng ([REDACTED]) trước khi tạo báo cáo.',
           }),
         ]),
-        el('div', { className: 'ri-result-actions' }, [
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            text: '1. Chụp nhanh giao diện trang hiện tại',
-            onClick: handleTakeDomSnapshot,
-          }),
-          el('button', {
-            type: 'button',
-            className: state.isRecording ? 'ri-danger-btn' : 'ri-primary-btn',
-            text: state.isRecording
-              ? `Dừng ghi thao tác (${reqCount})`
-              : '2. Bật ghi thao tác mạng',
-            onClick: handleToggleRecording,
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            disabled: state.isDeepScanning,
-            text: state.isDeepScanning
-              ? 'Đang quét 7 trang phụ…'
-              : '3. Quét nhanh API 5 mục phụ + Reset MAC / Kill Session',
-            onClick: handleDeepScan,
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-primary-btn',
-            disabled: state.isDeepScanning,
-            text: state.isDeepScanning
-              ? 'Đang đọc mã Kill Session & Radius…'
-              : '4. Quét mã Kill Session (IP) & Thông số kết nối (OLT tự động)',
-            onClick: handleOpsSignatureScan,
-          }),
-        ]),
+        el('div', { className: 'ri-result-actions' }, scannerActionBtns),
         el('div', { className: 'ri-scan-stats' }, [
           el('div', {}, [el('strong', { text: String(formCount) }), el('span', { text: 'Form quét được' })]),
           el('div', {}, [el('strong', { text: String(controlCount) }), el('span', { text: 'Nút bấm' })]),

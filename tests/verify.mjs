@@ -63,6 +63,8 @@ import {
   setInsideOltHint,
   validateBoxNewMac,
 } from '../src/adapters/inside.js';
+import { PORT_ENDPOINTS, runPortAction } from '../src/adapters/port.js';
+import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,6 +87,7 @@ async function runTests() {
     'inside.fpt.net',
     'mvc.inside.fpt.net',
     'port.fpt.net',
+    'mvcport.fpt.net',
     'fli-mngt.fcam.vn',
     'nextgen.fpt.net',
     'radius-portal.fpt.net',
@@ -121,8 +124,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.6.1'),
-    'Userscript must bump @version to 0.6.1'
+    userscriptContent.includes('@version      0.7.0'),
+    'Userscript must bump @version to 0.7.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1128,6 +1131,44 @@ async function runTests() {
   assert.ok(userscriptContent.includes('data-ri-slot'), 'Bundle must include persistent Clear OSP slots');
   assert.ok(userscriptContent.includes('oltConnManualOpen'), 'Bundle must include oltConnManualOpen');
   console.log('   OK: Kill Session rows, Box history schema, and Radius OLT auto-detect passed.');
+
+  console.log('14. Testing port.fpt.net adapter (demo mode & routing)...');
+  assert.equal(PORTALS.port.status, 'in_progress');
+  assert.equal(PORTALS.port.url, 'http://port.fpt.net/');
+  assert.ok(
+    Array.isArray(PORTALS.port.hosts) &&
+      PORTALS.port.hosts.includes('port.fpt.net') &&
+      PORTALS.port.hosts.includes('mvcport.fpt.net'),
+    'PORTALS.port.hosts must include port.fpt.net and mvcport.fpt.net'
+  );
+  assert.ok(
+    'lookup_port' in PORT_ENDPOINTS &&
+      'assign_port' in PORT_ENDPOINTS &&
+      'release_port' in PORT_ENDPOINTS,
+    'PORT_ENDPOINTS must declare lookup_port, assign_port, and release_port'
+  );
+  const portLookup = await runPortAction('lookup_port', ' sgn123456 ');
+  assert.equal(portLookup.status, 'ok');
+  assert.equal(portLookup.mode, 'demo');
+  assert.ok(
+    portLookup.summaryFields.some(
+      (f) => f.label === 'Mã hợp đồng' && f.value === 'SGN123456'
+    ),
+    'Port lookup demo result must include normalized Mã hợp đồng'
+  );
+  assert.equal((await runPortAction('lookup_port', '')).status, 'validation_error');
+  assert.equal((await runPortAction('unknown', 'SGN123456')).status, 'error');
+  assert.equal((await runPortAction('assign_port', 'SGN123456')).status, 'ok');
+  assert.equal((await runPortAction('release_port', 'SGN123456')).status, 'ok');
+  const routedLookup = await executePortalAction('port', 'lookup_port', 'sgn123456');
+  assert.ok(
+    routedLookup.title.includes('Thông tin Port'),
+    'executePortalAction must route port portal to port adapter'
+  );
+  assert.ok(userscriptContent.includes('runPortAction'), 'Userscript bundle must include runPortAction');
+  assert.ok(userscriptContent.includes('mvcport.fpt.net'), 'Userscript bundle must include mvcport.fpt.net');
+  assert.ok(userscriptContent.includes('matchedPortalId'), 'Userscript bundle must include host auto-detection');
+  console.log('   OK: port.fpt.net adapter tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

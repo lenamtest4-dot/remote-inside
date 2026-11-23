@@ -1,9 +1,9 @@
-# Remote Inside (v0.1)
+# Remote Inside (v0.7.0)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **điện thoại Android** và **MacBook** khi đi hiện trường.
 
-- **Inside** (`inside.fpt.net`) — *Ưu tiên v0.1*: Tra thông tin HĐ, Reset MAC, Kill Session, Clear OSP
-- **Port** (`port.fpt.net`) — Xem, Cấp, Thu hồi Port
+- **Inside** (`inside.fpt.net`) — *Đã ghép đủ 5 lệnh*: Tra thông tin HĐ, Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port)
+- **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đang ghép*: Xem, Cấp, Thu hồi Port
 - **Camera** (`fli-mngt.fcam.vn`) — Kiểm tra lỗi, Khởi động lại Camera
 - **Vật tư** (`nextgen.fpt.net/resource/recall`) — Tra cứu & cập nhật vật tư thu hồi
 - **Radius** (`radius-portal.fpt.net`) — Bỏ IPNAT, Bỏ IPv6

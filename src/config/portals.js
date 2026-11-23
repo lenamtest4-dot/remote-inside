@@ -61,10 +61,10 @@ export const PORTALS = {
     id: 'port',
     label: 'Port',
     fullName: 'port.fpt.net',
-    url: 'https://port.fpt.net/',
-    hosts: ['port.fpt.net'],
-    status: 'planned',
-    statusLabel: 'Sắp ghép',
+    url: 'http://port.fpt.net/',
+    hosts: ['port.fpt.net', 'mvcport.fpt.net'],
+    status: 'in_progress',
+    statusLabel: 'Đang ghép',
     description: 'Kiểm tra, cấp mới và thu hồi Port cho hợp đồng.',
     actions: [
       {

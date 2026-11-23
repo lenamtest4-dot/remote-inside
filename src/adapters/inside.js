@@ -844,12 +844,12 @@ export async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
       mode: 'demo',
       sessions: [
         {
-          objID: '1162622263',
+          objID: '900000001',
           date: '23/11/2026 04:16:30',
-          name: `Vtfdl-${contractId.toLowerCase()}`,
-          nasName: 'HCM-BRAS-CTR-03-05',
-          ipAddress: '21.174.165.216',
-          callerId: 'd4:61:95:a0:6e:41',
+          name: `demo-${contractId.toLowerCase()}`,
+          nasName: 'DEMO-BRAS-01',
+          ipAddress: '10.0.0.100',
+          callerId: 'A4:2B:8C:10:9E:4F',
         },
       ],
     };
@@ -956,9 +956,9 @@ export async function fetchInsideModemInfo(rawContractId, ctx = {}) {
       status: 'ok',
       mode: 'demo',
       contractId,
-      objID: '1162622263',
-      accountName: 'vtfdl-demo-2393',
-      macAddress: 'd4:61:95:a0:6e:41',
+      objID: '900000001',
+      accountName: 'demo-account-123',
+      macAddress: 'A4:2B:8C:10:9E:4F',
       customerName: 'Khách hàng mẫu',
     };
   }
@@ -1194,7 +1194,7 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
       };
     }
     case 'clear_osp': {
-      const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
+      const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'DEMO-OLT-01GC16');
       const portsCsv =
         Array.isArray(ctx.ports) && ctx.ports.length > 0 ? ctx.ports.join(',') : '1';
       const fields = [];
@@ -1214,7 +1214,7 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
     }
     case 'bypass': {
       const bpMode = ctx.mode || 'create';
-      const target = String(ctx.contract || contractId || 'VTAAR2501').trim();
+      const target = String(ctx.contract || contractId || 'SGN123456').trim();
       if (bpMode === 'delete') {
         return {
           status: 'ok',
@@ -1356,13 +1356,13 @@ export async function fetchInsideBoxMacs(rawContractId, ctx = {}) {
         {
           MAC: `FBOX${contractId}`,
           Contract: contractId,
-          IdContract: '1162622263',
+          IdContract: '900000001',
           MacNew: '',
         },
         {
           MAC: 'A42B8C109E4F',
           Contract: contractId,
-          IdContract: '1162622263',
+          IdContract: '900000001',
           MacNew: '',
         },
       ],
@@ -2182,9 +2182,9 @@ export async function fetchInsideOltListByLocation(
       status: 'ok',
       mode: 'demo',
       olts: [
-        { id: '101', name: 'BRUP00101GC16' },
-        { id: '102', name: 'BRUP00201GC14' },
-        { id: '103', name: 'BRUP00301GP08' },
+        { id: '101', name: 'DEMO-OLT-01GC16' },
+        { id: '102', name: 'DEMO-OLT-02GC14' },
+        { id: '103', name: 'DEMO-OLT-03GP08' },
       ],
     };
   }
@@ -2269,7 +2269,7 @@ export async function fetchInsideOltInit({ forceRefresh = false, forceDemo = fal
       locations: [
         {
           id: '64',
-          name: 'VTU - Hồ Chí Minh - Bà Rịa - Vũng Tàu (Mô phỏng)',
+          name: 'SGN - Khu vực mẫu (Mô phỏng)',
           selected: true,
         },
       ],
@@ -2443,6 +2443,20 @@ export function getByPassTypeLabel(rawType) {
   return matched ? matched.label : clean || '—';
 }
 
+function parseByPassDeleteAllowedUsers(html) {
+  const match = String(html || '').match(
+    /if\s*\(([^)]+)\)\s*\{\s*CN\.push\(\s*['"]destroy['"]\s*\)/i
+  );
+  if (!match || !match[1]) return [];
+  const users = [];
+  const eqRe = /UseCN\s*===?\s*['"]([^'"]+)['"]/gi;
+  let m;
+  while ((m = eqRe.exec(match[1])) !== null) {
+    if (m[1]) users.push(m[1].trim());
+  }
+  return users;
+}
+
 export function parseByPassPageMeta(htmlText) {
   const html = typeof htmlText === 'string' ? htmlText : '';
   const accLeaderMatch = html.match(/e\[["']AccLeaderByPass["']\]\s*=\s*["']([^"']+)["']/i);
@@ -2457,7 +2471,8 @@ export function parseByPassPageMeta(htmlText) {
 
   const isInsertMatch = html.match(/\bvar\s+isInsert\s*=\s*["']([^"']*)["']/i);
   const isInsert = isInsertMatch ? !/^false$/i.test(isInsertMatch[1].trim()) : true;
-  const canDelete = currentUser === 'NgoanHT2' || currentUser === 'VietNQ27';
+  const deleteAllowedUsers = parseByPassDeleteAllowedUsers(html);
+  const canDelete = Boolean(currentUser) && deleteAllowedUsers.includes(currentUser);
 
   let defaultFlagByPass = '';
   const loadTypeIdx = html.search(/function\s+LoadType\s*\(/i);
@@ -2488,6 +2503,7 @@ export function parseByPassPageMeta(htmlText) {
     currentUser,
     isInsert,
     canDelete,
+    deleteAllowedUsers,
     defaultFlagByPass,
     contractTypeView,
   };
@@ -2792,6 +2808,7 @@ export async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = 
         currentUser: 'Demo.User',
         isInsert: true,
         canDelete: false,
+        deleteAllowedUsers: [],
         defaultFlagByPass: '',
         contractTypeView: '1',
       },
@@ -2847,7 +2864,10 @@ export async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = 
   const meta = parseByPassPageMeta(res.responseText);
   if (!meta.currentUser) {
     meta.currentUser = readInsideUserFromDomFallback();
-    meta.canDelete = meta.currentUser === 'NgoanHT2' || meta.currentUser === 'VietNQ27';
+    meta.canDelete =
+      Boolean(meta.currentUser) &&
+      Array.isArray(meta.deleteAllowedUsers) &&
+      meta.deleteAllowedUsers.includes(meta.currentUser);
   }
   INSIDE_BYPASS_META_CACHE.meta = meta;
   INSIDE_BYPASS_META_CACHE.expiresAt = Date.now() + 10 * 60 * 1000;
@@ -2869,13 +2889,14 @@ export async function searchInsideByPass(rawQuery, { forceDemo = false } = {}) {
         currentUser: 'Demo.User',
         isInsert: true,
         canDelete: false,
+        deleteAllowedUsers: [],
         defaultFlagByPass: '',
         contractTypeView: '1',
       },
       rows: [
         {
           stt: '1',
-          district: 'TP. Vũng Tàu',
+          district: 'Quận 1 (Mẫu)',
           contract: query,
           accCreateByPass: 'Demo.User',
           accLeaderByPass: 'Demo.User',

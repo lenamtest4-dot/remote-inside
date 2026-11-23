@@ -20,11 +20,19 @@ const MODULE_ORDER = [
   'main.js',
 ];
 
+const RELEASE_BASE_URL = (
+  process.env.REMOTE_INSIDE_RELEASE_BASE_URL ||
+  'https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist'
+).replace(/\/+$/, '');
+
 const USERSCRIPT_HEADER = `// ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.9.0
+// @version      0.9.1
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
+// @homepageURL  https://github.com/lenamtest4-dot/remote-inside
+// @updateURL    ${RELEASE_BASE_URL}/remote-inside.meta.js
+// @downloadURL  ${RELEASE_BASE_URL}/remote-inside.user.js
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
 // @match        http://mvc.inside.fpt.net/*
@@ -116,13 +124,18 @@ function main() {
   const userscriptPath = path.join(DIST_DIR, 'remote-inside.user.js');
   fs.writeFileSync(userscriptPath, userscriptOut, 'utf8');
 
+  const metaPath = path.join(DIST_DIR, 'remote-inside.meta.js');
+  fs.writeFileSync(metaPath, USERSCRIPT_HEADER, 'utf8');
+
   const previewHtmlOut = buildPreviewHtml(iife);
   const previewPath = path.join(DIST_DIR, 'preview.html');
   fs.writeFileSync(previewPath, previewHtmlOut, 'utf8');
 
   const userSize = Buffer.byteLength(userscriptOut, 'utf8');
+  const metaSize = Buffer.byteLength(USERSCRIPT_HEADER, 'utf8');
   const htmlSize = Buffer.byteLength(previewHtmlOut, 'utf8');
   console.log(`Built dist/remote-inside.user.js (${userSize} bytes)`);
+  console.log(`Built dist/remote-inside.meta.js (${metaSize} bytes)`);
   console.log(`Built dist/preview.html (${htmlSize} bytes)`);
 }
 

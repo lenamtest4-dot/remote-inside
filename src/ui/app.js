@@ -878,12 +878,12 @@ export function mountRemoteInside({
     function applyCachedHintIfPresent(objId) {
       if (!isUserscriptEnv()) {
         state.oltDetectedInfo = {
-          objId: String(objId || '1162622263'),
-          oltPop: 'BRUP00101GC16',
+          objId: String(objId || '900000001'),
+          oltPop: 'DEMO-OLT-01GC16',
           slot: '0',
           port: '5',
           onu: '79',
-          ipOlt: '11.72.121.17',
+          ipOlt: '10.0.0.10',
         };
         applyDetectedOltToModal();
         if (!state.oltConnManualOpen) {
@@ -3114,7 +3114,7 @@ export function mountRemoteInside({
           el('div', { className: 'ri-embed-body' }, [
             el('div', {
               className: 'ri-embed-demo',
-              text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT BRUP00101GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
+              text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT DEMO-OLT-01GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
             }),
           ])
         );
@@ -3261,7 +3261,7 @@ export function mountRemoteInside({
         type: 'text',
         className: 'ri-confirm-input',
         id: 'ri-olt-search',
-        placeholder: 'Lọc nhanh tên OLT (ví dụ: BRUP001, GC16…)',
+        placeholder: 'Lọc nhanh tên OLT (ví dụ: OLT-01, GC16…)',
         autocomplete: 'off',
         spellcheck: 'false',
         value: state.oltSearch,
@@ -4292,8 +4292,8 @@ export function mountRemoteInside({
           id: 'ri-bypass-contract',
           placeholder:
             state.bypassChoice === 'Tập điểm'
-              ? 'Ví dụ: HNIW151.0001/FO'
-              : 'Ví dụ: VTAAR2501',
+              ? 'Ví dụ: POP01.0001/FO'
+              : 'Ví dụ: SGN123456',
           autocomplete: 'off',
           spellcheck: 'false',
           value: state.bypassContract,
@@ -4350,8 +4350,8 @@ export function mountRemoteInside({
           state.bypassChoice = e.target.value;
           targetInput.placeholder =
             state.bypassChoice === 'Tập điểm'
-              ? 'Ví dụ: HNIW151.0001/FO'
-              : 'Ví dụ: VTAAR2501';
+              ? 'Ví dụ: POP01.0001/FO'
+              : 'Ví dụ: SGN123456';
           syncBypassCreateUi();
         });
         targetInput.addEventListener('input', (e) => {
@@ -4932,7 +4932,7 @@ export function mountRemoteInside({
             type: 'text',
             className: 'ri-confirm-input',
             id: 'ri-port-pop-search',
-            placeholder: 'Lọc nhanh POP (ví dụ: BRUP075…)',
+            placeholder: 'Lọc nhanh POP (ví dụ: POP01…)',
             autocomplete: 'off',
             spellcheck: 'false',
             value: state.portPopSearch,

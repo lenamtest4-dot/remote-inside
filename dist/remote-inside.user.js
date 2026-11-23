@@ -1,8 +1,11 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.9.0
+// @version      0.9.1
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
+// @homepageURL  https://github.com/lenamtest4-dot/remote-inside
+// @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
+// @downloadURL  https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
 // @match        http://mvc.inside.fpt.net/*
@@ -3096,12 +3099,12 @@ async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
       mode: 'demo',
       sessions: [
         {
-          objID: '1162622263',
+          objID: '900000001',
           date: '23/11/2026 04:16:30',
-          name: `Vtfdl-${contractId.toLowerCase()}`,
-          nasName: 'HCM-BRAS-CTR-03-05',
-          ipAddress: '21.174.165.216',
-          callerId: 'd4:61:95:a0:6e:41',
+          name: `demo-${contractId.toLowerCase()}`,
+          nasName: 'DEMO-BRAS-01',
+          ipAddress: '10.0.0.100',
+          callerId: 'A4:2B:8C:10:9E:4F',
         },
       ],
     };
@@ -3208,9 +3211,9 @@ async function fetchInsideModemInfo(rawContractId, ctx = {}) {
       status: 'ok',
       mode: 'demo',
       contractId,
-      objID: '1162622263',
-      accountName: 'vtfdl-demo-2393',
-      macAddress: 'd4:61:95:a0:6e:41',
+      objID: '900000001',
+      accountName: 'demo-account-123',
+      macAddress: 'A4:2B:8C:10:9E:4F',
       customerName: 'Khách hàng mẫu',
     };
   }
@@ -3446,7 +3449,7 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
       };
     }
     case 'clear_osp': {
-      const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
+      const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'DEMO-OLT-01GC16');
       const portsCsv =
         Array.isArray(ctx.ports) && ctx.ports.length > 0 ? ctx.ports.join(',') : '1';
       const fields = [];
@@ -3466,7 +3469,7 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
     }
     case 'bypass': {
       const bpMode = ctx.mode || 'create';
-      const target = String(ctx.contract || contractId || 'VTAAR2501').trim();
+      const target = String(ctx.contract || contractId || 'SGN123456').trim();
       if (bpMode === 'delete') {
         return {
           status: 'ok',
@@ -3608,13 +3611,13 @@ async function fetchInsideBoxMacs(rawContractId, ctx = {}) {
         {
           MAC: `FBOX${contractId}`,
           Contract: contractId,
-          IdContract: '1162622263',
+          IdContract: '900000001',
           MacNew: '',
         },
         {
           MAC: 'A42B8C109E4F',
           Contract: contractId,
-          IdContract: '1162622263',
+          IdContract: '900000001',
           MacNew: '',
         },
       ],
@@ -4434,9 +4437,9 @@ async function fetchInsideOltListByLocation(
       status: 'ok',
       mode: 'demo',
       olts: [
-        { id: '101', name: 'BRUP00101GC16' },
-        { id: '102', name: 'BRUP00201GC14' },
-        { id: '103', name: 'BRUP00301GP08' },
+        { id: '101', name: 'DEMO-OLT-01GC16' },
+        { id: '102', name: 'DEMO-OLT-02GC14' },
+        { id: '103', name: 'DEMO-OLT-03GP08' },
       ],
     };
   }
@@ -4521,7 +4524,7 @@ async function fetchInsideOltInit({ forceRefresh = false, forceDemo = false } = 
       locations: [
         {
           id: '64',
-          name: 'VTU - Hồ Chí Minh - Bà Rịa - Vũng Tàu (Mô phỏng)',
+          name: 'SGN - Khu vực mẫu (Mô phỏng)',
           selected: true,
         },
       ],
@@ -4693,6 +4696,20 @@ function getByPassTypeLabel(rawType) {
   const matched = BYPASS_TYPE_OPTIONS.find((opt) => opt.value === clean);
   return matched ? matched.label : clean || '—';
 }
+
+function parseByPassDeleteAllowedUsers(html) {
+  const match = String(html || '').match(
+    /if\s*\(([^)]+)\)\s*\{\s*CN\.push\(\s*['"]destroy['"]\s*\)/i
+  );
+  if (!match || !match[1]) return [];
+  const users = [];
+  const eqRe = /UseCN\s*===?\s*['"]([^'"]+)['"]/gi;
+  let m;
+  while ((m = eqRe.exec(match[1])) !== null) {
+    if (m[1]) users.push(m[1].trim());
+  }
+  return users;
+}
 function parseByPassPageMeta(htmlText) {
   const html = typeof htmlText === 'string' ? htmlText : '';
   const accLeaderMatch = html.match(/e\[["']AccLeaderByPass["']\]\s*=\s*["']([^"']+)["']/i);
@@ -4707,7 +4724,8 @@ function parseByPassPageMeta(htmlText) {
 
   const isInsertMatch = html.match(/\bvar\s+isInsert\s*=\s*["']([^"']*)["']/i);
   const isInsert = isInsertMatch ? !/^false$/i.test(isInsertMatch[1].trim()) : true;
-  const canDelete = currentUser === 'NgoanHT2' || currentUser === 'VietNQ27';
+  const deleteAllowedUsers = parseByPassDeleteAllowedUsers(html);
+  const canDelete = Boolean(currentUser) && deleteAllowedUsers.includes(currentUser);
 
   let defaultFlagByPass = '';
   const loadTypeIdx = html.search(/function\s+LoadType\s*\(/i);
@@ -4738,6 +4756,7 @@ function parseByPassPageMeta(htmlText) {
     currentUser,
     isInsert,
     canDelete,
+    deleteAllowedUsers,
     defaultFlagByPass,
     contractTypeView,
   };
@@ -5036,6 +5055,7 @@ async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = false }
         currentUser: 'Demo.User',
         isInsert: true,
         canDelete: false,
+        deleteAllowedUsers: [],
         defaultFlagByPass: '',
         contractTypeView: '1',
       },
@@ -5091,7 +5111,10 @@ async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = false }
   const meta = parseByPassPageMeta(res.responseText);
   if (!meta.currentUser) {
     meta.currentUser = readInsideUserFromDomFallback();
-    meta.canDelete = meta.currentUser === 'NgoanHT2' || meta.currentUser === 'VietNQ27';
+    meta.canDelete =
+      Boolean(meta.currentUser) &&
+      Array.isArray(meta.deleteAllowedUsers) &&
+      meta.deleteAllowedUsers.includes(meta.currentUser);
   }
   INSIDE_BYPASS_META_CACHE.meta = meta;
   INSIDE_BYPASS_META_CACHE.expiresAt = Date.now() + 10 * 60 * 1000;
@@ -5112,13 +5135,14 @@ async function searchInsideByPass(rawQuery, { forceDemo = false } = {}) {
         currentUser: 'Demo.User',
         isInsert: true,
         canDelete: false,
+        deleteAllowedUsers: [],
         defaultFlagByPass: '',
         contractTypeView: '1',
       },
       rows: [
         {
           stt: '1',
-          district: 'TP. Vũng Tàu',
+          district: 'Quận 1 (Mẫu)',
           contract: query,
           accCreateByPass: 'Demo.User',
           accLeaderByPass: 'Demo.User',
@@ -6363,7 +6387,7 @@ async function fetchPortLocations({ forceRefresh = false, forceDemo = false } = 
   if (!isUserscriptEnv() || forceDemo) {
     return {
       status: 'ok',
-      locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+      locations: [{ value: '35', label: 'SGN - Khu vực mẫu (Mẫu)' }],
     };
   }
   if (!forceRefresh && cachedLocations.items && Date.now() < cachedLocations.expiresAt) {
@@ -6387,7 +6411,7 @@ async function fetchPortBranches(locationId, { forceDemo = false } = {}) {
   if (!isUserscriptEnv() || forceDemo) {
     return {
       status: 'ok',
-      branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+      branches: [{ value: '1', label: 'Chi nhánh mẫu (Mẫu)' }],
     };
   }
   const locKey = String(locationId || '0').trim();
@@ -6418,8 +6442,8 @@ async function fetchPortPops(locationId, branchId, { forceDemo = false } = {}) {
     return {
       status: 'ok',
       pops: [
-        { value: '101', label: 'BRUP07501' },
-        { value: '102', label: 'BRUP00101' },
+        { value: '101', label: 'DEMO-POP-01' },
+        { value: '102', label: 'DEMO-POP-02' },
       ],
     };
   }
@@ -6544,21 +6568,21 @@ async function fetchPortHistory({ pointName = '', port = '', locationID = '', fo
         {
           stt: '1',
           actionDate: '11/23/2026 11:38:42',
-          createBy: 'phuongnam.namlp',
+          createBy: 'KTV.Mau01',
           port: port || 'Port 04',
           ip: '10.10.20.5',
           action: 'Thu hồi port',
-          contractName: 'VTAAR2501',
+          contractName: 'SGN123456',
           data: 'Status=6 (Đã thu hồi port)',
         },
         {
           stt: '2',
           actionDate: '11/21/2026 08:49:42',
-          createBy: 'VTU.ThaoPT81',
+          createBy: 'KTV.Mau02',
           port: port || 'Port 04',
           ip: '10.10.20.5',
           action: 'Cấp mới port',
-          contractName: 'VTAAR2501',
+          contractName: 'SGN123456',
           data: `${pointName} • Port 04`,
         },
       ],
@@ -6588,9 +6612,9 @@ function makeDemoContext(contractId, typeContract = '3') {
     status: 'ok',
     mode: 'demo',
     recordMode: 'existing',
-    sourceUrl: `${PORT_ENDPOINTS.insertPage}/155123602`,
+    sourceUrl: `${PORT_ENDPOINTS.insertPage}/900001`,
     detail: {
-      id: '155123602',
+      id: '900001',
       contractName: contractId,
       typeContract,
       typeContractLabel: typeContract === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New',
@@ -6603,19 +6627,19 @@ function makeDemoContext(contractId, typeContract = '3') {
       customer: 'Khách hàng mẫu FTTH NEW',
       cmnd: '',
       company: '',
-      address: '2 Hải Đăng, Phường Vũng Tàu, TP. Hồ Chí Minh',
+      address: '123 Đường Mẫu, Quận 1, TP. Hồ Chí Minh',
       email: '',
       handphone: '',
       telephone: '',
       localType: '188',
       cardNumber: '1',
       description: '',
-      createBy: 'VTU.ThaoPT81',
+      createBy: 'KTV.Mau02',
       createDate: '11/21/2026 8:49:42 AM',
-      updateBy: 'Phuongnam.namlp',
+      updateBy: 'KTV.Mau01',
       updateDate: '11/23/2026 11:38:42 AM',
-      tstc: 'BRUP07501GC16 • SPL-07 • Port 04 (Mẫu)',
-      pc: 'BRUP07501 • PON 0/8 • VLAN 188 (Mẫu)',
+      tstc: 'DEMO-OLT-01GC16 • SPL-07 • Port 04 (Mẫu)',
+      pc: 'DEMO-POP-01 • PON 0/8 • VLAN 188 (Mẫu)',
       typeContractOptions: [
         { value: '3', label: 'FTTH_New', selected: typeContract !== '5' },
         { value: '5', label: 'FTTH_NEW LeaseLine', selected: typeContract === '5' },
@@ -6630,9 +6654,9 @@ function makeDemoContext(contractId, typeContract = '3') {
         { value: '3', label: 'Cấp lại port', selected: false },
       ],
     },
-    locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+    locations: [{ value: '35', label: 'SGN - Khu vực mẫu (Mẫu)' }],
     defaultLocationId: '35',
-    branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+    branches: [{ value: '1', label: 'Chi nhánh mẫu (Mẫu)' }],
     defaultBranchId: '1',
   };
 }
@@ -6938,8 +6962,8 @@ function buildPortMockResult(actionId, contractId, ctx = {}) {
         summaryFields: [
           { label: 'Mã hợp đồng', value: contractId },
           { label: 'Trạng thái Port', value: 'Bình thường (Đã cấp)' },
-          { label: 'Thông số Tập điểm / Port', value: 'BRUP07501GC16 • SPL-07 • Port 04' },
-          { label: 'Thông số kết nối', value: 'BRUP07501 • PON 0/8 • VLAN 188' },
+          { label: 'Thông số Tập điểm / Port', value: 'DEMO-OLT-01GC16 • SPL-07 • Port 04' },
+          { label: 'Thông số kết nối', value: 'DEMO-POP-01 • PON 0/8 • VLAN 188' },
           { label: 'Loại hợp đồng', value: 'FTTH_New' },
           { label: 'Nguồn dữ liệu', value: 'Dữ liệu mô phỏng (chưa bật VPN/Userscript)' },
         ],
@@ -6953,7 +6977,7 @@ function buildPortMockResult(actionId, contractId, ctx = {}) {
           'Lệnh mô phỏng thành công: Port mới đã được gán cho hợp đồng trên bản xem thử.',
         summaryFields: [
           { label: 'Mã hợp đồng', value: contractId },
-          { label: 'Tập điểm / Hộp đấu nối', value: ctx.deviceName || 'BRUP07501-SPL-01' },
+          { label: 'Tập điểm / Hộp đấu nối', value: ctx.deviceName || 'DEMO-POP-01-SPL-01' },
           { label: 'Port đã chọn', value: ctx.port || 'Port 04' },
         ],
       };
@@ -8075,12 +8099,12 @@ function mountRemoteInside({
     function applyCachedHintIfPresent(objId) {
       if (!isUserscriptEnv()) {
         state.oltDetectedInfo = {
-          objId: String(objId || '1162622263'),
-          oltPop: 'BRUP00101GC16',
+          objId: String(objId || '900000001'),
+          oltPop: 'DEMO-OLT-01GC16',
           slot: '0',
           port: '5',
           onu: '79',
-          ipOlt: '11.72.121.17',
+          ipOlt: '10.0.0.10',
         };
         applyDetectedOltToModal();
         if (!state.oltConnManualOpen) {
@@ -10311,7 +10335,7 @@ function mountRemoteInside({
           el('div', { className: 'ri-embed-body' }, [
             el('div', {
               className: 'ri-embed-demo',
-              text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT BRUP00101GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
+              text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT DEMO-OLT-01GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
             }),
           ])
         );
@@ -10458,7 +10482,7 @@ function mountRemoteInside({
         type: 'text',
         className: 'ri-confirm-input',
         id: 'ri-olt-search',
-        placeholder: 'Lọc nhanh tên OLT (ví dụ: BRUP001, GC16…)',
+        placeholder: 'Lọc nhanh tên OLT (ví dụ: OLT-01, GC16…)',
         autocomplete: 'off',
         spellcheck: 'false',
         value: state.oltSearch,
@@ -11489,8 +11513,8 @@ function mountRemoteInside({
           id: 'ri-bypass-contract',
           placeholder:
             state.bypassChoice === 'Tập điểm'
-              ? 'Ví dụ: HNIW151.0001/FO'
-              : 'Ví dụ: VTAAR2501',
+              ? 'Ví dụ: POP01.0001/FO'
+              : 'Ví dụ: SGN123456',
           autocomplete: 'off',
           spellcheck: 'false',
           value: state.bypassContract,
@@ -11547,8 +11571,8 @@ function mountRemoteInside({
           state.bypassChoice = e.target.value;
           targetInput.placeholder =
             state.bypassChoice === 'Tập điểm'
-              ? 'Ví dụ: HNIW151.0001/FO'
-              : 'Ví dụ: VTAAR2501';
+              ? 'Ví dụ: POP01.0001/FO'
+              : 'Ví dụ: SGN123456';
           syncBypassCreateUi();
         });
         targetInput.addEventListener('input', (e) => {
@@ -12129,7 +12153,7 @@ function mountRemoteInside({
             type: 'text',
             className: 'ri-confirm-input',
             id: 'ri-port-pop-search',
-            placeholder: 'Lọc nhanh POP (ví dụ: BRUP075…)',
+            placeholder: 'Lọc nhanh POP (ví dụ: POP01…)',
             autocomplete: 'off',
             spellcheck: 'false',
             value: state.portPopSearch,

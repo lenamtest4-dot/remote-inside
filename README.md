@@ -1,4 +1,4 @@
-# Remote Inside (v0.9.0)
+# Remote Inside (v0.9.1)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **điện thoại Android** và **MacBook** khi đi hiện trường.
 
@@ -26,20 +26,25 @@ Sau đó mở trình duyệt vào `http://localhost:4173/preview.html`.
 
 ---
 
-## 2. Cài đặt để chạy kèm VPN & IAM
+## 2. Cài đặt 1 chạm + Tự động cập nhật (Android & PC)
 
-Cài bộ chạy Userscript từ file **`dist/remote-inside.user.js`**:
-
-### Trên MacBook (Chrome / Brave / Edge)
-1. Cài tiện ích **Tampermonkey** từ Chrome Web Store.
-2. Bấm vào biểu tượng Tampermonkey -> **Create a new script...** (Tạo script mới).
-3. Xóa hết phần chữ mặc định bên trong, mở file `dist/remote-inside.user.js`, copy toàn bộ nội dung dán vào và bấm **File -> Save** (hoặc `Cmd + S`).
+### Link cài đặt trực tiếp (1 đường link duy nhất)
+```
+https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js
+```
+*(Script đã gắn sẵn `@updateURL` trỏ về `dist/remote-inside.meta.js` và `@downloadURL` trỏ về `dist/remote-inside.user.js`, nên mỗi khi có phiên bản mới trên `main`, Tampermonkey sẽ tự kiểm tra và cập nhật cho mọi máy.)*
 
 ### Trên điện thoại Android
-1. Cài **Firefox** hoặc **Microsoft Edge** trên Google Play (hai trình duyệt này hỗ trợ tiện ích mở rộng trên điện thoại).
-2. Cài thêm tiện ích **Tampermonkey** (hoặc **Violentmonkey**) ngay trong phần Tiện ích của trình duyệt.
-3. Tạo script mới rồi dán toàn bộ nội dung file `dist/remote-inside.user.js` và lưu lại.
-4. Khi bật VPN mở `inside.fpt.net` (hoặc bất kỳ trang nào trong 5 trang trên), góc dưới bên phải sẽ hiện nút nổi màu cam **Remote Inside** để bạn mở bảng điều khiển.
+1. Cài trình duyệt **Firefox** hoặc **Microsoft Edge** trên Google Play *(hai trình duyệt này hỗ trợ tiện ích mở rộng trên điện thoại)*.
+2. Cài tiện ích **Tampermonkey** (hoặc **Violentmonkey**) trong phần **Tiện ích (Extensions)**.
+3. Mở thẳng đường link `https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js` trên trình duyệt vừa cài (hoặc vào Tampermonkey -> **Utilities** -> **Install from URL**) rồi bấm **Install** *(Cài đặt)*.
+   - Nếu cài offline từ file: gửi file `dist/remote-inside.user.js` -> Tampermonkey -> **Utilities** -> **Import from file**.
+
+### Trên MacBook / PC (Chrome / Brave / Edge)
+1. Cài tiện ích **Tampermonkey** từ Chrome Web Store.
+2. Mở link `https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js` -> Tampermonkey tự bật tab xác nhận -> bấm **Install / Update**.
+3. **Lưu ý quan trọng nếu dùng trình duyệt Brave:** Bấm biểu tượng **con sư tử màu cam (Brave Shields)** bên phải thanh địa chỉ và gạt **TẮT Shields** trên các trang `iam.fpt.net`, `port.fpt.net`, `inside.fpt.net` để Brave không chặn cookie đăng nhập xuyên trang (`cookieNotFoundMessage`).
+4. Khi bật VPN mở `inside.fpt.net` hoặc `port.fpt.net`, góc dưới bên phải sẽ hiện nút nổi màu cam **Remote Inside** để mở bảng điều khiển.
 
 ---
 

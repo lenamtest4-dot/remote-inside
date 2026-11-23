@@ -963,7 +963,7 @@ export async function fetchPortLocations({ forceRefresh = false, forceDemo = fal
   if (!isUserscriptEnv() || forceDemo) {
     return {
       status: 'ok',
-      locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+      locations: [{ value: '35', label: 'SGN - Khu vực mẫu (Mẫu)' }],
     };
   }
   if (!forceRefresh && cachedLocations.items && Date.now() < cachedLocations.expiresAt) {
@@ -988,7 +988,7 @@ export async function fetchPortBranches(locationId, { forceDemo = false } = {}) 
   if (!isUserscriptEnv() || forceDemo) {
     return {
       status: 'ok',
-      branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+      branches: [{ value: '1', label: 'Chi nhánh mẫu (Mẫu)' }],
     };
   }
   const locKey = String(locationId || '0').trim();
@@ -1020,8 +1020,8 @@ export async function fetchPortPops(locationId, branchId, { forceDemo = false } 
     return {
       status: 'ok',
       pops: [
-        { value: '101', label: 'BRUP07501' },
-        { value: '102', label: 'BRUP00101' },
+        { value: '101', label: 'DEMO-POP-01' },
+        { value: '102', label: 'DEMO-POP-02' },
       ],
     };
   }
@@ -1149,21 +1149,21 @@ export async function fetchPortHistory({ pointName = '', port = '', locationID =
         {
           stt: '1',
           actionDate: '11/23/2026 11:38:42',
-          createBy: 'phuongnam.namlp',
+          createBy: 'KTV.Mau01',
           port: port || 'Port 04',
           ip: '10.10.20.5',
           action: 'Thu hồi port',
-          contractName: 'VTAAR2501',
+          contractName: 'SGN123456',
           data: 'Status=6 (Đã thu hồi port)',
         },
         {
           stt: '2',
           actionDate: '11/21/2026 08:49:42',
-          createBy: 'VTU.ThaoPT81',
+          createBy: 'KTV.Mau02',
           port: port || 'Port 04',
           ip: '10.10.20.5',
           action: 'Cấp mới port',
-          contractName: 'VTAAR2501',
+          contractName: 'SGN123456',
           data: `${pointName} • Port 04`,
         },
       ],
@@ -1193,9 +1193,9 @@ function makeDemoContext(contractId, typeContract = '3') {
     status: 'ok',
     mode: 'demo',
     recordMode: 'existing',
-    sourceUrl: `${PORT_ENDPOINTS.insertPage}/155123602`,
+    sourceUrl: `${PORT_ENDPOINTS.insertPage}/900001`,
     detail: {
-      id: '155123602',
+      id: '900001',
       contractName: contractId,
       typeContract,
       typeContractLabel: typeContract === '5' ? 'FTTH_NEW LeaseLine' : 'FTTH_New',
@@ -1208,19 +1208,19 @@ function makeDemoContext(contractId, typeContract = '3') {
       customer: 'Khách hàng mẫu FTTH NEW',
       cmnd: '',
       company: '',
-      address: '2 Hải Đăng, Phường Vũng Tàu, TP. Hồ Chí Minh',
+      address: '123 Đường Mẫu, Quận 1, TP. Hồ Chí Minh',
       email: '',
       handphone: '',
       telephone: '',
       localType: '188',
       cardNumber: '1',
       description: '',
-      createBy: 'VTU.ThaoPT81',
+      createBy: 'KTV.Mau02',
       createDate: '11/21/2026 8:49:42 AM',
-      updateBy: 'Phuongnam.namlp',
+      updateBy: 'KTV.Mau01',
       updateDate: '11/23/2026 11:38:42 AM',
-      tstc: 'BRUP07501GC16 • SPL-07 • Port 04 (Mẫu)',
-      pc: 'BRUP07501 • PON 0/8 • VLAN 188 (Mẫu)',
+      tstc: 'DEMO-OLT-01GC16 • SPL-07 • Port 04 (Mẫu)',
+      pc: 'DEMO-POP-01 • PON 0/8 • VLAN 188 (Mẫu)',
       typeContractOptions: [
         { value: '3', label: 'FTTH_New', selected: typeContract !== '5' },
         { value: '5', label: 'FTTH_NEW LeaseLine', selected: typeContract === '5' },
@@ -1235,9 +1235,9 @@ function makeDemoContext(contractId, typeContract = '3') {
         { value: '3', label: 'Cấp lại port', selected: false },
       ],
     },
-    locations: [{ value: '35', label: 'VTU - Bà Rịa - Vũng Tàu (Mẫu)' }],
+    locations: [{ value: '35', label: 'SGN - Khu vực mẫu (Mẫu)' }],
     defaultLocationId: '35',
-    branches: [{ value: '1', label: 'TP. Vũng Tàu (Mẫu)' }],
+    branches: [{ value: '1', label: 'Chi nhánh mẫu (Mẫu)' }],
     defaultBranchId: '1',
   };
 }
@@ -1543,8 +1543,8 @@ function buildPortMockResult(actionId, contractId, ctx = {}) {
         summaryFields: [
           { label: 'Mã hợp đồng', value: contractId },
           { label: 'Trạng thái Port', value: 'Bình thường (Đã cấp)' },
-          { label: 'Thông số Tập điểm / Port', value: 'BRUP07501GC16 • SPL-07 • Port 04' },
-          { label: 'Thông số kết nối', value: 'BRUP07501 • PON 0/8 • VLAN 188' },
+          { label: 'Thông số Tập điểm / Port', value: 'DEMO-OLT-01GC16 • SPL-07 • Port 04' },
+          { label: 'Thông số kết nối', value: 'DEMO-POP-01 • PON 0/8 • VLAN 188' },
           { label: 'Loại hợp đồng', value: 'FTTH_New' },
           { label: 'Nguồn dữ liệu', value: 'Dữ liệu mô phỏng (chưa bật VPN/Userscript)' },
         ],
@@ -1558,7 +1558,7 @@ function buildPortMockResult(actionId, contractId, ctx = {}) {
           'Lệnh mô phỏng thành công: Port mới đã được gán cho hợp đồng trên bản xem thử.',
         summaryFields: [
           { label: 'Mã hợp đồng', value: contractId },
-          { label: 'Tập điểm / Hộp đấu nối', value: ctx.deviceName || 'BRUP07501-SPL-01' },
+          { label: 'Tập điểm / Hộp đấu nối', value: ctx.deviceName || 'DEMO-POP-01-SPL-01' },
           { label: 'Port đã chọn', value: ctx.port || 'Port 04' },
         ],
       };

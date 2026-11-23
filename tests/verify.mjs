@@ -105,12 +105,15 @@ const DIST_DIR = path.join(ROOT_DIR, 'dist');
 async function runTests() {
   console.log('1. Checking built artifacts in dist/...');
   const userscriptPath = path.join(DIST_DIR, 'remote-inside.user.js');
+  const metaPath = path.join(DIST_DIR, 'remote-inside.meta.js');
   const previewPath = path.join(DIST_DIR, 'preview.html');
 
   assert.ok(fs.existsSync(userscriptPath), 'dist/remote-inside.user.js must exist');
+  assert.ok(fs.existsSync(metaPath), 'dist/remote-inside.meta.js must exist');
   assert.ok(fs.existsSync(previewPath), 'dist/preview.html must exist');
 
   const userscriptContent = fs.readFileSync(userscriptPath, 'utf8');
+  const metaContent = fs.readFileSync(metaPath, 'utf8');
   const previewContent = fs.readFileSync(previewPath, 'utf8');
 
   // Verify required Userscript metadata headers
@@ -155,8 +158,38 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.9.0'),
-    'Userscript must bump @version to 0.9.0'
+    userscriptContent.includes('@version      0.9.1'),
+    'Userscript must bump @version to 0.9.1'
+  );
+  assert.ok(
+    userscriptContent.includes('@homepageURL  https://github.com/lenamtest4-dot/remote-inside'),
+    'Userscript must include @homepageURL'
+  );
+  assert.ok(
+    userscriptContent.includes('@updateURL    ') && userscriptContent.includes('remote-inside.meta.js'),
+    'Userscript must include @updateURL pointing to remote-inside.meta.js'
+  );
+  assert.ok(
+    userscriptContent.includes('@downloadURL  ') && userscriptContent.includes('remote-inside.user.js'),
+    'Userscript must include @downloadURL pointing to remote-inside.user.js'
+  );
+  assert.ok(
+    metaContent.includes('@version      0.9.1') &&
+      metaContent.includes('@updateURL    ') &&
+      metaContent.includes('@downloadURL  ') &&
+      metaContent.includes('@homepageURL  '),
+    'dist/remote-inside.meta.js must contain complete auto-update header'
+  );
+  assert.ok(
+    userscriptContent.startsWith(metaContent),
+    'Userscript header must match dist/remote-inside.meta.js'
+  );
+  const forbiddenDemoDataRe =
+    /phuongnam|namlp|thaopt|hoàng minh|hải đăng|vtaa[a-z0-9]+|ngoanht|vietnq|brup0|11\.72\.|432227|155123602/i;
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(metaContent),
+    false,
+    'Built dist artifacts must not contain real personal/contract/IP demo fixtures'
   );
 
   // Parse JS syntax inside VM without executing
@@ -561,7 +594,7 @@ async function runTests() {
   assert.ok(parsedLookup.embeddedViews[4].url.includes('objid=9876543'));
 
   const numericAndFalseRadius = parseInsideLookupPayload({
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     detailJson: { data: [{ ID: 123, Status: 1 }] },
     radiusBool: false,
   });
@@ -575,15 +608,15 @@ async function runTests() {
     <script src="/assets/jquery.min.js"></script>
     <script src="/static/js/app-radius.js?v=2"></script>
     <form method="POST" action="/DSLLLine/ResetMAC/Submit?token=secret123">
-      <input type="text" id="txtContract" name="txtContract" value="VTAAR2393" />
-      <button id="btnReset" onclick="resetNow('VTAAR2393')">Reset MAC</button>
+      <input type="text" id="txtContract" name="txtContract" value="SGN123456" />
+      <button id="btnReset" onclick="resetNow('SGN123456')">Reset MAC</button>
     </form>
     <script>
       const ds = { transport: { read: { url: "/iptvinfo/GetListBox?token=secret123&objid=99" } } };
-      $.post("/DSLLLine/ResetMAC/Execute", { contract: "VTAAR2393" });
+      $.post("/DSLLLine/ResetMAC/Execute", { contract: "SGN123456" });
     </script>
   `;
-  const htmlHints = extractApiHintsFromHtml(sampleHtml, 'http://mvc.inside.fpt.net/iptvinfo/infobox', 'VTAAR2393');
+  const htmlHints = extractApiHintsFromHtml(sampleHtml, 'http://mvc.inside.fpt.net/iptvinfo/infobox', 'SGN123456');
   assert.deepEqual(htmlHints.scriptUrls, ['http://mvc.inside.fpt.net/static/js/app-radius.js']);
   assert.ok(
     htmlHints.apiHints.includes('/iptvinfo/GetListBox?token&objid'),
@@ -598,11 +631,11 @@ async function runTests() {
   assert.equal(htmlHints.fields.length, 1);
   assert.equal(htmlHints.fields[0].name, 'txtContract');
   assert.equal(JSON.stringify(htmlHints).includes('secret123'), false, 'Must strip secret query values');
-  assert.equal(JSON.stringify(htmlHints).includes('VTAAR2393'), false, 'Must redact contract ID & skip .value');
+  assert.equal(JSON.stringify(htmlHints).includes('SGN123456'), false, 'Must redact contract ID & skip .value');
 
   const jsHints = extractApiHintsFromJs(
     'fetch("/api/v1/connection-parameters?ObjID=123&token=secret123"); axios.get("/api/v1/online-session");',
-    'VTAAR2393'
+    'SGN123456'
   );
   assert.ok(jsHints.includes('/api/v1/connection-parameters?ObjID&token'));
   assert.ok(jsHints.includes('/api/v1/online-session'));
@@ -632,7 +665,7 @@ async function runTests() {
   const sigOut = extractAjaxSignaturesFromHtml(
     ajaxSampleHtml,
     'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
-    'VTAAR2393'
+    'SGN123456'
   );
   assert.equal(sigOut.ajaxCalls.length, 2);
   assert.equal(sigOut.ajaxCalls[0].fnHint, 'ChangeSubmit');
@@ -668,19 +701,19 @@ async function runTests() {
   console.log('9. Testing Inside live mutation response parser...');
   const mutOkJson = parseInsideMutationResponse({
     actionLabel: 'Kill Session',
-    contractId: 'VTAAR2393',
-    objID: 1162622263,
+    contractId: 'SGN123456',
+    objID: 900000001,
     httpStatus: 200,
     responseText: JSON.stringify({ status: true, msg: 'Kill session thành công' }),
   });
   assert.equal(mutOkJson.status, 'ok');
-  assert.equal(mutOkJson.title, 'Đã Kill Session cho VTAAR2393');
+  assert.equal(mutOkJson.title, 'Đã Kill Session cho SGN123456');
   assert.equal(mutOkJson.message, 'Kill session thành công');
 
   const mutFailJson = parseInsideMutationResponse({
     actionLabel: 'Reset MAC Modem',
-    contractId: 'VTAAR2393',
-    objID: 1162622263,
+    contractId: 'SGN123456',
+    objID: 900000001,
     httpStatus: 200,
     responseText: JSON.stringify({ status: false, msg: 'Không tìm thấy phiên hợp lệ' }),
   });
@@ -689,8 +722,8 @@ async function runTests() {
 
   const mutFailText = parseInsideMutationResponse({
     actionLabel: 'Reset MAC Modem',
-    contractId: 'VTAAR2393',
-    objID: 1162622263,
+    contractId: 'SGN123456',
+    objID: 900000001,
     httpStatus: 200,
     responseText: 'Lỗi hệ thống: Không có quyền thực hiện',
   });
@@ -698,8 +731,8 @@ async function runTests() {
 
   const mutOkPlain = parseInsideMutationResponse({
     actionLabel: 'Reset MAC Modem',
-    contractId: 'VTAAR2393',
-    objID: 1162622263,
+    contractId: 'SGN123456',
+    objID: 900000001,
     httpStatus: 200,
     responseText: '"Cập nhật MAC thành công"',
     extraFields: [{ label: 'Chế độ Reset MAC', value: 'Xóa trắng MAC (NewMAC trống)' }],
@@ -709,8 +742,8 @@ async function runTests() {
 
   const mutHttpErr = parseInsideMutationResponse({
     actionLabel: 'Kill Session',
-    contractId: 'VTAAR2393',
-    objID: 1162622263,
+    contractId: 'SGN123456',
+    objID: 900000001,
     httpStatus: 500,
     responseText: 'Internal Server Error',
   });
@@ -727,14 +760,14 @@ async function runTests() {
     <input type="hidden" id="fDeviceType" name="fDeviceType" value="GPON" />
     <select id="fOLT" name="fOLT" onchange="loadPort()">
       <option value="0">Tat ca</option>
-      <option value="VTU-OLT-01" selected>VTU-OLT-01 (Vung Tau)</option>
-      <option value="VTU-OLT-02">VTU-OLT-02</option>
+      <option value="DEMO-OLT-01" selected>DEMO-OLT-01 (TP. HCM)</option>
+      <option value="DEMO-OLT-02">DEMO-OLT-02</option>
     </select>
     <input type="checkbox" id="chkPort1" name="chkPort" class="pon-cb" value="0/1/1" onclick="togglePort(this)" />
     <script>
       function SaveSwapping() {
         const cfg = {
-          contract: 'VTAAR2393',
+          contract: 'SGN123456',
           headers: { Authorization: 'Bearer top-secret-jwt' },
           password: 'pw123',
           contact: '0901234567',
@@ -744,32 +777,32 @@ async function runTests() {
         $.post('/Contract/IPTVReplaceMAC/SwappingMAC', cfg);
       }
       function ClearSerial() {
-        var url = '/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxClearSerial.asp?contract=VTAAR2393';
+        var url = '/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxClearSerial.asp?contract=SGN123456';
         return url;
       }
     </script>
   `;
 
-  const inlineScripts = extractInlineScriptsSanitized(sampleBoxOltHtml, 'VTAAR2393');
+  const inlineScripts = extractInlineScriptsSanitized(sampleBoxOltHtml, 'SGN123456');
   assert.equal(inlineScripts.length, 1);
   const inlineCode = inlineScripts[0].code;
   assert.ok(inlineCode.includes('SaveSwapping'), 'Must preserve SaveSwapping function');
   assert.ok(inlineCode.includes('transport') || inlineCode.includes('SwappingMAC'), 'Must preserve Kendo transport update URL');
   assert.ok(inlineCode.includes('ClearSerial'), 'Must preserve ClearSerial function');
   assert.ok(inlineCode.includes('<CONTRACT_ID>'), 'Must replace contract ID with <CONTRACT_ID>');
-  assert.equal(inlineCode.includes('VTAAR2393'), false, 'Must redact literal contract ID');
+  assert.equal(inlineCode.includes('SGN123456'), false, 'Must redact literal contract ID');
   assert.equal(inlineCode.includes('top-secret-jwt'), false, 'Must redact Bearer token');
   assert.equal(inlineCode.includes('secret123'), false, 'Must redact query token value');
   assert.equal(inlineCode.includes('pw123'), false, 'Must redact password literal');
   assert.equal(inlineCode.includes('0901234567'), false, 'Must redact mobile phone number');
   assert.equal(inlineCode.includes('tech@example.com'), false, 'Must redact email address');
 
-  const controlsMeta = extractFormControlsMeta(sampleBoxOltHtml, 'VTAAR2393');
+  const controlsMeta = extractFormControlsMeta(sampleBoxOltHtml, 'SGN123456');
   assert.equal(controlsMeta.selects.length, 1);
   assert.equal(controlsMeta.selects[0].id, 'fOLT');
   assert.equal(controlsMeta.selects[0].onchange, 'loadPort()');
   assert.equal(controlsMeta.selects[0].optionCount, 3);
-  assert.equal(controlsMeta.selects[0].selectedValue, 'VTU-OLT-01');
+  assert.equal(controlsMeta.selects[0].selectedValue, 'DEMO-OLT-01');
   assert.equal(controlsMeta.selects[0].sampleOptions.length, 3);
   assert.equal(controlsMeta.selects[0].sampleOptions[1].selected, true);
 
@@ -785,14 +818,14 @@ async function runTests() {
   const externalJsSample = `
     function formatDate(d) { return String(d); }
     function ClearSerial(olt, portID) {
-      $.post('/AjaxClear.asp?token=secret999', { olt: olt, portID: portID, contract: 'VTAAR2393' });
+      $.post('/AjaxClear.asp?token=secret999', { olt: olt, portID: portID, contract: 'SGN123456' });
     }
     var loadPort = function(olt) {
       return '/ViewPortPON.Asp?fOLT=' + olt;
     };
     function unrelatedHelper() { return 42; }
   `;
-  const matchedFns = extractMatchingFunctionsFromJs(externalJsSample, undefined, 'VTAAR2393');
+  const matchedFns = extractMatchingFunctionsFromJs(externalJsSample, undefined, 'SGN123456');
   const fnNames = matchedFns.map((f) => f.name);
   assert.ok(fnNames.includes('ClearSerial'), 'Must extract ClearSerial function');
   assert.ok(fnNames.includes('loadPort'), 'Must extract var loadPort = function');
@@ -800,12 +833,12 @@ async function runTests() {
   assert.equal(fnNames.includes('unrelatedHelper'), false, 'Must ignore unrelatedHelper');
   const serializedFns = JSON.stringify(matchedFns);
   assert.equal(serializedFns.includes('secret999'), false, 'Must redact token in external JS');
-  assert.equal(serializedFns.includes('VTAAR2393'), false, 'Must redact contract ID in external JS');
+  assert.equal(serializedFns.includes('SGN123456'), false, 'Must redact contract ID in external JS');
 
   const hintsWithIsc = extractApiHintsFromHtml(
     sampleBoxOltHtml,
     'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
-    'VTAAR2393'
+    'SGN123456'
   );
   assert.equal(
     hintsWithIsc.scriptUrls.some((u) => u.includes('jquery.min.js')),
@@ -832,10 +865,10 @@ async function runTests() {
   assert.equal(validateBoxNewMac('12345').valid, false);
 
   const boxOkRes = parseReplaceMacBoxResponse({
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     oldMac: 'FBOXOLD123456789',
     newMac: 'AABBCCDDEEFF',
-    idContract: '1162622263',
+    idContract: '900000001',
     httpStatus: 200,
     responseText: JSON.stringify({ status: 9, msg: 'Thay thế MAC thành công!' }),
   });
@@ -843,7 +876,7 @@ async function runTests() {
   assert.equal(boxOkRes.message, 'Thay thế MAC thành công!');
 
   const boxFailZero = parseReplaceMacBoxResponse({
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     oldMac: 'FBOXOLD123456789',
     newMac: 'AABBCCDDEEFF',
     httpStatus: 200,
@@ -852,7 +885,7 @@ async function runTests() {
   assert.equal(boxFailZero.status, 'error');
 
   const boxFailFive = parseReplaceMacBoxResponse({
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     oldMac: 'FBOXOLD123456789',
     newMac: 'AABBCCDDEEFF',
     httpStatus: 200,
@@ -863,20 +896,20 @@ async function runTests() {
   });
   assert.equal(boxFailFive.status, 'error');
 
-  const parsedOlts = parseOltListResponse('0@Tat ca$101@BRUP00101GC16$102@BRUP00201GC14$103@BRUP00301GP08\n');
+  const parsedOlts = parseOltListResponse('0@Tat ca$101@DEMO-OLT-01GC16$102@DEMO-OLT-03GC14$103@DEMO-OLT-04GP08\n');
   assert.deepEqual(parsedOlts, [
-    { id: '101', name: 'BRUP00101GC16' },
-    { id: '102', name: 'BRUP00201GC14' },
-    { id: '103', name: 'BRUP00301GP08' },
+    { id: '101', name: 'DEMO-OLT-01GC16' },
+    { id: '102', name: 'DEMO-OLT-03GC14' },
+    { id: '103', name: 'DEMO-OLT-04GP08' },
   ]);
-  assert.equal(isExtendedPortOlt('BRUP00101GC16'), true);
-  assert.equal(isExtendedPortOlt('BRUP00201GC14'), true);
-  assert.equal(isExtendedPortOlt('BRUP00301GP08'), false);
+  assert.equal(isExtendedPortOlt('DEMO-OLT-01GC16'), true);
+  assert.equal(isExtendedPortOlt('DEMO-OLT-03GC14'), true);
+  assert.equal(isExtendedPortOlt('DEMO-OLT-04GP08'), false);
 
   const monitorHtmlSample = `
     <select id="fLocationID" name="fLocationID" onchange="ChangeLocationID()">
       <option value="0">Tat ca</option>
-      <option value="64">VTU - Ho Chi Minh - Ba Ria - Vung Tau
+      <option value="64">SGN - Khu vuc mau
       <option value="4">HCM - Ho Chi Minh</option>
     </select>
     <script>SetCurrentOption(document.forms[0].fLocationID, '64');</script>
@@ -904,14 +937,14 @@ async function runTests() {
   assert.equal(fallbackPorts[0].isType2, false);
   assert.equal(fallbackPorts[8].isType2, true);
 
-  const alertHtml = `<script>alert('Clear serial port 1,2 thanh cong!');</script><table><tr><th>OLT</th><td>BRUP00101GC16</td></tr></table>`;
+  const alertHtml = `<script>alert('Clear serial port 1,2 thanh cong!');</script><table><tr><th>OLT</th><td>DEMO-OLT-01GC16</td></tr></table>`;
   assert.deepEqual(extractJsAlertMessages(alertHtml), ['Clear serial port 1,2 thanh cong!']);
 
   const clearOk = parseClearSerialResponse({
     mode: 'clear_serial',
     contractId: '',
     oltId: '101',
-    oltName: 'BRUP00101GC16',
+    oltName: 'DEMO-OLT-01GC16',
     portsCsv: '1,2',
     httpStatus: 200,
     responseText: alertHtml,
@@ -924,7 +957,7 @@ async function runTests() {
   const clearErr = parseClearSerialResponse({
     mode: 'clear_serial',
     oltId: '101',
-    oltName: 'BRUP00101GC16',
+    oltName: 'DEMO-OLT-01GC16',
     portsCsv: '1',
     httpStatus: 200,
     responseText: `<script>alert('Ban chua chon Port hoac loi ket noi OLT');</script>`,
@@ -934,13 +967,13 @@ async function runTests() {
   const demoClearNoContract = await runInsideAction('clear_osp', '', {
     forceDemo: true,
     oltId: '101',
-    oltName: 'BRUP00101GC16',
+    oltName: 'DEMO-OLT-01GC16',
     ports: ['1', '2'],
   });
   assert.equal(demoClearNoContract.status, 'ok', 'Clear OSP must work without Contract ID');
   assert.equal(demoClearNoContract.mode, 'demo');
   assert.ok(demoClearNoContract.title.includes('Clear Serial'));
-  assert.ok(demoClearNoContract.title.includes('BRUP00101GC16'));
+  assert.ok(demoClearNoContract.title.includes('DEMO-OLT-01GC16'));
   console.log('   OK: Reset MAC Box & Clear OSP parsers and demo execution passed.');
 
   console.log('12. Testing Reset MAC Modem prefill, Box history logs, and Next.js chunk scan helpers...');
@@ -954,10 +987,10 @@ async function runTests() {
       CreateDate: '/Date(1732345678000)/',
       CreateBy: 'ktv.test',
       Note: 'Đổi Box hỏng',
-      Contract: 'VTAAR2393',
+      Contract: 'SGN123456',
       FullName: 'Nguyen Van A',
       Phone: '0901234567',
-      BranchCode: 'VTU',
+      BranchCode: 'SGN',
     },
   ]);
   assert.equal(logItemsBare.length, 1);
@@ -977,12 +1010,12 @@ async function runTests() {
   assert.equal(logItemsWrapped[0].oldMac, 'AA11');
   assert.equal(logItemsWrapped[0].newMac, 'BB22');
 
-  const demoModemInfo = await fetchInsideModemInfo('VTAAR2393', { forceDemo: true });
+  const demoModemInfo = await fetchInsideModemInfo('SGN123456', { forceDemo: true });
   assert.equal(demoModemInfo.status, 'ok');
-  assert.equal(demoModemInfo.macAddress, 'd4:61:95:a0:6e:41');
+  assert.equal(demoModemInfo.macAddress, 'A4:2B:8C:10:9E:4F');
   assert.ok(demoModemInfo.objID);
 
-  const demoBoxLogs = await fetchInsideBoxMacLogs('VTAAR2393', { forceDemo: true });
+  const demoBoxLogs = await fetchInsideBoxMacLogs('SGN123456', { forceDemo: true });
   assert.equal(demoBoxLogs.status, 'ok');
   assert.ok(demoBoxLogs.logs.length >= 2);
 
@@ -1001,15 +1034,15 @@ async function runTests() {
 
   const radiusChunkJs = `
     const s = () => fetch("https://radius-api.fpt.net/api/v1/connection-parameters?ObjID=" + e + "&token=topSecretVal", { headers: { Authorization: "Bearer secretJwt" } });
-    function parseOlt() { return { oltName: "BRUP00101GC16", slot: 0, port: 5, contract: "VTAAR2393" }; }
+    function parseOlt() { return { oltName: "DEMO-OLT-01GC16", slot: 0, port: 5, contract: "SGN123456" }; }
   `;
-  const jsContexts = extractCodeContextsFromJs(radiusChunkJs, undefined, 'VTAAR2393');
+  const jsContexts = extractCodeContextsFromJs(radiusChunkJs, undefined, 'SGN123456');
   assert.ok(jsContexts.length >= 1);
   const ctxJoined = jsContexts.join('\n');
   assert.ok(ctxJoined.includes('connection-parameters'));
   assert.equal(ctxJoined.includes('topSecretVal'), false, 'Must redact query token');
   assert.equal(ctxJoined.includes('secretJwt'), false, 'Must redact Bearer token');
-  assert.equal(ctxJoined.includes('VTAAR2393'), false, 'Must redact contract ID');
+  assert.equal(ctxJoined.includes('SGN123456'), false, 'Must redact contract ID');
   console.log('   OK: Modem prefill, Box history logs, and Next.js chunk helpers passed.');
 
   console.log('13. Testing Kill Session live rows, exact Box history schema, and Radius OLT auto-detect...');
@@ -1017,19 +1050,19 @@ async function runTests() {
   const killRowsBare = parseKillSessionRows([
     {
       Date: '/Date(1795407390000)/',
-      Name: 'Vtfdl-vtaar2393',
-      NASName: 'HCM-BRAS-CTR-03-05',
-      IPAddress: '21.174.165.216',
-      CallerID: 'd4:61:95:a0:6e:41',
-      ObjID: 1162622263,
+      Name: 'demo-sgn123456',
+      NASName: 'DEMO-BRAS-01',
+      IPAddress: '10.0.0.100',
+      CallerID: 'A4:2B:8C:10:9E:4F',
+      ObjID: 900000001,
     },
   ]);
   assert.equal(killRowsBare.length, 1);
-  assert.equal(killRowsBare[0].objID, '1162622263');
-  assert.equal(killRowsBare[0].ipAddress, '21.174.165.216');
-  assert.equal(killRowsBare[0].nasName, 'HCM-BRAS-CTR-03-05');
-  assert.equal(killRowsBare[0].name, 'Vtfdl-vtaar2393');
-  assert.equal(killRowsBare[0].callerId, 'd4:61:95:a0:6e:41');
+  assert.equal(killRowsBare[0].objID, '900000001');
+  assert.equal(killRowsBare[0].ipAddress, '10.0.0.100');
+  assert.equal(killRowsBare[0].nasName, 'DEMO-BRAS-01');
+  assert.equal(killRowsBare[0].name, 'demo-sgn123456');
+  assert.equal(killRowsBare[0].callerId, 'A4:2B:8C:10:9E:4F');
   assert.ok(killRowsBare[0].date.includes('/'));
 
   const killRowsWrapped = parseKillSessionRows({
@@ -1038,21 +1071,21 @@ async function runTests() {
   assert.equal(killRowsWrapped.length, 1);
   assert.equal(killRowsWrapped[0].objID, '9988');
 
-  const demoSessions = await fetchInsideOnlineSessions('VTAAR2393', { forceDemo: true });
+  const demoSessions = await fetchInsideOnlineSessions('SGN123456', { forceDemo: true });
   assert.equal(demoSessions.status, 'ok');
   assert.ok(demoSessions.sessions.length >= 1);
   assert.ok(demoSessions.sessions[0].ipAddress);
 
   const numOk = parseInsideMutationResponse({
     actionLabel: 'Kill session',
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     httpStatus: 200,
     responseText: '1',
   });
   assert.equal(numOk.status, 'ok');
   const numErr = parseInsideMutationResponse({
     actionLabel: 'Kill session',
-    contractId: 'VTAAR2393',
+    contractId: 'SGN123456',
     httpStatus: 200,
     responseText: '0',
   });
@@ -1061,12 +1094,12 @@ async function runTests() {
   const exactBoxLogs = parseBoxMacLogItems([
     {
       ID: 101,
-      ObjID: 432227490,
-      Contract: 'VTAAR2393',
+      ObjID: 900001001,
+      Contract: 'SGN123456',
       OldMAC: 'C894D2B746C4',
       NewMAC: 'D46195A06E41',
       ModifyDate: '/Date(1732345678000)/',
-      ModifyBy: 'namlp',
+      ModifyBy: 'ktv.mau01',
       OldBoxType: 12,
       NewBoxType: 14,
       OldBoxType_Name: 'FPT Play Box S550',
@@ -1076,27 +1109,27 @@ async function runTests() {
   assert.equal(exactBoxLogs.length, 1);
   assert.equal(exactBoxLogs[0].oldMac, 'C894D2B746C4');
   assert.equal(exactBoxLogs[0].newMac, 'D46195A06E41');
-  assert.equal(exactBoxLogs[0].actor, 'namlp');
+  assert.equal(exactBoxLogs[0].actor, 'ktv.mau01');
   assert.equal(exactBoxLogs[0].oldBoxType, 'FPT Play Box S550');
   assert.equal(exactBoxLogs[0].newBoxType, 'FPT Play Box 650');
   assert.equal(exactBoxLogs[0].extraFields.length, 0, 'BoxType fields must not duplicate into extraFields');
 
   const parsedSpaced = parseRadiusOltFromText(
-    'OLT / SLOT / PORT / ONU BRUP00101GC16 [S:0 / P:5 / O:79] IP OLT 11.72.121.17'
+    'OLT / SLOT / PORT / ONU DEMO-OLT-01GC16 [S:0 / P:5 / O:79] IP OLT 10.0.0.10'
   );
   assert.deepEqual(parsedSpaced, {
-    oltPop: 'BRUP00101GC16',
+    oltPop: 'DEMO-OLT-01GC16',
     slot: '0',
     port: '5',
     onu: '79',
-    ipOlt: '11.72.121.17',
+    ipOlt: '10.0.0.10',
   });
 
   const parsedGlued = parseRadiusOltFromText(
-    'OLT / SLOT / PORT / ONUBRUP00101GC16 [S:0 / P: - / O:79]'
+    'OLT / SLOT / PORT / ONUDEMOOLT01GC16 [S:0 / P: - / O:79]'
   );
   assert.deepEqual(parsedGlued, {
-    oltPop: 'BRUP00101GC16',
+    oltPop: 'DEMOOLT01GC16',
     slot: '0',
     port: '',
     onu: '79',
@@ -1105,55 +1138,55 @@ async function runTests() {
   assert.equal(parseRadiusOltFromText('Khong co thong tin OLT'), null);
 
   const sampleOltList = [
-    { id: '101', name: 'BRUP00101GC16' },
-    { id: '102', name: 'BRUP00201GC14 - Ba Ria' },
+    { id: '101', name: 'DEMO-OLT-01GC16' },
+    { id: '102', name: 'DEMO-OLT-03GC14 - Khu B' },
   ];
-  assert.deepEqual(findMatchingOltOption(sampleOltList, 'BRUP00101GC16'), {
+  assert.deepEqual(findMatchingOltOption(sampleOltList, 'DEMO-OLT-01GC16'), {
     id: '101',
-    name: 'BRUP00101GC16',
+    name: 'DEMO-OLT-01GC16',
   });
-  assert.deepEqual(findMatchingOltOption(sampleOltList, 'BRUP00201GC14'), {
+  assert.deepEqual(findMatchingOltOption(sampleOltList, 'DEMO-OLT-03GC14'), {
     id: '102',
-    name: 'BRUP00201GC14 - Ba Ria',
+    name: 'DEMO-OLT-03GC14 - Khu B',
   });
   assert.equal(findMatchingOltOption(sampleOltList, 'UNKNOWNOLT99'), null);
 
-  setInsideOltHint('432227490', parsedSpaced);
-  const cachedOltHint = getInsideOltHint('432227490');
-  assert.equal(cachedOltHint.oltPop, 'BRUP00101GC16');
+  setInsideOltHint('900001001', parsedSpaced);
+  const cachedOltHint = getInsideOltHint('900001001');
+  assert.equal(cachedOltHint.oltPop, 'DEMO-OLT-01GC16');
   assert.equal(cachedOltHint.port, '5');
   assert.equal(getInsideOltHint('999999999'), null);
 
   assert.equal(
     isSameOltDetectedInfo(
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
-      { objId: '432227490', oltPop: 'brup07501gc16 ', slot: '0', port: '8', onu: '94', ipOlt: ' 11.72.121.74' }
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '8', onu: '94', ipOlt: '10.0.0.74' },
+      { objId: '900001001', oltPop: 'demo-olt-02gc16 ', slot: '0', port: '8', onu: '94', ipOlt: ' 10.0.0.74' }
     ),
     true
   );
   assert.equal(
     isSameOltDetectedInfo(
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '9', onu: '94', ipOlt: '11.72.121.74' }
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '8', onu: '94', ipOlt: '10.0.0.74' },
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '9', onu: '94', ipOlt: '10.0.0.74' }
     ),
     false
   );
   assert.equal(
     isSameOltDetectedInfo(
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '' },
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' }
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '8', onu: '94', ipOlt: '' },
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '8', onu: '94', ipOlt: '10.0.0.74' }
     ),
     false
   );
   assert.equal(
     isSameOltDetectedInfo(
-      { objId: '432227490', oltPop: 'BRUP07501GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' },
-      { objId: '432227490', oltPop: 'BRUP00101GC16', slot: '0', port: '8', onu: '94', ipOlt: '11.72.121.74' }
+      { objId: '900001001', oltPop: 'DEMO-OLT-02GC16', slot: '0', port: '8', onu: '94', ipOlt: '10.0.0.74' },
+      { objId: '900001001', oltPop: 'DEMO-OLT-01GC16', slot: '0', port: '8', onu: '94', ipOlt: '10.0.0.74' }
     ),
     false
   );
   assert.equal(
-    isSameOltDetectedInfo(null, { objId: '432227490', oltPop: 'BRUP07501GC16' }),
+    isSameOltDetectedInfo(null, { objId: '900001001', oltPop: 'DEMO-OLT-02GC16' }),
     false
   );
 
@@ -1190,8 +1223,8 @@ async function runTests() {
     decodeHtmlEntities('&#272;&#227; thu h&#7891;i port &amp; kiểm tra'),
     'Đã thu hồi port & kiểm tra'
   );
-  assert.deepEqual(parseDropdownOptions([{ Value: '35', Text: 'VTU - V&#361;ng T&#224;u' }]), [
-    { value: '35', label: 'VTU - Vũng Tàu' },
+  assert.deepEqual(parseDropdownOptions([{ Value: '35', Text: 'SGN - TP. H&#7891; Ch&#237; Minh' }]), [
+    { value: '35', label: 'SGN - TP. Hồ Chí Minh' },
   ]);
 
   const sampleLibJs = `
@@ -1211,7 +1244,7 @@ async function runTests() {
   ]);
 
   const sampleInsertHtml = `
-    <input type="hidden" id="h_id" value="155123602" />
+    <input type="hidden" id="h_id" value="900002002" />
     <input type="hidden" id="h_typeContract" value="3" />
     <input type="hidden" id="h_status" value="6" />
     <input type="hidden" id="h_valueStatusPort" value="2" />
@@ -1228,29 +1261,29 @@ async function runTests() {
       <option value="2" selected>Thu hồi port</option>
       <option value="3">Cấp lại port</option>
     </select>
-    <input id="txtContact" value="VTAAR2501" />
-    <input id="txtCustomer" value="Ho&#224;ng Minh Ti&#7871;n" />
-    <input id="txtHomePhone" value="0969000001" />
-    <input id="txtTelephone" value="0254000002" />
+    <input id="txtContact" value="SGN654321" />
+    <input id="txtCustomer" value="Nguy&#7877;n V&#259;n M&#7851;u" />
+    <input id="txtHomePhone" value="0900000001" />
+    <input id="txtTelephone" value="0280000002" />
     <input id="txtCardNumber" value="1" />
     <input id="txtLocalType" value="188" />
     <input id="txtUpdateCreate" value="11/23/2026 11:38:42 AM" />
     <textarea id="txtDescription">Ghi ch&#250; m&#7851;u</textarea>
-    <div id="dvTSTC"><lable><b>BRUP07501 • Port 04</b></lable></div>
+    <div id="dvTSTC"><lable><b>DEMO-POP-01 • Port 04</b></lable></div>
     <div id="dvPC"><lable>OLT PON 0/8</lable></div>
   `;
   const parsedDetail = parsePortContractDetailHtml(sampleInsertHtml);
-  assert.equal(parsedDetail.id, '155123602');
-  assert.equal(parsedDetail.customer, 'Hoàng Minh Tiến');
-  assert.equal(parsedDetail.handphone, '0969000001', 'handphone must map from #txtHomePhone');
-  assert.equal(parsedDetail.telephone, '0254000002', 'telephone must map from #txtTelephone');
+  assert.equal(parsedDetail.id, '900002002');
+  assert.equal(parsedDetail.customer, 'Nguyễn Văn Mẫu');
+  assert.equal(parsedDetail.handphone, '0900000001', 'handphone must map from #txtHomePhone');
+  assert.equal(parsedDetail.telephone, '0280000002', 'telephone must map from #txtTelephone');
   assert.equal(parsedDetail.status, '6');
   assert.equal(parsedDetail.statusLabel, 'Đã thu hồi port');
   assert.equal(parsedDetail.releaseStatusPortValue, '2');
   assert.equal(parsedDetail.reassignStatusPortValue, '3');
   assert.equal(parsedDetail.updateDate, '11/23/2026 11:38:42 AM');
   assert.equal(parsedDetail.description, 'Ghi chú mẫu');
-  assert.equal(parsedDetail.tstc, 'BRUP07501 • Port 04');
+  assert.equal(parsedDetail.tstc, 'DEMO-POP-01 • Port 04');
   assert.equal(parsedDetail.pc, 'OLT PON 0/8');
 
   const rawPortHtml =
@@ -1264,32 +1297,32 @@ async function runTests() {
   assert.deepEqual(slotsJsonStr, slotsRaw);
 
   const histRows = parsePortHistoryRows([
-    { STT: 1, ActionDate: '11/23/2026', CreateBy: 'namlp', Port: 'Port 02', IP: '10.0.0.1', Action: 'Thu hồi', ContractName: 'VTAAR2501', Data: 'OK' },
+    { STT: 1, ActionDate: '11/23/2026', CreateBy: 'ktv.mau01', Port: 'Port 02', IP: '10.0.0.1', Action: 'Thu hồi', ContractName: 'SGN654321', Data: 'OK' },
   ]);
   assert.equal(histRows.length, 1);
-  assert.equal(histRows[0].createBy, 'namlp');
+  assert.equal(histRows[0].createBy, 'ktv.mau01');
   assert.equal(histRows[0].port, 'Port 02');
 
   const mutOk = parsePortMutationResponse(
-    JSON.stringify(['1', 'Cập nhật thành công', 'BRUP07501 • P02', 'OLT 0/8']),
+    JSON.stringify(['1', 'Cập nhật thành công', 'DEMO-POP-01 • P02', 'OLT 0/8']),
     'Đổi Port',
-    'VTAAR2501'
+    'SGN654321'
   );
   assert.equal(mutOk.status, 'ok');
-  assert.equal(mutOk.tstc, 'BRUP07501 • P02');
+  assert.equal(mutOk.tstc, 'DEMO-POP-01 • P02');
   const mutErr = parsePortMutationResponse(
     JSON.stringify(['2', 'Port đang được sử dụng']),
     'Cấp Port',
-    'VTAAR2501'
+    'SGN654321'
   );
   assert.equal(mutErr.status, 'error');
 
-  const demoPortCtx = await fetchPortContractContext('VTAAR2501', { forceDemo: true });
+  const demoPortCtx = await fetchPortContractContext('SGN654321', { forceDemo: true });
   assert.equal(demoPortCtx.status, 'ok');
   assert.ok(demoPortCtx.locations.length >= 1);
   const demoSlots = await fetchPortSlotList('55101', { forceDemo: true });
   assert.ok(demoSlots.slots.some((s) => !s.disabled) && demoSlots.slots.some((s) => s.disabled));
-  const demoHistory = await fetchPortHistory({ pointName: 'BRUP07501-SPL-01', forceDemo: true });
+  const demoHistory = await fetchPortHistory({ pointName: 'DEMO-POP-01-SPL-01', forceDemo: true });
   assert.ok(demoHistory.rows.length >= 1);
   const portLookup = await runPortAction('lookup_port', ' sgn123456 ');
   assert.equal(portLookup.status, 'ok');
@@ -1320,18 +1353,18 @@ async function runTests() {
 
   const portHtmlSample = `
     <html>
-      <head><title>Quan ly Port VTAAR2393</title></head>
+      <head><title>Quan ly Port SGN123456</title></head>
       <frameset>
         <frame id="leftFrame" name="left" src="Left.asp?token=secret123">
       </frameset>
       <body>
-        <iframe id="ftthNew" name="main" src="http://mvcport.fpt.net/FTTH/Index?hd=VTAAR2393"></iframe>
-        <a href="/Port/View?id=1" onclick="GoPage('/Port/Assign?token=abc')">Cấp Port VTAAR2393</a>
+        <iframe id="ftthNew" name="main" src="http://mvcport.fpt.net/FTTH/Index?hd=SGN123456"></iframe>
+        <a href="/Port/View?id=1" onclick="GoPage('/Port/Assign?token=abc')">Cấp Port SGN123456</a>
         <a href="mailto:a@b.c">mail</a>
       </body>
     </html>
   `;
-  const portParsed = extractFramesAndLinksFromHtml(portHtmlSample, 'http://port.fpt.net/', 'VTAAR2393');
+  const portParsed = extractFramesAndLinksFromHtml(portHtmlSample, 'http://port.fpt.net/', 'SGN123456');
   assert.equal(portParsed.title, 'Quan ly Port <CONTRACT_ID>');
   assert.equal(portParsed.frames.length, 2);
   assert.equal(portParsed.frames[0].origin, 'http://port.fpt.net');
@@ -1346,21 +1379,21 @@ async function runTests() {
   assert.deepEqual(portParsed.links[0].queryParamNames, ['token']);
   const portSerialized = JSON.stringify(portParsed);
   assert.equal(portSerialized.includes('secret123'), false, 'Must strip frame query value');
-  assert.equal(portSerialized.includes('VTAAR2393'), false, 'Must redact contract token');
+  assert.equal(portSerialized.includes('SGN123456'), false, 'Must redact contract token');
   assert.equal(portSerialized.includes('abc'), false, 'Must strip link query value');
 
   const validMvcHtmlWithInlineError =
-    '<html><body><input id="h_id" value="155123602" />' +
+    '<html><body><input id="h_id" value="900002002" />' +
     '<script>Message("Hết thời gian làm việc. Vui lòng Refesh (hoặc F5) lại trang để tiếp tục", "Thông báo");</' +
     'script></body></html>';
   assert.equal(
     detectPortSessionExpired(
       {
         status: 200,
-        finalUrl: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/155123602',
+        finalUrl: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/900002002',
         responseText: validMvcHtmlWithInlineError,
       },
-      'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/155123602'
+      'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert/900002002'
     ).expired,
     false,
     'Valid mvcport HTML containing dormant inline JS timeout message must not flag expired'
@@ -1590,21 +1623,25 @@ async function runTests() {
 
   const bypassMetaNormal = parseByPassPageMeta(`
     <script>
-      var UseCN = 'Phuongnam.namlp';
+      var UseCN = 'ktv.mau01';
       var isInsert = 'True';
-      e["AccLeaderByPass"] = 'Phuongnam.namlp';
+      e["AccLeaderByPass"] = 'ktv.mau01';
+      if (UseCN == 'admin.mau01' || UseCN == 'admin.mau02') { CN.push('destroy') }
       function LoadType() { $("#drpType").kendoDropDownList({ dataSource: [{ value: '', text: 'Tat ca' }] }); }
       function LoadTypeView() { $("#drpTypeView").kendoDropDownList({ dataSource: [{ value: 1, text: 'Hop dong' }] }); }
     </` + `script>
   `);
-  assert.equal(bypassMetaNormal.currentUser, 'Phuongnam.namlp');
+  assert.equal(bypassMetaNormal.currentUser, 'ktv.mau01');
   assert.equal(bypassMetaNormal.isInsert, true);
   assert.equal(bypassMetaNormal.canDelete, false);
+  assert.deepEqual(bypassMetaNormal.deleteAllowedUsers, ['admin.mau01', 'admin.mau02']);
   assert.equal(bypassMetaNormal.defaultFlagByPass, '');
   assert.equal(bypassMetaNormal.contractTypeView, '1');
 
-  const bypassMetaAdmin = parseByPassPageMeta(`var UseCN = 'NgoanHT2'; var isInsert = 'False';`);
-  assert.equal(bypassMetaAdmin.currentUser, 'NgoanHT2');
+  const bypassMetaAdmin = parseByPassPageMeta(
+    `var UseCN = 'admin.mau01'; var isInsert = 'False'; if (UseCN == 'admin.mau01' || UseCN == 'admin.mau02') { CN.push('destroy') }`
+  );
+  assert.equal(bypassMetaAdmin.currentUser, 'admin.mau01');
   assert.equal(bypassMetaAdmin.isInsert, false);
   assert.equal(bypassMetaAdmin.canDelete, true);
 
@@ -1612,7 +1649,7 @@ async function runTests() {
     validateByPassPayload({
       mode: 'create',
       choice: 'Hợp đồng',
-      contract: 'VTAAR2501',
+      contract: 'SGN654321',
       accByPass: 'bad_email',
       typeByPass: 'Gong',
     }).valid,
@@ -1623,7 +1660,7 @@ async function runTests() {
     validateByPassPayload({
       mode: 'create',
       choice: 'Hợp đồng',
-      contract: 'VTAAR2501',
+      contract: 'SGN654321',
       accByPass: 'nvkt@fpt.com',
       typeByPass: 'Bo Gong',
       contentByPass: '',
@@ -1635,7 +1672,7 @@ async function runTests() {
     validateByPassPayload({
       mode: 'create',
       choice: 'Hợp đồng',
-      contract: 'VTAAR2501',
+      contract: 'SGN654321',
       accByPass: 'nvkt@fpt.com',
       typeByPass: 'Bo Gong Tam va Phai Xu Ly Gong Lai',
       contentByPass: '',
@@ -1646,7 +1683,7 @@ async function runTests() {
   const validGong = validateByPassPayload({
     mode: 'create',
     choice: 'Tập điểm',
-    contract: 'HNIW151.0001/FO',
+    contract: 'DEMO-POP-01.0001/FO',
     accByPass: 'nvkt@fpt.com',
     typeByPass: 'Gong',
     contentByPass: 'should be cleared',
@@ -1657,7 +1694,7 @@ async function runTests() {
   assert.equal(
     validateByPassPayload({
       mode: 'update',
-      contract: 'VTAAR2501',
+      contract: 'SGN654321',
       accByPass: 'nvkt@fpt.com',
       typeByPass: 'Bo Gong',
       contentByPass: 'Ha tang doi tac',
@@ -1673,10 +1710,10 @@ async function runTests() {
     JSON.stringify([
       {
         STT: 1,
-        BillTo_District: 'Vung Tau',
-        Contract: 'VTAAR2501',
-        AccCreateByPass: 'namlp',
-        AccLeaderByPass: 'namlp',
+        BillTo_District: 'Quan 1',
+        Contract: 'SGN654321',
+        AccCreateByPass: 'ktv.mau01',
+        AccLeaderByPass: 'ktv.mau01',
         AccByPass: 'nvkt@fpt.com',
         FlagByPass: 'Bo Gong',
         Date: '23/11/2026',
@@ -1686,36 +1723,36 @@ async function runTests() {
     ])
   );
   assert.equal(parsedByPassRows.length, 1);
-  assert.equal(parsedByPassRows[0].contract, 'VTAAR2501');
+  assert.equal(parsedByPassRows[0].contract, 'SGN654321');
   assert.equal(parsedByPassRows[0].flagByPass, 'Bo Gong');
 
-  assert.equal(parseByPassInsertResponse('"Thanh cong 1 dong"', 'VTAAR2501').status, 'ok');
+  assert.equal(parseByPassInsertResponse('"Thanh cong 1 dong"', 'SGN654321').status, 'ok');
   assert.equal(
-    parseByPassInsertResponse('"Bạn không có quyền thực hiện thao tác này!"', 'VTAAR2501').status,
+    parseByPassInsertResponse('"Bạn không có quyền thực hiện thao tác này!"', 'SGN654321').status,
     'error'
   );
-  assert.equal(parseByPassUpdateResponse('-1', 'VTAAR2501').status, 'error');
-  assert.ok(parseByPassUpdateResponse('-1', 'VTAAR2501').message.includes('RX'));
-  assert.equal(parseByPassUpdateResponse('-2', 'HNIW151.0001/FO').status, 'error');
-  assert.ok(parseByPassUpdateResponse('-2', 'HNIW151.0001/FO').message.includes('tập điểm'));
-  assert.equal(parseByPassUpdateResponse('No permision!', 'VTAAR2501').status, 'error');
-  assert.equal(parseByPassUpdateResponse('[]', 'VTAAR2501').status, 'error');
-  const bpUpdOk = parseByPassUpdateResponse('[{"UpdateDate":"23/11/2026 16:30"}]', 'VTAAR2501');
+  assert.equal(parseByPassUpdateResponse('-1', 'SGN654321').status, 'error');
+  assert.ok(parseByPassUpdateResponse('-1', 'SGN654321').message.includes('RX'));
+  assert.equal(parseByPassUpdateResponse('-2', 'DEMO-POP-01.0001/FO').status, 'error');
+  assert.ok(parseByPassUpdateResponse('-2', 'DEMO-POP-01.0001/FO').message.includes('tập điểm'));
+  assert.equal(parseByPassUpdateResponse('No permision!', 'SGN654321').status, 'error');
+  assert.equal(parseByPassUpdateResponse('[]', 'SGN654321').status, 'error');
+  const bpUpdOk = parseByPassUpdateResponse('[{"UpdateDate":"23/11/2026 16:30"}]', 'SGN654321');
   assert.equal(bpUpdOk.status, 'ok');
   assert.equal(bpUpdOk.updateDate, '23/11/2026 16:30');
-  assert.equal(parseByPassDeleteResponse('1', 'VTAAR2501').status, 'ok');
-  assert.equal(parseByPassDeleteResponse('0', 'VTAAR2501').status, 'error');
+  assert.equal(parseByPassDeleteResponse('1', 'SGN654321').status, 'ok');
+  assert.equal(parseByPassDeleteResponse('0', 'SGN654321').status, 'error');
 
   const demoBpMeta = await fetchInsideByPassMeta({ forceDemo: true });
   assert.equal(demoBpMeta.status, 'ok');
-  const demoBpSearch = await searchInsideByPass('VTAAR2501', { forceDemo: true });
+  const demoBpSearch = await searchInsideByPass('SGN654321', { forceDemo: true });
   assert.equal(demoBpSearch.status, 'ok');
-  assert.equal(demoBpSearch.rows[0].contract, 'VTAAR2501');
+  assert.equal(demoBpSearch.rows[0].contract, 'SGN654321');
 
-  const demoBpCreate = await runInsideAction('bypass', 'VTAAR2501', {
+  const demoBpCreate = await runInsideAction('bypass', 'SGN654321', {
     mode: 'create',
     choice: 'Hợp đồng',
-    contract: 'VTAAR2501',
+    contract: 'SGN654321',
     accByPass: 'nvkt@fpt.com',
     typeByPass: 'Bo Gong',
     contentByPass: 'Ha tang doi tac',
@@ -1727,14 +1764,14 @@ async function runTests() {
   const demoBpPointNoTopContract = await runInsideAction('bypass', '', {
     mode: 'create',
     choice: 'Tập điểm',
-    contract: 'HNIW151.0001/FO',
+    contract: 'DEMO-POP-01.0001/FO',
     accByPass: 'nvkt@fpt.com',
     typeByPass: 'Gong',
     forceDemo: true,
   });
   assert.equal(demoBpPointNoTopContract.status, 'ok');
   assert.ok(
-    demoBpPointNoTopContract.summaryFields.some((f) => f.value === 'HNIW151.0001/FO'),
+    demoBpPointNoTopContract.summaryFields.some((f) => f.value === 'DEMO-POP-01.0001/FO'),
     'ByPass in Tap diem mode must work without top contract input'
   );
 

@@ -12,8 +12,8 @@ export const PORTALS = {
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
     status: 'priority',
-    statusLabel: 'Đủ 6 lệnh',
-    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',
+    statusLabel: 'Đủ 7 lệnh',
+    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
     actions: [
       {
         id: 'lookup',
@@ -64,6 +64,17 @@ export const PORTALS = {
         requiresContract: false,
         confirmNote:
           'Kiểm tra đúng Số HĐ / Tập điểm, Email NV kỹ thuật, Tình trạng và Lý do ByPass trước khi lưu.',
+      },
+      {
+        id: 'deploy_ticket',
+        label: 'Phiếu triển khai',
+        description:
+          'Mở phiếu triển khai FOX-ERP: Clear MAC vật tư, Hoàn tất phiếu, SĐT User, Biên bản ĐT, Cập nhật Online.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
       },
     ],
   },

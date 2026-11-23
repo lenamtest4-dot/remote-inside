@@ -18,7 +18,7 @@
   <script>
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.10.4";
+  const __REMOTE_INSIDE_VERSION__ = "0.11.0";
   const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
@@ -34,8 +34,8 @@ const PORTALS = {
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
     status: 'priority',
-    statusLabel: 'Đủ 6 lệnh',
-    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',
+    statusLabel: 'Đủ 7 lệnh',
+    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
     actions: [
       {
         id: 'lookup',
@@ -86,6 +86,17 @@ const PORTALS = {
         requiresContract: false,
         confirmNote:
           'Kiểm tra đúng Số HĐ / Tập điểm, Email NV kỹ thuật, Tình trạng và Lý do ByPass trước khi lưu.',
+      },
+      {
+        id: 'deploy_ticket',
+        label: 'Phiếu triển khai',
+        description:
+          'Mở phiếu triển khai FOX-ERP: Clear MAC vật tư, Hoàn tất phiếu, SĐT User, Biên bản ĐT, Cập nhật Online.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
       },
     ],
   },
@@ -5803,6 +5814,995 @@ async function runInsideAction(actionId, rawContractId, ctx = {}) {
   };
 }
 
+// --- adapters/deployment.js ---
+/**
+ * Adapter thao tac Phieu trien khai FOX-ERP (fox-erp.fpt.net & partner.fpt.net).
+ * Chay truc tiep qua VPN & phien IAM hien tai, khong luu mat khau hay x-resource-grant xuong bo nho.
+ */
+const DEPLOYMENT_ENDPOINTS = {
+  partnerMonitor: 'http://partner.fpt.net/pt-portal/monitor',
+  partnerGetContract: 'http://partner.fpt.net/pt-portal/api/portals/configs/getContract',
+  foxBase: 'https://fox-erp.fpt.net/app/tkbt/tk',
+  foxTicketPage: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket',
+  getTicketInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/ticket/get-ticket-info',
+  getConfigByParent: 'https://fox-erp.fpt.net/app/tkbt/tk/api/config/get-config-by-parent',
+  getEquipmentOnDep: 'https://fox-erp.fpt.net/app/tkbt/tk/api/equipment/get-equipment-on-dep',
+  clearEquipment: 'https://fox-erp.fpt.net/app/tkbt/tk/api/equipment/clear-equipment',
+  getContractPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/get-contract-phone',
+  revealPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/reveal-phone',
+  getEContractRecord: 'https://fox-erp.fpt.net/app/tkbt/tk/api/record/get-e-contract-record',
+  signEContract: 'https://fox-erp.fpt.net/app/tkbt/tk/api/record/sign-econtract',
+  getModemMetrics: 'https://fox-erp.fpt.net/app/tkbt/tk/api/product-service/internet/get-modem-metrics',
+  syncOnline: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/sync-online',
+  updateDeploymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/ticket/update-deployment-info',
+  statusCompleted: 'https://fox-erp.fpt.net/app/tkbt/tk/api/status/completed',
+};
+const DEPLOYMENT_CATALOG_KEYS = {
+  SUPPORT_STATUS: 'Deloyment_SupportINFStatus',
+  REASON_DELAY: 'ReasonCheckInLate',
+  REASON_HIFPT: 'ReasonNonSetHiFPT',
+  NOT_COMPLETE_WIFI: 'NoneCompleteWifi',
+  REASON_UNUSE_CAP_LAN: 'ReasonUnuseCapLan',
+  CABLE_TYPE: 'SupportINF_CableType',
+};
+
+const DEMO_DATA_FILTER = [
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.SUPPORT_STATUS,
+    Datas: [
+      { Code: 0, Tittle: 'Đang xử lý', Position: 1 },
+      { Code: 1, Tittle: 'Hoàn tất', Position: 2 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_DELAY,
+    Datas: [
+      { Code: 0, Tittle: 'Không xác định', Position: 1 },
+      { Code: 1, Tittle: 'Khách hàng hẹn lại giờ', Position: 2 },
+      { Code: 2, Tittle: 'Kẹt hạ tầng tập điểm', Position: 3 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT,
+    Datas: [
+      { Code: 0, Tittle: 'Không chọn', Position: 1 },
+      { Code: 1, Tittle: 'Không gặp chủ hợp đồng', Position: 2 },
+      { Code: 2, Tittle: 'Không dùng smartphone', Position: 3 },
+      { Code: 3, Tittle: 'Lý do khác', Position: 4 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.NOT_COMPLETE_WIFI,
+    Datas: [
+      { Code: 0, Tittle: 'Không chọn', Position: 1 },
+      { Code: 1, Tittle: 'Vật tư/thiết bị đang chờ đồng bộ', Position: 2 },
+      { Code: 2, Tittle: 'Khách hàng yêu cầu tự cấu hình', Position: 3 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_UNUSE_CAP_LAN,
+    Datas: [
+      { Code: 0, Tittle: 'Không chọn', Position: 1 },
+      { Code: 1, Tittle: 'KH không đồng ý đi dây LAN do mất thẩm mỹ nhà', Position: 2 },
+      { Code: 2, Tittle: 'KH muốn sử dụng wifi để di chuyển các vị trí khác nhau', Position: 3 },
+    ],
+  },
+];
+
+function decodeSafeQueryParam(rawVal) {
+  if (!rawVal) return '';
+  try {
+    return decodeURIComponent(String(rawVal));
+  } catch {
+    return String(rawVal);
+  }
+}
+
+/**
+ * Lay tham so q tu URL ticket ma van giu nguyen ky tu + hoac base64url.
+ */
+function extractQueryQFromUrl(rawUrl) {
+  const m = String(rawUrl || '').match(/[?&]q=([^&#]+)/i);
+  return m && m[1] ? decodeSafeQueryParam(m[1]).trim() : '';
+}
+function extractDeploymentTicketLink(partnerData) {
+  const list = Array.isArray(partnerData) ? partnerData : [];
+  if (list.length === 0) {
+    return {
+      found: false,
+      reason: 'not_found',
+      message: 'Không tìm thấy phiếu đang mở trên Partner cho hợp đồng này.',
+    };
+  }
+
+  for (const item of list) {
+    if (!item || typeof item.url !== 'string') continue;
+    const rawUrl = item.url.trim();
+    if (/\/app\/tkbt\/tk\/ticket/i.test(rawUrl)) {
+      const hash = extractQueryQFromUrl(rawUrl);
+      if (hash) {
+        const normalizedUrl = /^https?:\/\//i.test(rawUrl)
+          ? rawUrl
+          : rawUrl.startsWith('/')
+          ? `https://fox-erp.fpt.net${rawUrl}`
+          : `${DEPLOYMENT_ENDPOINTS.foxTicketPage}?q=${encodeURIComponent(hash)}`;
+        return {
+          found: true,
+          url: normalizedUrl,
+          hash,
+          isBackLog: Boolean(item.isBackLog),
+          type: String(item.type || ''),
+        };
+      }
+    }
+  }
+
+  const hasMaintenanceOnly = list.some(
+    (item) => item && typeof item.url === 'string' && /\/app\/tkbt\/bt\/ticket/i.test(item.url)
+  );
+  if (hasMaintenanceOnly) {
+    return {
+      found: false,
+      reason: 'maintenance_only',
+      message: 'Hợp đồng này chỉ thấy phiếu Bảo trì (/bt/ticket), chưa có phiếu Triển khai (/tk/ticket).',
+    };
+  }
+
+  return {
+    found: false,
+    reason: 'not_found',
+    message: 'Partner chưa trả về đường dẫn phiếu triển khai (/app/tkbt/tk/ticket) hợp lệ.',
+  };
+}
+function extractHashFromLocation(loc) {
+  if (!loc) return '';
+  try {
+    const hostname = String(loc.hostname || '').toLowerCase();
+    const pathname = String(loc.pathname || '').toLowerCase();
+    if (hostname !== 'fox-erp.fpt.net' || !pathname.startsWith('/app/tkbt/tk/ticket')) {
+      return '';
+    }
+    const rawSearch = String(loc.search || loc.href || '');
+    return extractQueryQFromUrl(rawSearch);
+  } catch {
+    return '';
+  }
+}
+function parseDataFilterOptions(dataFilter, parentName) {
+  if (!Array.isArray(dataFilter) || !parentName) {
+    return [];
+  }
+  const group = dataFilter.find((g) => g && g.ParentName === parentName);
+  const datas = group && Array.isArray(group.Datas) ? group.Datas : [];
+  return datas
+    .filter((item) => item && item.Code !== null && item.Code !== undefined && item.Tittle != null)
+    .map((item) => ({
+      id: String(item.Code),
+      text: String(item.Tittle),
+      position: Number(item.Position ?? 0),
+    }))
+    .sort((a, b) => a.position - b.position);
+}
+function findDataFilterText(dataFilter, parentName, code) {
+  const opts = parseDataFilterOptions(dataFilter, parentName);
+  const numCode = Number(code);
+  const hit = opts.find((o) =>
+    Number.isFinite(numCode) && o.id !== '' ? Number(o.id) === numCode : o.id === String(code ?? '')
+  );
+  return hit ? hit.text : '';
+}
+
+function mapAssignedEmployee(emp) {
+  if (!emp || typeof emp !== 'object') return null;
+  return {
+    account: String(emp.EmpAccount || emp.InsideAccount || emp.Account || '').trim(),
+    name: String(emp.EmpName || emp.Name || '').trim(),
+    phone: String(emp.EmpPhone || emp.Phone || '').trim(),
+    code: String(emp.Empcode || emp.EmpCode || emp.EmployeeCode || '').trim(),
+    status: Number(emp.EmpStatus ?? 0),
+  };
+}
+function normalizeTicketSummary(contractData, selectedSupId = 0) {
+  const src = contractData && typeof contractData === 'object' ? contractData : {};
+  const contract = String(src.Contract || '').trim();
+  const dataFilter = Array.isArray(src.DataFilter) ? src.DataFilter : [];
+  const rawTickets = Array.isArray(src.SupportInfInfo) ? src.SupportInfInfo : [];
+
+  const tickets = rawTickets.map((t) => {
+    const supId = Number(t.SupId ?? 0);
+    const assignList = Array.isArray(t.AssignEmpInfo) ? t.AssignEmpInfo : [];
+    const mainRaw = assignList.find((e) => Number(e && e.EmpStatus) === 1) || null;
+    const supportRaws = assignList.filter((e) => Number(e && e.EmpStatus) === 2);
+    const construc = t && t.ConstrucInfo && typeof t.ConstrucInfo === 'object' ? t.ConstrucInfo : {};
+    const status = Number(t.Status ?? 0);
+    const statusDesc =
+      String(t.StatusDesc || '').trim() ||
+      findDataFilterText(dataFilter, DEPLOYMENT_CATALOG_KEYS.SUPPORT_STATUS, status) ||
+      (status === 1 ? 'Hoàn tất' : 'Đang xử lý');
+
+    return {
+      supId,
+      depCode: String(t.DepCode || (contract && supId ? `TK.${contract}.${supId}` : '')).trim(),
+      status,
+      statusDesc,
+      flag: Number(t.Flag ?? 0),
+      blockDepName: String(t.BlockDepName || t.BlockName || '').trim(),
+      mainEmp: mapAssignedEmployee(mainRaw),
+      supportEmps: supportRaws.map(mapAssignedEmployee).filter(Boolean),
+      reasonDelay: String(t.ReasonDelay ?? 0),
+      descriptionRd: String(t.DescriptionRd ?? ''),
+      outDoorReUsed: Number(construc.OutDoorReUsed ?? 0),
+      indoor: String(construc.Indoor || ''),
+      outdoor: String(construc.Outdoor || ''),
+      reasonHiFPT: String(t.ReasonHiFPT ?? 0),
+      notCompleteWifi: String(t.NotCompleteWifi ?? 0),
+      reasonUnuseCapLan: String(t.ReasonUnuseCapLan ?? 0),
+      ordersCount: Array.isArray(t.OrdersInfo) ? t.OrdersInfo.length : 0,
+      appointmentDate: String(t.AppointmentDate || t.TimeAppointment || '').trim(),
+      depTypeDesc: String(t.DepTypeDesc || t.TypeDesc || '').trim(),
+    };
+  });
+
+  const targetSupId = Number(selectedSupId || 0);
+  const ticket =
+    (targetSupId > 0 ? tickets.find((t) => t.supId === targetSupId) : null) ||
+    tickets.find((t) => t.flag === 1) ||
+    tickets[0] ||
+    null;
+
+  return {
+    objId: Number(src.ObjId ?? 0),
+    contract,
+    fullName: String(src.FullName || '').trim(),
+    address: String(src.Address || '').trim(),
+    nameObj: String(src.NameObj || '').trim(),
+    localTypeName: String(src.LocalTypeName || '').trim(),
+    statusContractDesc: String(src.StatusContractDesc || 'Bình thường').trim(),
+    customerPhone: String(src.CustomerPhone || '').trim(),
+    customerPhoneToken: String(src.CustomerPhoneToken || '').trim(),
+    firstAccess: String(src.FirstAccess || '').trim(),
+    grant: String(src.Grant || ''),
+    dataFilter,
+    tickets,
+    ticket,
+  };
+}
+function normalizeEquipmentList(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const mapped = list.map((r) => {
+    const typeId = Number(r.TypeId ?? 0);
+    const mac = String(r.Mac || '').trim();
+    const isRevoke = typeId === 3;
+    const isMac = Number(r.IsMac ?? 0) === 1 || Boolean(mac);
+    return {
+      efId: Number(r.EfId ?? 0),
+      idCode: Number(r.IdCode ?? 0),
+      name: String(r.Name || r.EquipmentName || '').trim(),
+      description: String(r.Description || '').trim(),
+      quantity: Number(r.Quantity ?? 0),
+      typeId,
+      isRevoke,
+      isMac,
+      mac,
+      functionName: String(r.FunctionName || '').trim(),
+      serviceName: String(r.ServiceName || '').trim(),
+      policy: String(r.Policy || '').trim(),
+    };
+  });
+
+  const importItems = mapped
+    .filter((item) => !item.isRevoke)
+    .sort((a, b) => Number(b.isMac) - Number(a.isMac));
+  const revokeItems = mapped
+    .filter((item) => item.isRevoke)
+    .sort((a, b) => Number(b.isMac) - Number(a.isMac));
+  const macCount = mapped.filter((item) => !item.isRevoke && item.isMac && item.mac).length;
+
+  return { importItems, revokeItems, macCount };
+}
+function validateConstructionUpdate({ outDoorReUsed, descriptionRD } = {}) {
+  const cleanedDesc = String(descriptionRD ?? '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleanedDesc.length > 500) {
+    return {
+      valid: false,
+      error: 'Ghi chú nguyên nhân trễ hạn không được vượt quá 500 ký tự.',
+      outDoorReUsed: 0,
+      descriptionRD: cleanedDesc,
+    };
+  }
+
+  const rawOutdoor =
+    outDoorReUsed === null || outDoorReUsed === undefined || String(outDoorReUsed).trim() === ''
+      ? 0
+      : Number(String(outDoorReUsed).trim());
+  if (!Number.isInteger(rawOutdoor) || rawOutdoor < 0 || rawOutdoor > 9999) {
+    return {
+      valid: false,
+      error: 'Số lượng cáp tận dụng Outdoor phải là số nguyên từ 0 đến 9999.',
+      outDoorReUsed: rawOutdoor,
+      descriptionRD: cleanedDesc,
+    };
+  }
+
+  return {
+    valid: true,
+    error: '',
+    outDoorReUsed: rawOutdoor,
+    descriptionRD: cleanedDesc,
+  };
+}
+function buildCompletedPayload({
+  objId,
+  supId,
+  outDoorReUsed = 0,
+  descriptionRD = '',
+  reasonDelay = 0,
+  reasonHiFPT = 0,
+  notCompleteWifi = 0,
+  reasonUnuseCapLan = 0,
+} = {}) {
+  const payload = {
+    ObjId: Number(objId) || 0,
+    SupId: Number(supId) || 0,
+    OutDoorReUsed: Number(outDoorReUsed) || 0,
+    DescriptionRD: String(descriptionRD || '').trim(),
+    ReasonDelay: Number(reasonDelay) || 0,
+  };
+  const numHi = Number(reasonHiFPT) || 0;
+  const numWifi = Number(notCompleteWifi) || 0;
+  const numLan = Number(reasonUnuseCapLan) || 0;
+  if (numHi > 0) payload.ReasonHiFPT = numHi;
+  if (numWifi > 0) payload.NotCompleteWifi = numWifi;
+  if (numLan > 0) payload.ReasonUnuseCapLan = numLan;
+  return payload;
+}
+
+function buildDemoTicketPayload(contractId = 'SGN123456') {
+  const cleanId = normalizeContractId(contractId) || 'SGN123456';
+  return {
+    ObjId: 1000001,
+    Contract: cleanId,
+    FullName: 'NGUYEN VAN MAU',
+    Address: '123 Duong Mau, Phuong Mau, TP.HCM',
+    NameObj: 'Giga',
+    LocalTypeName: 'Giga - FTTx (Demo)',
+    StatusContractDesc: 'Bình thường',
+    CustomerPhone: '090****001',
+    CustomerPhoneToken: 'demo_phone_token_1',
+    FirstAccess: '23/11/2026 08:30:00',
+    Grant: '',
+    DataFilter: DEMO_DATA_FILTER,
+    SupportInfInfo: [
+      {
+        SupId: 900001,
+        DepCode: `TK.${cleanId}.900001`,
+        Status: 0,
+        StatusDesc: 'Đang xử lý',
+        Flag: 1,
+        BlockDepName: 'Khu vuc Mau 01 (L01)',
+        ReasonDelay: 0,
+        DescriptionRd: '',
+        ReasonHiFPT: 0,
+        NotCompleteWifi: 0,
+        ReasonUnuseCapLan: 0,
+        AppointmentDate: '10:00-12:00 • 26/11/2026',
+        DepTypeDesc: 'Triển khai mới',
+        ConstrucInfo: { Indoor: '70', Outdoor: '35', OutDoorReUsed: 0 },
+        OrdersInfo: [{ OrderId: 1 }, { OrderId: 2 }],
+        AssignEmpInfo: [
+          {
+            EmpStatus: 1,
+            EmpAccount: 'ktv.mau01',
+            EmpName: 'KTV Mau 01',
+            EmpPhone: '0900000002',
+            Empcode: 'MAU0001',
+          },
+        ],
+      },
+    ],
+  };
+}
+
+const DEMO_EQUIPMENTS = [
+  {
+    EfId: 1,
+    IdCode: 33096,
+    Name: 'Internet Hub AX3000GZV3',
+    Description: 'Modem WiFi 6',
+    Quantity: 1,
+    TypeId: 1,
+    IsMac: 1,
+    Mac: '001122334455',
+    FunctionName: 'Cấp mới',
+    ServiceName: 'Internet',
+  },
+  {
+    EfId: 2,
+    IdCode: 1111,
+    Name: 'Access Point AX3000CV2',
+    Description: 'AP Mesh',
+    Quantity: 1,
+    TypeId: 1,
+    IsMac: 1,
+    Mac: 'AABBCCDDEEFF',
+    FunctionName: 'Cấp mới',
+    ServiceName: 'Internet',
+  },
+  {
+    EfId: 3,
+    IdCode: 1881,
+    Name: 'FCAM-IQ 4S',
+    Description: 'FPT Camera',
+    Quantity: 1,
+    TypeId: 1,
+    IsMac: 1,
+    Mac: 'DEMO-CAM-0001',
+    FunctionName: 'Cấp mới',
+    ServiceName: 'FPT Camera',
+  },
+  {
+    EfId: 4,
+    IdCode: 5001,
+    Name: 'Dây thuê bao quang đệm chặt 1 core',
+    Description: 'Cáp FTTH',
+    Quantity: 70,
+    TypeId: 1,
+    IsMac: 0,
+    Mac: '',
+    ServiceName: 'Cáp',
+  },
+  {
+    EfId: 5,
+    IdCode: 5002,
+    Name: 'Dây rút / Vật tư phụ',
+    Description: 'Vật tư phụ khác',
+    Quantity: 10,
+    TypeId: 1,
+    IsMac: 0,
+    Mac: '',
+    ServiceName: 'Vật tư phụ khác',
+  },
+];
+
+const DEMO_PHONES = [
+  { ObjId: 1000001, Type: 1, Phone: '090****001', PhoneToken: 'demo_tok_main', DescriptionVn: 'Số chính chủ' },
+  { ObjId: 1000001, Type: 2, Phone: '090****001', PhoneToken: 'demo_tok_cmr', DescriptionVn: 'SĐT CMR' },
+  { ObjId: 1000001, Type: 3, Phone: '090****001', PhoneToken: 'demo_tok_play', DescriptionVn: 'SĐT FPTPlay' },
+];
+
+const DEMO_RECORDS = [
+  {
+    Id: 1,
+    Guid: '00000000-0000-0000-0000-000000000001',
+    Code: 'TK-BBNT-DEMO-01',
+    Name: 'Biên bản nghiệm thu triển khai',
+    State: 'Pending',
+    CreateDate: '23/11/2026 15:42:01',
+  },
+  {
+    Id: 2,
+    Guid: '00000000-0000-0000-0000-000000000002',
+    Code: 'HD-DEMO-0001',
+    Name: 'Hợp đồng điện tử',
+    State: 'Signed',
+    CreateDate: '16/11/2026 16:21:26',
+  },
+];
+async function postFoxJson(
+  url,
+  bodyObj = null,
+  { grant = '', timeout = 15000, loginUrl = DEPLOYMENT_ENDPOINTS.foxTicketPage } = {}
+) {
+  const headers = {
+    Accept: 'application/json',
+  };
+  let data = null;
+  if (bodyObj !== null && bodyObj !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    data = JSON.stringify(bodyObj);
+  }
+  if (grant) {
+    headers['x-resource-grant'] = String(grant);
+  }
+
+  const res = await requestPortal({
+    url,
+    method: 'POST',
+    headers,
+    data,
+    timeout,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'offline',
+      message: 'Không kết nối được tới FOX-ERP / Partner. Hãy kiểm tra lại VPN công ty.',
+      loginUrl,
+    };
+  }
+
+  const iamCheck = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: url,
+  });
+  if (iamCheck.expired) {
+    return {
+      status: 'iam_expired',
+      message: iamCheck.reason || 'Phiên đăng nhập IAM chưa sẵn sàng hoặc đã hết hạn.',
+      loginUrl,
+    };
+  }
+
+  const rawText = String(res.responseText || '').trim();
+  if (rawText.startsWith('<')) {
+    return {
+      status: 'iam_expired',
+      message: 'Máy chủ trả về trang đăng nhập thay vì dữ liệu JSON. Vui lòng đăng nhập IAM lại.',
+      loginUrl,
+    };
+  }
+
+  let json = null;
+  try {
+    json = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    json = null;
+  }
+
+  if (!json || typeof json !== 'object') {
+    return {
+      status: 'error',
+      message: `Phản hồi không đúng định dạng JSON (HTTP ${res.status}).`,
+      httpStatus: res.status,
+      loginUrl,
+    };
+  }
+
+  return {
+    status: 'ok',
+    httpStatus: res.status,
+    json,
+    loginUrl,
+  };
+}
+
+async function warmupAndRetryFoxJson(url, bodyObj, warmupUrl, opts = {}) {
+  const first = await postFoxJson(url, bodyObj, opts);
+  if (first.status !== 'iam_expired' || !warmupUrl) {
+    return first;
+  }
+  await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  return postFoxJson(url, bodyObj, opts);
+}
+async function fetchDeploymentTicket(
+  contractId = '',
+  { pageLocation = null, selectedSupId = 0, forceDemo = false } = {}
+) {
+  const cleanContract = normalizeContractId(contractId);
+
+  if (!isUserscriptEnv() || forceDemo) {
+    const demoRaw = buildDemoTicketPayload(cleanContract || 'SGN123456');
+    const summary = normalizeTicketSummary(demoRaw, selectedSupId);
+    return {
+      status: 'ok',
+      mode: 'demo',
+      ticketUrl: `${DEPLOYMENT_ENDPOINTS.foxTicketPage}?q=demo`,
+      hash: 'demo',
+      grant: '',
+      summary,
+      dataFilter: summary.dataFilter,
+      equipments: normalizeEquipmentList(DEMO_EQUIPMENTS),
+      modemMetrics: {
+        Ip: '192.0.2.10',
+        MacAddress: '00:11:22:33:44:55',
+        RxGroupPoints: -19.2,
+        OnuRxPower: -20.1,
+        OnuTxPower: 2.3,
+        LastMile: 70,
+        StatusByPass: 'Normal (Mẫu)',
+        FirstOnlineMacDate: '23/11/2026 08:30:00',
+      },
+    };
+  }
+
+  let hash = '';
+  let ticketUrl = '';
+
+  if (cleanContract) {
+    const partnerRes = await warmupAndRetryFoxJson(
+      DEPLOYMENT_ENDPOINTS.partnerGetContract,
+      { Contract: cleanContract },
+      DEPLOYMENT_ENDPOINTS.partnerMonitor,
+      { loginUrl: DEPLOYMENT_ENDPOINTS.partnerMonitor }
+    );
+    if (partnerRes.status !== 'ok') {
+      return {
+        status: partnerRes.status,
+        message: partnerRes.message,
+        loginUrl: DEPLOYMENT_ENDPOINTS.partnerMonitor,
+        loginLabel: 'Đăng nhập Partner',
+      };
+    }
+    const partnerJson = partnerRes.json;
+    if (!partnerJson.Succeeded) {
+      return {
+        status: 'error',
+        message: partnerJson.Message || `Không tra cứu được phiếu triển khai cho ${cleanContract}.`,
+      };
+    }
+    const linkInfo = extractDeploymentTicketLink(partnerJson.Data);
+    if (!linkInfo.found) {
+      return {
+        status: 'error',
+        message: linkInfo.message,
+      };
+    }
+    hash = linkInfo.hash;
+    ticketUrl = linkInfo.url;
+  } else {
+    const pageHash = extractHashFromLocation(pageLocation);
+    if (!pageHash) {
+      return {
+        status: 'error',
+        message: 'Vui lòng nhập Mã hợp đồng trước khi mở Phiếu triển khai.',
+      };
+    }
+    hash = pageHash;
+    ticketUrl = (pageLocation && pageLocation.href) || DEPLOYMENT_ENDPOINTS.foxTicketPage;
+  }
+
+  const ticketRes = await warmupAndRetryFoxJson(
+    DEPLOYMENT_ENDPOINTS.getTicketInfo,
+    { Hash: hash },
+    ticketUrl,
+    { loginUrl: ticketUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage }
+  );
+  if (ticketRes.status !== 'ok') {
+    return {
+      status: ticketRes.status,
+      message: ticketRes.message,
+      loginUrl: ticketUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage,
+      loginLabel: 'Đăng nhập FOX-ERP',
+    };
+  }
+
+  const ticketJson = ticketRes.json;
+  if (!ticketJson.Succeeded || !ticketJson.Data) {
+    return {
+      status: 'error',
+      message: ticketJson.Message || 'Không tải được chi tiết phiếu triển khai trên FOX-ERP.',
+    };
+  }
+
+  const summary = normalizeTicketSummary(ticketJson.Data, selectedSupId);
+  const grant = summary.grant || '';
+  const activeSupId = summary.ticket ? summary.ticket.supId : 0;
+
+  const [cfgSet, eqSet, metricsSet] = await Promise.allSettled([
+    summary.dataFilter.length === 0
+      ? postFoxJson(DEPLOYMENT_ENDPOINTS.getConfigByParent, null, { grant })
+      : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: summary.dataFilter } }),
+    summary.objId && activeSupId
+      ? postFoxJson(
+          DEPLOYMENT_ENDPOINTS.getEquipmentOnDep,
+          { ObjId: summary.objId, SupId: activeSupId },
+          { grant }
+        )
+      : Promise.resolve({ status: 'ok', json: { Succeeded: true, Data: [] } }),
+    summary.contract
+      ? postFoxJson(DEPLOYMENT_ENDPOINTS.getModemMetrics, { Contract: summary.contract }, { grant })
+      : Promise.resolve({ status: 'ok', json: { Succeeded: false, Data: null } }),
+  ]);
+
+  let dataFilter = summary.dataFilter;
+  if (
+    dataFilter.length === 0 &&
+    cfgSet.status === 'fulfilled' &&
+    cfgSet.value &&
+    cfgSet.value.status === 'ok' &&
+    cfgSet.value.json &&
+    Array.isArray(cfgSet.value.json.Data)
+  ) {
+    dataFilter = cfgSet.value.json.Data;
+  }
+
+  const rawEquipments =
+    eqSet.status === 'fulfilled' &&
+    eqSet.value &&
+    eqSet.value.status === 'ok' &&
+    eqSet.value.json &&
+    eqSet.value.json.Succeeded
+      ? eqSet.value.json.Data
+      : [];
+
+  const modemMetrics =
+    metricsSet.status === 'fulfilled' &&
+    metricsSet.value &&
+    metricsSet.value.status === 'ok' &&
+    metricsSet.value.json &&
+    metricsSet.value.json.Succeeded
+      ? metricsSet.value.json.Data || null
+      : null;
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    ticketUrl,
+    hash,
+    grant,
+    summary: { ...summary, dataFilter },
+    dataFilter,
+    equipments: normalizeEquipmentList(rawEquipments),
+    modemMetrics,
+  };
+}
+async function fetchDeploymentEquipments({ objId, supId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', equipments: normalizeEquipmentList(DEMO_EQUIPMENTS) };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getEquipmentOnDep,
+    { ObjId: Number(objId) || 0, SupId: Number(supId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return { status: 'error', message: res.json.Message || 'Không tải được danh sách vật tư.' };
+  }
+  return { status: 'ok', mode: 'live', equipments: normalizeEquipmentList(res.json.Data) };
+}
+async function clearDeploymentTicketMac({ objId, supId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: 'Đã Clear Mac thiết bị trên phiếu (mẫu mô phỏng).' };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.clearEquipment,
+    { ObjId: Number(objId) || 0, SupId: Number(supId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  const succeeded = Boolean(res.json.Succeeded) || Number(res.json.Data ?? 0) > 0;
+  return {
+    status: succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (succeeded ? 'Clear Mac thiết bị trên phiếu thành công.' : 'Không Clear được MAC thiết bị.'),
+  };
+}
+async function fetchDeploymentModemMetrics({ contract, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      data: {
+        Ip: '192.0.2.10',
+        MacAddress: '00:11:22:33:44:55',
+        RxGroupPoints: -19.2,
+        OnuRxPower: -20.1,
+        OnuTxPower: 2.3,
+        LastMile: 70,
+        StatusByPass: 'Normal (Mẫu)',
+        FirstOnlineMacDate: '23/11/2026 08:30:00',
+      },
+    };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getModemMetrics,
+    { Contract: normalizeContractId(contract) },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded || !res.json.Data) {
+    return { status: 'error', message: res.json.Message || 'Không tải được thông số kết nối NET.' };
+  }
+  return { status: 'ok', mode: 'live', data: res.json.Data };
+}
+async function fetchDeploymentPhones({ contract, objId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', rows: DEMO_PHONES };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getContractPhone,
+    { Contract: normalizeContractId(contract), ContractId: Number(objId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return { status: 'error', message: res.json.Message || 'Không tải được danh sách SĐT User.' };
+  }
+  return { status: 'ok', mode: 'live', rows: Array.isArray(res.json.Data) ? res.json.Data : [] };
+}
+async function revealDeploymentPhone({ token, objId, supId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', phone: '0901000001' };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.revealPhone,
+    { Token: String(token || ''), ObjId: Number(objId) || 0, SupId: Number(supId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded || !res.json.Data) {
+    return { status: 'error', message: res.json.Message || 'Không giải mã được số điện thoại.' };
+  }
+  return { status: 'ok', mode: 'live', phone: String(res.json.Data) };
+}
+async function fetchDeploymentEContracts({ objId, grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', rows: DEMO_RECORDS };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getEContractRecord,
+    { ObjId: Number(objId) || 0 },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return { status: 'error', message: res.json.Message || 'Không tải được Biên bản điện tử.' };
+  }
+  return { status: 'ok', mode: 'live', rows: Array.isArray(res.json.Data) ? res.json.Data : [] };
+}
+async function signDeploymentEContract({
+  objId,
+  supId,
+  guid,
+  name,
+  code,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: `Đã gửi yêu cầu ký biên bản ${code} (mẫu mô phỏng).` };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.signEContract,
+    {
+      ObjId: Number(objId) || 0,
+      SupId: Number(supId) || 0,
+      EContractId: String(guid || ''),
+      EContractName: String(name || ''),
+      EContractCode: String(code || ''),
+    },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded ? `Ký biên bản ${code} thành công.` : `Chưa ký được biên bản ${code}.`),
+  };
+}
+async function syncDeploymentOnline({
+  objId,
+  supId,
+  contract,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Hệ thống ghi nhận đồng bộ thông tin Online thành công (mẫu mô phỏng).',
+    };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.syncOnline,
+    {
+      Contract: normalizeContractId(contract),
+      ObjId: Number(objId) || 0,
+      SupId: Number(supId) || 0,
+    },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded
+        ? 'Hệ thống ghi nhận đồng bộ dữ liệu thành công. Vui lòng đợi 1-3 phút.'
+        : 'Đồng bộ thông tin Online chưa thành công.'),
+  };
+}
+async function updateDeploymentConstruction({
+  objId,
+  supId,
+  contract,
+  outDoorReUsed = 0,
+  descriptionRD = '',
+  reasonDelay = 0,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateConstructionUpdate({ outDoorReUsed, descriptionRD });
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Đã lưu thông tin thi công phiếu triển khai (mẫu mô phỏng).',
+    };
+  }
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.updateDeploymentInfo,
+    {
+      ObjId: Number(objId) || 0,
+      SupId: Number(supId) || 0,
+      Contract: normalizeContractId(contract),
+      DescriptionRD: check.descriptionRD,
+      ReasonDelay: Number(reasonDelay) || 0,
+      OutDoorReUsed: check.outDoorReUsed,
+    },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded ? 'Cập nhật thông tin thi công thành công.' : 'Cập nhật thông tin thi công thất bại.'),
+  };
+}
+async function completeDeploymentTicket({
+  objId,
+  supId,
+  outDoorReUsed = 0,
+  descriptionRD = '',
+  reasonDelay = 0,
+  reasonHiFPT = 0,
+  notCompleteWifi = 0,
+  reasonUnuseCapLan = 0,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateConstructionUpdate({ outDoorReUsed, descriptionRD });
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+  const payload = buildCompletedPayload({
+    objId,
+    supId,
+    outDoorReUsed: check.outDoorReUsed,
+    descriptionRD: check.descriptionRD,
+    reasonDelay,
+    reasonHiFPT,
+    notCompleteWifi,
+    reasonUnuseCapLan,
+  });
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Đã xác nhận hoàn tất phiếu triển khai (mẫu mô phỏng).',
+      payload,
+    };
+  }
+
+  const res = await postFoxJson(DEPLOYMENT_ENDPOINTS.statusCompleted, payload, { grant });
+  if (res.status !== 'ok') return res;
+  return {
+    status: res.json.Succeeded ? 'ok' : 'error',
+    mode: 'live',
+    message:
+      res.json.Message ||
+      (res.json.Succeeded ? 'Hoàn tất phiếu triển khai thành công.' : 'Không hoàn tất được phiếu.'),
+  };
+}
+
 // --- adapters/port.js ---
 /**
  * Adapter xu ly nghiep vu FTTH NEW Port cho cong port.fpt.net / mvcport.fpt.net:
@@ -7659,6 +8659,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
 
 
 
+
 function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -7920,6 +8921,36 @@ function mountRemoteInside({
     portHistoryLoading: false,
     portHistoryError: '',
     portHistoryRows: [],
+    deployTab: 'overview',
+    deployLoading: false,
+    deployError: '',
+    deployLoginUrl: '',
+    deployLoginLabel: '',
+    deployNotice: '',
+    deployNoticeTone: 'info',
+    deployTicketUrl: '',
+    deployHash: '',
+    deployGrant: '',
+    deploySummary: null,
+    deployDataFilter: [],
+    deployEquipments: { importItems: [], revokeItems: [], macCount: 0 },
+    deployModemMetrics: null,
+    deployPhonesLoading: false,
+    deployPhonesError: '',
+    deployPhones: [],
+    deployRevealedPhones: {},
+    deployRevealingToken: '',
+    deployEContractsLoading: false,
+    deployEContractsError: '',
+    deployEContracts: [],
+    deployOutDoorReUsed: '0',
+    deployReasonDelay: '0',
+    deployDescriptionRD: '',
+    deployReasonHiFPT: '0',
+    deployNotCompleteWifi: '0',
+    deployReasonUnuseCapLan: '0',
+    deployBusyAction: '',
+    deployArmedAction: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -8069,6 +9100,39 @@ function mountRemoteInside({
     }
   }
 
+  function resetDeployModalState() {
+    state.deployTab = 'overview';
+    state.deployLoading = false;
+    state.deployError = '';
+    state.deployLoginUrl = '';
+    state.deployLoginLabel = '';
+    state.deployNotice = '';
+    state.deployNoticeTone = 'info';
+    state.deployTicketUrl = '';
+    state.deployHash = '';
+    state.deployGrant = '';
+    state.deploySummary = null;
+    state.deployDataFilter = [];
+    state.deployEquipments = { importItems: [], revokeItems: [], macCount: 0 };
+    state.deployModemMetrics = null;
+    state.deployPhonesLoading = false;
+    state.deployPhonesError = '';
+    state.deployPhones = [];
+    state.deployRevealedPhones = {};
+    state.deployRevealingToken = '';
+    state.deployEContractsLoading = false;
+    state.deployEContractsError = '';
+    state.deployEContracts = [];
+    state.deployOutDoorReUsed = '0';
+    state.deployReasonDelay = '0';
+    state.deployDescriptionRD = '';
+    state.deployReasonHiFPT = '0';
+    state.deployNotCompleteWifi = '0';
+    state.deployReasonUnuseCapLan = '0';
+    state.deployBusyAction = '';
+    state.deployArmedAction = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -8155,6 +9219,7 @@ function mountRemoteInside({
     state.portHistoryLoading = false;
     state.portHistoryError = '';
     state.portHistoryRows = [];
+    resetDeployModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -8379,6 +9444,380 @@ function mountRemoteInside({
       state.bypassError = err && err.message ? err.message : 'Lỗi tải CheckList ByPass.';
     }
     renderConfirm();
+  }
+
+  function applyDeployTicketDraftFromSummary(summary) {
+    const t = summary && summary.ticket ? summary.ticket : null;
+    state.deployOutDoorReUsed = t ? String(t.outDoorReUsed ?? 0) : '0';
+    state.deployReasonDelay = t ? String(t.reasonDelay ?? 0) : '0';
+    state.deployDescriptionRD = t ? String(t.descriptionRd ?? '') : '';
+    state.deployReasonHiFPT = t ? String(t.reasonHiFPT ?? 0) : '0';
+    state.deployNotCompleteWifi = t ? String(t.notCompleteWifi ?? 0) : '0';
+    state.deployReasonUnuseCapLan = t ? String(t.reasonUnuseCapLan ?? 0) : '0';
+  }
+
+  async function loadDeployExtrasForModal({ forceReload = false } = {}) {
+    const summary = state.deploySummary;
+    if (!summary || !summary.objId) return;
+    if (!forceReload && state.deployPhones.length > 0 && state.deployEContracts.length > 0) {
+      return;
+    }
+
+    state.deployPhonesLoading = true;
+    state.deployPhonesError = '';
+    state.deployEContractsLoading = true;
+    state.deployEContractsError = '';
+    renderConfirm();
+
+    const grant = state.deployGrant || '';
+    try {
+      const [phoneRes, recRes] = await Promise.all([
+        fetchDeploymentPhones({
+          contract: summary.contract,
+          objId: summary.objId,
+          grant,
+        }),
+        fetchDeploymentEContracts({
+          objId: summary.objId,
+          grant,
+        }),
+      ]);
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+        return;
+      }
+
+      state.deployPhonesLoading = false;
+      if (phoneRes.status === 'ok') {
+        state.deployPhones = Array.isArray(phoneRes.rows) ? phoneRes.rows : [];
+      } else {
+        state.deployPhonesError = phoneRes.message || 'Không tải được danh sách SĐT User.';
+      }
+
+      state.deployEContractsLoading = false;
+      if (recRes.status === 'ok') {
+        state.deployEContracts = Array.isArray(recRes.rows) ? recRes.rows : [];
+      } else {
+        state.deployEContractsError = recRes.message || 'Không tải được Biên bản điện tử.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+        return;
+      }
+      state.deployPhonesLoading = false;
+      state.deployEContractsLoading = false;
+      const errMsg = err && err.message ? err.message : 'Lỗi tải SĐT & Biên bản điện tử.';
+      state.deployPhonesError = errMsg;
+      state.deployEContractsError = errMsg;
+    }
+    renderConfirm();
+  }
+
+  async function refreshDeployEquipmentsInModal() {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !summary.objId || !ticket || !ticket.supId) return;
+    const eqRes = await fetchDeploymentEquipments({
+      objId: summary.objId,
+      supId: ticket.supId,
+      grant: state.deployGrant || '',
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+      return;
+    }
+    if (eqRes.status === 'ok' && eqRes.equipments) {
+      state.deployEquipments = eqRes.equipments;
+    }
+  }
+
+  async function refreshDeployMetricsInModal() {
+    const summary = state.deploySummary;
+    if (!summary || !summary.contract) return;
+    state.deployNotice = 'Đang làm mới thông số kết nối NET…';
+    state.deployNoticeTone = 'info';
+    renderConfirm();
+    const res = await fetchDeploymentModemMetrics({
+      contract: summary.contract,
+      grant: state.deployGrant || '',
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+      return;
+    }
+    if (res.status === 'ok' && res.data) {
+      state.deployModemMetrics = res.data;
+      state.deployNotice = 'Đã cập nhật thông số kết nối NET mới nhất.';
+      state.deployNoticeTone = 'ok';
+    } else {
+      state.deployNotice = res.message || 'Không làm mới được thông số kết nối NET.';
+      state.deployNoticeTone = 'error';
+    }
+    renderConfirm();
+  }
+
+  async function switchDeployTicketSupId(nextSupId) {
+    const summary = state.deploySummary;
+    if (!summary || !Array.isArray(summary.tickets)) return;
+    const target = summary.tickets.find((t) => String(t.supId) === String(nextSupId));
+    if (!target) return;
+    state.deploySummary = { ...summary, ticket: target };
+    state.deployNotice = '';
+    state.deployArmedAction = '';
+    applyDeployTicketDraftFromSummary(state.deploySummary);
+    renderConfirm();
+    await refreshDeployEquipmentsInModal();
+    if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+    renderConfirm();
+  }
+
+  async function loadDeployTicketModal(rawContractId, selectedSupId = 0) {
+    const prevTab = state.deployTab || 'overview';
+    resetDeployModalState();
+    state.deployTab = prevTab;
+    state.deployLoading = true;
+    renderConfirm();
+
+    const cleanId = normalizeContractId(rawContractId || '');
+    try {
+      const res = await fetchDeploymentTicket(cleanId, {
+        pageLocation: pageWindow ? pageWindow.location : null,
+        selectedSupId,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+        return;
+      }
+      state.deployLoading = false;
+      if (res.status !== 'ok') {
+        state.deployError = res.message || 'Không tải được phiếu triển khai FOX-ERP.';
+        state.deployLoginUrl = res.loginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage;
+        state.deployLoginLabel = res.loginLabel || 'Đăng nhập IAM';
+        renderConfirm();
+        return;
+      }
+
+      state.deployTicketUrl = res.ticketUrl || '';
+      state.deployHash = res.hash || '';
+      state.deployGrant = res.grant || '';
+      state.deploySummary = res.summary || null;
+      state.deployDataFilter = Array.isArray(res.dataFilter) ? res.dataFilter : [];
+      state.deployEquipments = res.equipments || { importItems: [], revokeItems: [], macCount: 0 };
+      state.deployModemMetrics = res.modemMetrics || null;
+      applyDeployTicketDraftFromSummary(state.deploySummary);
+      if (
+        res.summary &&
+        res.summary.contract &&
+        normalizeContractId(state.contractInput) !== res.summary.contract
+      ) {
+        state.contractInput = res.summary.contract;
+        state.recentContracts = addRecentContract(res.summary.contract);
+      }
+      addLog(
+        'Inside',
+        'Mở phiếu triển khai',
+        (res.summary && res.summary.ticket && res.summary.ticket.depCode) ||
+          (res.summary && res.summary.contract) ||
+          cleanId,
+        res.mode === 'demo' ? 'demo' : 'ok'
+      );
+      renderConfirm();
+
+      if (state.deployTab === 'extras') {
+        loadDeployExtrasForModal({ forceReload: true });
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
+        return;
+      }
+      state.deployLoading = false;
+      state.deployError = err && err.message ? err.message : 'Lỗi tải Phiếu triển khai.';
+      state.deployLoginUrl = DEPLOYMENT_ENDPOINTS.foxTicketPage;
+      state.deployLoginLabel = 'Mở FOX-ERP';
+      renderConfirm();
+    }
+  }
+
+  async function runDeployMutation({
+    busyKey,
+    pendingText,
+    fallbackErr,
+    logAction,
+    fn,
+    onOk,
+  }) {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket || state.deployBusyAction) return;
+    state.deployArmedAction = '';
+    state.deployBusyAction = busyKey;
+    state.deployNotice = pendingText;
+    state.deployNoticeTone = 'info';
+    renderConfirm();
+
+    try {
+      const res = await fn(summary, ticket);
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployBusyAction = '';
+      if (res.status === 'ok') {
+        state.deployNotice = res.message || 'Thao tác thành công.';
+        state.deployNoticeTone = 'ok';
+        addLog('Inside', logAction, ticket.depCode || summary.contract, res.mode === 'demo' ? 'demo' : 'ok');
+        if (onOk) {
+          await onOk(res);
+          if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+        }
+      } else {
+        state.deployNotice = res.message || fallbackErr;
+        state.deployNoticeTone = 'error';
+        if (res.loginUrl) {
+          state.deployLoginUrl = res.loginUrl;
+        }
+        addLog('Inside', logAction, ticket.depCode || summary.contract, 'error');
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployBusyAction = '';
+      state.deployNotice = err && err.message ? err.message : fallbackErr;
+      state.deployNoticeTone = 'error';
+    }
+    renderConfirm();
+  }
+
+  function handleDeployClearMac() {
+    return runDeployMutation({
+      busyKey: 'clear_mac',
+      pendingText: 'Đang gửi lệnh Clear Mac thiết bị trên phiếu…',
+      fallbackErr: 'Clear Mac chưa thành công.',
+      logAction: 'Clear Mac phiếu TK',
+      fn: (summary, ticket) =>
+        clearDeploymentTicketMac({
+          objId: summary.objId,
+          supId: ticket.supId,
+          grant: state.deployGrant || '',
+        }),
+      onOk: () => refreshDeployEquipmentsInModal(),
+    });
+  }
+
+  function handleDeploySyncOnline() {
+    return runDeployMutation({
+      busyKey: 'sync_online',
+      pendingText: 'Đang gửi đồng bộ thông tin Online…',
+      fallbackErr: 'Đồng bộ Online chưa thành công.',
+      logAction: 'Cập nhật Online phiếu TK',
+      fn: (summary, ticket) =>
+        syncDeploymentOnline({
+          objId: summary.objId,
+          supId: ticket.supId,
+          contract: summary.contract,
+          grant: state.deployGrant || '',
+        }),
+    });
+  }
+
+  function handleDeploySaveConstruction() {
+    return runDeployMutation({
+      busyKey: 'save_construction',
+      pendingText: 'Đang lưu thông tin thi công…',
+      fallbackErr: 'Lưu thông tin thi công chưa thành công.',
+      logAction: 'Lưu thi công phiếu TK',
+      fn: (summary, ticket) =>
+        updateDeploymentConstruction({
+          objId: summary.objId,
+          supId: ticket.supId,
+          contract: summary.contract,
+          outDoorReUsed: state.deployOutDoorReUsed,
+          descriptionRD: state.deployDescriptionRD,
+          reasonDelay: state.deployReasonDelay,
+          grant: state.deployGrant || '',
+        }),
+    });
+  }
+
+  function handleDeployComplete() {
+    return runDeployMutation({
+      busyKey: 'complete',
+      pendingText: 'Đang gửi xác nhận hoàn tất phiếu triển khai…',
+      fallbackErr: 'Chưa hoàn tất được phiếu.',
+      logAction: 'Hoàn tất phiếu TK',
+      fn: (summary, ticket) =>
+        completeDeploymentTicket({
+          objId: summary.objId,
+          supId: ticket.supId,
+          outDoorReUsed: state.deployOutDoorReUsed,
+          descriptionRD: state.deployDescriptionRD,
+          reasonDelay: state.deployReasonDelay,
+          reasonHiFPT: state.deployReasonHiFPT,
+          notCompleteWifi: state.deployNotCompleteWifi,
+          reasonUnuseCapLan: state.deployReasonUnuseCapLan,
+          grant: state.deployGrant || '',
+        }),
+      onOk: () => {
+        if (state.deploySummary && state.deploySummary.ticket) {
+          state.deploySummary = {
+            ...state.deploySummary,
+            ticket: {
+              ...state.deploySummary.ticket,
+              status: 1,
+              statusDesc: 'Hoàn tất',
+            },
+          };
+        }
+      },
+    });
+  }
+
+  async function handleDeployRevealPhone(item) {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket || !item || !item.PhoneToken || state.deployRevealingToken) return;
+    state.deployRevealingToken = item.PhoneToken;
+    renderConfirm();
+
+    try {
+      const res = await revealDeploymentPhone({
+        token: item.PhoneToken,
+        objId: summary.objId,
+        supId: ticket.supId,
+        grant: state.deployGrant || '',
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployRevealingToken = '';
+      if (res.status === 'ok' && res.phone) {
+        state.deployRevealedPhones = {
+          ...state.deployRevealedPhones,
+          [item.PhoneToken]: res.phone,
+        };
+        state.deployNotice = `Đã giải mã ${item.DescriptionVn || 'SĐT'}: ${res.phone}`;
+        state.deployNoticeTone = 'ok';
+      } else {
+        state.deployNotice = res.message || 'Không hiện được số điện thoại đầy đủ.';
+        state.deployNoticeTone = 'error';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployRevealingToken = '';
+      state.deployNotice = err && err.message ? err.message : 'Lỗi giải mã SĐT.';
+      state.deployNoticeTone = 'error';
+    }
+    renderConfirm();
+  }
+
+  function handleDeploySignEContract(rec) {
+    if (!rec) return;
+    return runDeployMutation({
+      busyKey: 'sign_econtract',
+      pendingText: `Đang gửi ký biên bản ${rec.Code || ''}…`,
+      fallbackErr: 'Chưa ký được biên bản điện tử.',
+      logAction: 'Ký BBĐT phiếu TK',
+      fn: (summary, ticket) =>
+        signDeploymentEContract({
+          objId: summary.objId,
+          supId: ticket.supId,
+          guid: rec.Guid,
+          name: rec.Name,
+          code: rec.Code,
+          grant: state.deployGrant || '',
+        }),
+      onOk: () => loadDeployExtrasForModal({ forceReload: true }),
+    });
   }
 
   async function loadModemInfoForModal(contractId) {
@@ -8961,6 +10400,8 @@ function mountRemoteInside({
         }
       } else if (state.activePortalId === 'inside' && action.id === 'bypass') {
         loadInsideByPassModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'deploy_ticket') {
+        loadDeployTicketModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'release_port') {
         loadPortReleaseModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
@@ -11133,6 +12574,7 @@ function mountRemoteInside({
     const isInsideKill = portal.id === 'inside' && act.id === 'kill_session';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
     const isInsideBypass = portal.id === 'inside' && act.id === 'bypass';
+    const isInsideDeploy = portal.id === 'inside' && act.id === 'deploy_ticket';
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
 
@@ -11141,6 +12583,8 @@ function mountRemoteInside({
         className: 'ri-sheet-title',
         text: isInsideKill
           ? 'Kill Session — Phiên đang chạy'
+          : isInsideDeploy
+          ? 'Phiếu triển khai FOX-ERP'
           : isInsideBypass
           ? 'CheckList ByPass'
           : `Xác nhận ${act.label}?`,
@@ -11149,6 +12593,8 @@ function mountRemoteInside({
         className: 'ri-sheet-sub',
         text: isInsideKill
           ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
+          : isInsideDeploy
+          ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
           : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
     ];
@@ -11178,10 +12624,10 @@ function mountRemoteInside({
     const cancelBtn = el('button', {
       type: 'button',
       className: 'ri-secondary-btn',
-      text: (isInsideBox && state.boxTab === 'history') || isInsideKill ? 'Đóng' : 'Hủy',
+      text: (isInsideBox && state.boxTab === 'history') || isInsideKill || isInsideDeploy ? 'Đóng' : 'Hủy',
       onClick: () => {
         resetConfirmState();
-        renderConfirm();
+        render();
       },
     });
 
@@ -12341,6 +13787,628 @@ function mountRemoteInside({
           });
         }
       }
+    } else if (isInsideDeploy) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.deployLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', {
+              text: contractId
+                ? `Đang tải phiếu triển khai FOX-ERP cho ${contractId}…`
+                : 'Đang tải phiếu triển khai từ FOX-ERP…',
+            }),
+          ])
+        );
+      } else if (state.deployError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadDeployTicketModal(contractId),
+          }),
+        ];
+        if (state.deployLoginUrl) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: state.deployLoginLabel || 'Đăng nhập IAM',
+              onClick: () => {
+                openExternalOrPortalUrl(state.deployLoginUrl, {
+                  mode: 'login',
+                  title: state.deployLoginLabel || 'Đăng nhập FOX-ERP / Partner',
+                  pageWindow,
+                });
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.deployError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+      } else if (!state.deploySummary || !state.deploySummary.ticket) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status' }, [
+            el('div', { text: 'Không tìm thấy phiếu triển khai khả dụng.' }),
+          ])
+        );
+      } else {
+        const summary = state.deploySummary;
+        const ticket = summary.ticket;
+        const eq = state.deployEquipments || { importItems: [], revokeItems: [], macCount: 0 };
+        const metrics = state.deployModemMetrics || null;
+        const isBusy = Boolean(state.deployBusyAction);
+
+        if (summary.tickets && summary.tickets.length > 1) {
+          const ticketSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-deploy-ticket-select' },
+            summary.tickets.map((t) =>
+              el('option', {
+                value: String(t.supId),
+                text: `${t.depCode} — ${t.statusDesc || 'Phiếu'}`,
+              })
+            )
+          );
+          ticketSel.value = String(ticket.supId);
+          ticketSel.addEventListener('change', (e) => switchDeployTicketSupId(e.target.value));
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-deploy-ticket-select',
+                text: `Chọn phiếu (${summary.tickets.length} phiếu)`,
+              }),
+              ticketSel,
+            ])
+          );
+        }
+
+        const topUtilityBtns = [
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Tải lại phiếu',
+            onClick: () => loadDeployTicketModal(contractId || summary.contract, ticket.supId),
+          }),
+        ];
+        if (state.deployTicketUrl) {
+          topUtilityBtns.unshift(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Mở phiếu gốc',
+              onClick: () => {
+                openExternalOrPortalUrl(state.deployTicketUrl, {
+                  mode: 'portal',
+                  title: ticket.depCode || 'Phiếu triển khai FOX-ERP',
+                  pageWindow,
+                });
+              },
+            })
+          );
+        }
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `${ticket.depCode} • ${ticket.statusDesc}`,
+              }),
+              el('div', { className: 'ri-result-actions' }, topUtilityBtns),
+            ]),
+            el('div', { className: 'ri-mode-row' }, [
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'overview' ? ' is-active' : ''}`,
+                text: 'Tổng quan',
+                onClick: () => {
+                  state.deployTab = 'overview';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'equipment' ? ' is-active' : ''}`,
+                text: `Vật tư & MAC (${eq.importItems.length})`,
+                onClick: () => {
+                  state.deployTab = 'equipment';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'complete' ? ' is-active' : ''}`,
+                text: 'Hoàn tất',
+                onClick: () => {
+                  state.deployTab = 'complete';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'extras' ? ' is-active' : ''}`,
+                text: 'SĐT & BBĐT',
+                onClick: () => {
+                  state.deployTab = 'extras';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                  loadDeployExtrasForModal();
+                },
+              }),
+            ]),
+          ])
+        );
+
+        if (state.deployNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.deployNoticeTone || 'info',
+            }, [el('div', { text: state.deployNotice })])
+          );
+        }
+
+        function buildDeployKvList(rows) {
+          const filtered = rows.filter(([, val]) => val !== '' && val !== undefined && val !== null);
+          return el(
+            'div',
+            { className: 'ri-kv-list' },
+            filtered.map(([k, val]) =>
+              el('div', { className: 'ri-kv-item' }, [
+                el('span', { className: 'ri-kv-key', text: k }),
+                el('span', { className: 'ri-kv-val', text: String(val) }),
+              ])
+            )
+          );
+        }
+
+        function buildArmedConfirmRow({
+          armKey,
+          idleLabel,
+          idleClass = 'ri-danger-btn',
+          confirmLabel,
+          busyKey,
+          onConfirm,
+        }) {
+          const isArmed = state.deployArmedAction === armKey;
+          if (isArmed) {
+            return el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                disabled: isBusy,
+                text: 'Hủy',
+                onClick: () => {
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: idleClass,
+                disabled: isBusy,
+                text: state.deployBusyAction === busyKey ? 'Đang gửi…' : confirmLabel,
+                onClick: onConfirm,
+              }),
+            ]);
+          }
+          return el('button', {
+            type: 'button',
+            className: idleClass,
+            disabled: isBusy,
+            text: state.deployBusyAction === busyKey ? 'Đang xử lý…' : idleLabel,
+            onClick: () => {
+              state.deployArmedAction = armKey;
+              renderConfirm();
+            },
+          });
+        }
+
+        if (state.deployTab === 'overview') {
+          const mainEmpText = ticket.mainEmp
+            ? [ticket.mainEmp.account, ticket.mainEmp.phone].filter(Boolean).join(' • ')
+            : '';
+          sheetParts.push(
+            buildDeployKvList([
+              ['Mã phiếu', ticket.depCode],
+              ['Tình trạng', ticket.statusDesc],
+              ['Khách hàng', summary.fullName],
+              ['Địa chỉ', summary.address],
+              ['Gói / Dịch vụ', [summary.nameObj, summary.localTypeName].filter(Boolean).join(' • ')],
+              ['Tập điểm / Block', ticket.blockDepName],
+              ['KTV chính', mainEmpText || 'Chưa phân công'],
+              ['Lịch hẹn', ticket.appointmentDate],
+              ['Cáp khảo sát', `Indoor: ${ticket.indoor || '0'}m • Outdoor: ${ticket.outdoor || '0'}m`],
+            ])
+          );
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Thông số kết nối NET' }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  text: 'Làm mới',
+                  onClick: refreshDeployMetricsInModal,
+                }),
+              ]),
+              metrics
+                ? buildDeployKvList([
+                    ['IP hiện tại', metrics.Ip || '—'],
+                    ['MAC đang online', metrics.MacAddress || '—'],
+                    ['ONU RX / TX', `${metrics.OnuRxPower ?? '—'} / ${metrics.OnuTxPower ?? '—'}`],
+                    ['RX Tập điểm', metrics.RxGroupPoints ?? '—'],
+                    ['LastMile', metrics.LastMile != null ? `${metrics.LastMile} m` : '—'],
+                    ['ByPass', metrics.StatusByPass || '—'],
+                    ['Online đầu tiên', metrics.FirstOnlineMacDate || '—'],
+                  ])
+                : el('div', {
+                    className: 'ri-sheet-status',
+                    text: 'Chưa có thông số kết nối NET trực tuyến.',
+                  }),
+              el('div', { className: 'ri-result-actions' }, [
+                buildArmedConfirmRow({
+                  armKey: 'sync_online',
+                  idleLabel: 'Cập nhật thông tin Online',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận cập nhật Online',
+                  busyKey: 'sync_online',
+                  onConfirm: handleDeploySyncOnline,
+                }),
+              ]),
+            ])
+          );
+        } else if (state.deployTab === 'equipment') {
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', {
+                  className: 'ri-confirm-label',
+                  text: `Vật tư triển khai (${eq.importItems.length}) • Gắn MAC (${eq.macCount})${
+                    eq.revokeItems.length > 0 ? ` • Thu hồi (${eq.revokeItems.length})` : ''
+                  }`,
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  text: 'Tải lại',
+                  onClick: async () => {
+                    await refreshDeployEquipmentsInModal();
+                    if (state.confirmAction && state.confirmAction.id === 'deploy_ticket') {
+                      renderConfirm();
+                    }
+                  },
+                }),
+              ]),
+              el('div', { className: 'ri-result-actions' }, [
+                buildArmedConfirmRow({
+                  armKey: 'clear_mac',
+                  idleLabel: 'Clear Mac thiết bị',
+                  idleClass: 'ri-danger-btn',
+                  confirmLabel: 'Xác nhận Clear Mac ngay',
+                  busyKey: 'clear_mac',
+                  onConfirm: handleDeployClearMac,
+                }),
+              ]),
+            ])
+          );
+
+          const allItems = [...eq.importItems, ...eq.revokeItems];
+          if (allItems.length === 0) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status' }, [
+                el('div', { text: 'Phiếu chưa có danh sách vật tư triển khai.' }),
+              ])
+            );
+          } else {
+            sheetParts.push(
+              el(
+                'div',
+                { className: 'ri-history-list' },
+                allItems.map((item) =>
+                  el('div', { className: 'ri-history-card' }, [
+                    el('div', {
+                      className: 'ri-history-macs',
+                      text: `${item.name || item.description || 'Thiết bị'}${
+                        item.isRevoke ? ' (Thu hồi)' : ''
+                      }`,
+                    }),
+                    el('div', {
+                      className: 'ri-history-meta',
+                      text: [
+                        `SL: ${item.quantity}`,
+                        item.serviceName || '',
+                        item.functionName || '',
+                      ]
+                        .filter(Boolean)
+                        .join(' • '),
+                    }),
+                    item.isMac
+                      ? el('div', {
+                          className: 'ri-modem-mac',
+                          text: item.mac ? `MAC: ${item.mac}` : 'MAC: (Trống / Đã Clear)',
+                        })
+                      : null,
+                  ])
+                )
+              )
+            );
+          }
+        } else if (state.deployTab === 'complete') {
+          function buildCatalogSelect(selectId, labelText, parentKey, fallbackText, currentVal, onChange) {
+            const opts = parseDataFilterOptions(state.deployDataFilter, parentKey);
+            const list = opts.slice();
+            if (!list.some((o) => o.id === String(currentVal ?? '0'))) {
+              list.unshift({
+                id: String(currentVal ?? '0'),
+                text: String(currentVal ?? '0') === '0' ? fallbackText : `Mã ${currentVal}`,
+              });
+            }
+            const selectEl = el(
+              'select',
+              { className: 'ri-select', id: selectId },
+              list.map((o) => el('option', { value: o.id, text: o.text }))
+            );
+            selectEl.value = String(currentVal ?? '0');
+            selectEl.addEventListener('change', (e) => onChange(e.target.value));
+            return el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: selectId, text: labelText }),
+              selectEl,
+            ]);
+          }
+
+          const outdoorInput = el('input', {
+            type: 'number',
+            className: 'ri-confirm-input',
+            id: 'ri-deploy-outdoor-reused',
+            min: '0',
+            max: '9999',
+            placeholder: '0',
+            value: state.deployOutDoorReUsed,
+          });
+          outdoorInput.value = state.deployOutDoorReUsed;
+          outdoorInput.addEventListener('input', (e) => {
+            state.deployOutDoorReUsed = e.target.value;
+          });
+
+          const descArea = el('textarea', {
+            className: 'ri-textarea',
+            id: 'ri-deploy-desc-rd',
+            maxlength: '500',
+            placeholder: 'Ghi chú nguyên nhân trễ hạn / triển khai (tối đa 500 ký tự)…',
+          });
+          descArea.value = state.deployDescriptionRD || '';
+          descArea.addEventListener('input', (e) => {
+            state.deployDescriptionRD = e.target.value;
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-deploy-outdoor-reused',
+                text: 'Cáp tận dụng Outdoor (m)',
+              }),
+              outdoorInput,
+            ]),
+            buildCatalogSelect(
+              'ri-deploy-reason-delay',
+              'Nguyên nhân trễ hạn',
+              DEPLOYMENT_CATALOG_KEYS.REASON_DELAY,
+              'Không xác định',
+              state.deployReasonDelay,
+              (val) => {
+                state.deployReasonDelay = val;
+              }
+            ),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-deploy-desc-rd',
+                text: 'Ghi chú nguyên nhân trễ hạn',
+              }),
+              descArea,
+            ]),
+            buildCatalogSelect(
+              'ri-deploy-reason-hifpt',
+              'Nguyên nhân chưa cài đặt HiFPT',
+              DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT,
+              'Không chọn',
+              state.deployReasonHiFPT,
+              (val) => {
+                state.deployReasonHiFPT = val;
+              }
+            ),
+            buildCatalogSelect(
+              'ri-deploy-reason-wifi',
+              'Nguyên nhân không hoàn tất từ wifi',
+              DEPLOYMENT_CATALOG_KEYS.NOT_COMPLETE_WIFI,
+              'Không chọn',
+              state.deployNotCompleteWifi,
+              (val) => {
+                state.deployNotCompleteWifi = val;
+              }
+            ),
+            buildCatalogSelect(
+              'ri-deploy-reason-lan',
+              'Nguyên nhân không sử dụng Cáp Lan cho Box',
+              DEPLOYMENT_CATALOG_KEYS.REASON_UNUSE_CAP_LAN,
+              'Không chọn',
+              state.deployReasonUnuseCapLan,
+              (val) => {
+                state.deployReasonUnuseCapLan = val;
+              }
+            ),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                disabled: isBusy,
+                text:
+                  state.deployBusyAction === 'save_construction'
+                    ? 'Đang lưu…'
+                    : 'Lưu thông tin thi công',
+                onClick: handleDeploySaveConstruction,
+              }),
+              buildArmedConfirmRow({
+                armKey: 'complete',
+                idleLabel: 'Xác nhận hoàn tất phiếu',
+                idleClass: 'ri-primary-btn',
+                confirmLabel: 'Xác nhận hoàn tất ngay',
+                busyKey: 'complete',
+                onConfirm: handleDeployComplete,
+              }),
+            ])
+          );
+        } else if (state.deployTab === 'extras') {
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Số điện thoại User' }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  text: 'Tải lại',
+                  onClick: () => loadDeployExtrasForModal({ forceReload: true }),
+                }),
+              ]),
+            ])
+          );
+
+          if (state.deployPhonesLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh sách SĐT User…' }),
+              ])
+            );
+          } else if (state.deployPhonesError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                el('div', { text: state.deployPhonesError }),
+              ])
+            );
+          } else if (state.deployPhones.length === 0) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status' }, [
+                el('div', { text: 'Không có số điện thoại User trên hợp đồng.' }),
+              ])
+            );
+          } else {
+            sheetParts.push(
+              el(
+                'div',
+                { className: 'ri-session-list' },
+                state.deployPhones.map((item) => {
+                  const revealed = item.PhoneToken ? state.deployRevealedPhones[item.PhoneToken] : '';
+                  const isRevealing = item.PhoneToken && state.deployRevealingToken === item.PhoneToken;
+                  return el('div', { className: 'ri-session-card' }, [
+                    el('div', {
+                      className: 'ri-session-ip',
+                      text: `${item.DescriptionVn || 'Số điện thoại'}: ${revealed || item.Phone || '—'}`,
+                    }),
+                    el('div', { className: 'ri-session-actions' }, [
+                      revealed
+                        ? el('button', {
+                            type: 'button',
+                            className: 'ri-secondary-btn',
+                            text: 'Sao chép SĐT',
+                            onClick: async () => {
+                              await copyTextSafe(revealed);
+                              state.deployNotice = `Đã sao chép ${revealed} vào bộ nhớ tạm.`;
+                              state.deployNoticeTone = 'ok';
+                              renderConfirm();
+                            },
+                          })
+                        : item.PhoneToken
+                        ? el('button', {
+                            type: 'button',
+                            className: 'ri-primary-btn',
+                            disabled: Boolean(state.deployRevealingToken),
+                            text: isRevealing ? 'Đang hiện…' : 'Hiện SĐT đầy đủ',
+                            onClick: () => handleDeployRevealPhone(item),
+                          })
+                        : null,
+                    ]),
+                  ]);
+                })
+              )
+            );
+          }
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Biên bản điện tử' }),
+            ])
+          );
+
+          if (state.deployEContractsLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh sách Biên bản điện tử…' }),
+              ])
+            );
+          } else if (state.deployEContractsError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                el('div', { text: state.deployEContractsError }),
+              ])
+            );
+          } else if (state.deployEContracts.length === 0) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status' }, [
+                el('div', { text: 'Chưa có Biên bản điện tử trên hợp đồng.' }),
+              ])
+            );
+          } else {
+            sheetParts.push(
+              el(
+                'div',
+                { className: 'ri-history-list' },
+                state.deployEContracts.map((rec) => {
+                  const isPending = /pending/i.test(String(rec.State || ''));
+                  return el('div', { className: 'ri-history-card' }, [
+                    el('div', {
+                      className: 'ri-history-macs',
+                      text: `${rec.Code || 'Biên bản'} • ${rec.State || '—'}`,
+                    }),
+                    el('div', {
+                      className: 'ri-history-meta',
+                      text: [rec.Name || '', rec.CreateDate || ''].filter(Boolean).join(' • '),
+                    }),
+                    isPending && rec.Guid
+                      ? el('div', { className: 'ri-session-actions' }, [
+                          buildArmedConfirmRow({
+                            armKey: `sign:${rec.Guid}`,
+                            idleLabel: 'Ký BBĐT',
+                            idleClass: 'ri-primary-btn',
+                            confirmLabel: 'Xác nhận ký BBĐT',
+                            busyKey: 'sign_econtract',
+                            onConfirm: () => handleDeploySignEContract(rec),
+                          }),
+                        ])
+                      : null,
+                  ]);
+                })
+              )
+            );
+          }
+        }
+      }
     } else if (isPortRelease) {
       confirmBtn.textContent = 'Xác nhận Thu hồi Port';
 
@@ -13100,6 +15168,12 @@ function mountRemoteInside({
             className: 'ri-primary-btn',
             text: 'Đăng nhập Port (FTTH NEW)',
             onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập FOX-ERP / Partner',
+            onClick: () => openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
           }),
           el('button', {
             type: 'button',

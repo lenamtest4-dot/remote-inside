@@ -1,8 +1,8 @@
-# Remote Inside (v0.10.4)
+# Remote Inside (v0.11.0)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)** và **MacBook / PC** khi đi hiện trường.
 
-- **Inside** (`inside.fpt.net`) — *Đã ghép đủ 6 lệnh*: Tra thông tin HĐ, Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port), ByPass (CheckList ByPass)
+- **Inside** (`inside.fpt.net` / `fox-erp.fpt.net`) — *Đã ghép đủ 7 lệnh*: Tra thông tin HĐ, Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port), ByPass (CheckList ByPass), **Phiếu triển khai FOX-ERP** (Xem phiếu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User, Biên bản ĐT, Cập nhật Online)
 - **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
 - **Camera** (`fli-mngt.fcam.vn`) — Kiểm tra lỗi, Khởi động lại Camera *(đang chờ quét ghép tiếp)*
 - **Vật tư** (`nextgen.fpt.net/resource/recall`) — Tra cứu & cập nhật vật tư thu hồi *(đang chờ quét ghép tiếp)*
@@ -15,7 +15,7 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.10.4.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.11.0.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.

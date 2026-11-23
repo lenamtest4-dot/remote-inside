@@ -85,6 +85,25 @@ import {
   validateByPassPayload,
 } from '../src/adapters/inside.js';
 import {
+  DEPLOYMENT_CATALOG_KEYS,
+  DEPLOYMENT_ENDPOINTS,
+  buildCompletedPayload,
+  clearDeploymentTicketMac,
+  completeDeploymentTicket,
+  extractDeploymentTicketLink,
+  extractHashFromLocation,
+  fetchDeploymentEContracts,
+  fetchDeploymentTicket,
+  findDataFilterText,
+  normalizeEquipmentList,
+  normalizeTicketSummary,
+  parseDataFilterOptions,
+  revealDeploymentPhone,
+  syncDeploymentOnline,
+  updateDeploymentConstruction,
+  validateConstructionUpdate,
+} from '../src/adapters/deployment.js';
+import {
   PORT_ENDPOINTS,
   bootstrapMvcPortSession,
   buildPortUrl,
@@ -2156,6 +2175,243 @@ async function runTests() {
     'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/complete-modal.mjs',
   ]);
   console.log('   OK: FOX-ERP / Partner SPA Scanner & Recorder checks passed.');
+
+  console.log('18. Testing FOX-ERP Phiếu triển khai (Deployment Ticket) adapter & live bridge...');
+  const deployActionCfg = PORTALS.inside.actions.find((a) => a.id === 'deploy_ticket');
+  assert.ok(deployActionCfg, 'PORTALS.inside.actions must contain deploy_ticket');
+  assert.equal(deployActionCfg.label, 'Phiếu triển khai');
+  assert.equal(deployActionCfg.requiresContract, false);
+  assert.equal(PORTALS.inside.statusLabel, 'Đủ 7 lệnh');
+
+  const validLink = extractDeploymentTicketLink([
+    { type: 'bt', url: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=btHash', isBackLog: false },
+    { type: 'tk', url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket?q=abc+123%2Fxy', isBackLog: true },
+  ]);
+  assert.equal(validLink.found, true);
+  assert.equal(validLink.hash, 'abc+123/xy');
+  assert.equal(validLink.isBackLog, true);
+
+  const maintOnlyLink = extractDeploymentTicketLink([
+    { type: 'bt', url: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=onlybt', isBackLog: false },
+  ]);
+  assert.equal(maintOnlyLink.found, false);
+  assert.equal(maintOnlyLink.reason, 'maintenance_only');
+  assert.equal(extractDeploymentTicketLink([]).found, false);
+
+  assert.equal(
+    extractHashFromLocation({
+      hostname: 'fox-erp.fpt.net',
+      pathname: '/app/tkbt/tk/ticket',
+      search: '?q=hash%2Bwith%2Fplus',
+    }),
+    'hash+with/plus'
+  );
+  assert.equal(
+    extractHashFromLocation({
+      hostname: 'inside.fpt.net',
+      pathname: '/default.asp',
+      search: '?q=ignored',
+    }),
+    ''
+  );
+
+  const sampleFilter = [
+    {
+      ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT,
+      Datas: [
+        { Code: 2, Tittle: 'Ly do 2', Position: 2 },
+        { Code: 0, Tittle: 'Khong chon', Position: 1 },
+      ],
+    },
+  ];
+  assert.deepEqual(parseDataFilterOptions(sampleFilter, DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT), [
+    { id: '0', text: 'Khong chon', position: 1 },
+    { id: '2', text: 'Ly do 2', position: 2 },
+  ]);
+  assert.equal(findDataFilterText(sampleFilter, DEPLOYMENT_CATALOG_KEYS.REASON_HIFPT, 2), 'Ly do 2');
+
+  const eqNorm = normalizeEquipmentList([
+    { EfId: 1, IdCode: 500, Name: 'Day cap', Quantity: 50, TypeId: 1, IsMac: 0 },
+    { EfId: 2, IdCode: 100, Name: 'Modem Demo', Quantity: 1, TypeId: 1, IsMac: 1, Mac: '001122334455' },
+    { EfId: 3, IdCode: 900, Name: 'Box Thu hoi', Quantity: 1, TypeId: 3, IsMac: 1, Mac: 'AABBCCDDEEFF' },
+  ]);
+  assert.equal(eqNorm.importItems.length, 2);
+  assert.equal(eqNorm.importItems[0].name, 'Modem Demo', 'MAC equipments must sort first');
+  assert.equal(eqNorm.revokeItems.length, 1);
+  assert.equal(eqNorm.macCount, 1);
+
+  assert.equal(validateConstructionUpdate({ outDoorReUsed: -1, descriptionRD: 'ok' }).valid, false);
+  assert.equal(
+    validateConstructionUpdate({ outDoorReUsed: 10, descriptionRD: 'a'.repeat(501) }).valid,
+    false
+  );
+  assert.deepEqual(validateConstructionUpdate({ outDoorReUsed: ' 12 ', descriptionRD: '  ghi   chu ' }), {
+    valid: true,
+    error: '',
+    outDoorReUsed: 12,
+    descriptionRD: 'ghi chu',
+  });
+
+  assert.deepEqual(
+    buildCompletedPayload({
+      objId: 1000001,
+      supId: 900001,
+      outDoorReUsed: 5,
+      descriptionRD: 'Da xu ly',
+      reasonDelay: 1,
+      reasonHiFPT: 2,
+      notCompleteWifi: 0,
+      reasonUnuseCapLan: 3,
+    }),
+    {
+      ObjId: 1000001,
+      SupId: 900001,
+      OutDoorReUsed: 5,
+      DescriptionRD: 'Da xu ly',
+      ReasonDelay: 1,
+      ReasonHiFPT: 2,
+      ReasonUnuseCapLan: 3,
+    }
+  );
+
+  // Full demo workflow
+  const demoTicket = await fetchDeploymentTicket('SGN123456', { forceDemo: true });
+  assert.equal(demoTicket.status, 'ok');
+  assert.equal(demoTicket.mode, 'demo');
+  assert.equal(demoTicket.summary.contract, 'SGN123456');
+  assert.equal(demoTicket.equipments.macCount, 3);
+  assert.equal((await clearDeploymentTicketMac({ forceDemo: true })).status, 'ok');
+  assert.equal((await revealDeploymentPhone({ forceDemo: true })).phone, '0901000001');
+  assert.equal((await fetchDeploymentEContracts({ forceDemo: true })).rows.length, 2);
+  assert.equal((await syncDeploymentOnline({ forceDemo: true })).status, 'ok');
+  assert.equal((await updateDeploymentConstruction({ outDoorReUsed: 5, forceDemo: true })).status, 'ok');
+  assert.equal((await completeDeploymentTicket({ outDoorReUsed: 0, forceDemo: true })).status, 'ok');
+
+  // Live mocked bridge verifying Grant -> x-resource-grant propagation
+  const hadWin18 = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+  const prevWin18 = globalThis.window;
+  const grantStore = new Map();
+  const capturedFoxRequests = [];
+  try {
+    globalThis.window = {
+      RemoteInsideNative: {
+        httpRequest(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          capturedFoxRequests.push(parsed);
+          let bodyObj = { Succeeded: false };
+          if (parsed.url === DEPLOYMENT_ENDPOINTS.partnerGetContract) {
+            bodyObj = {
+              Succeeded: true,
+              Data: [
+                {
+                  type: 'tk',
+                  url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket?q=LIVE_HASH_TOKEN',
+                  isBackLog: false,
+                },
+              ],
+            };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getTicketInfo) {
+            bodyObj = {
+              Succeeded: true,
+              Data: {
+                ObjId: 1000001,
+                Contract: 'SGN123456',
+                FullName: 'NGUYEN VAN MAU',
+                Grant: 'Fe26.2**demo-grant-token',
+                DataFilter: sampleFilter,
+                SupportInfInfo: [
+                  { SupId: 900001, DepCode: 'TK.SGN123456.900001', Status: 0, Flag: 1, ConstrucInfo: { OutDoorReUsed: 0 } },
+                ],
+              },
+            };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getEquipmentOnDep) {
+            bodyObj = {
+              Succeeded: true,
+              Data: [{ EfId: 1, IdCode: 33096, Name: 'Modem Demo', Quantity: 1, TypeId: 1, IsMac: 1, Mac: '001122334455' }],
+            };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getModemMetrics) {
+            bodyObj = { Succeeded: true, Data: { Ip: '192.0.2.10', MacAddress: '00:11:22:33:44:55' } };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.clearEquipment) {
+            bodyObj = { Succeeded: true, Data: 1, Message: 'Clear OK' };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.revealPhone) {
+            bodyObj = { Succeeded: true, Data: '0901000009' };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.syncOnline) {
+            bodyObj = { Succeeded: true, Message: 'Sync OK' };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.statusCompleted) {
+            bodyObj = { Succeeded: true, Data: 1, Message: 'Completed OK' };
+          }
+          grantStore.set(
+            parsed.reqId,
+            JSON.stringify({
+              ok: true,
+              status: 200,
+              finalUrl: parsed.url,
+              responseText: JSON.stringify(bodyObj),
+              responseHeaders: 'Content-Type: application/json\r\n',
+            })
+          );
+          queueMicrotask(() => {
+            if (typeof globalThis.window.__riNativeResolve === 'function') {
+              globalThis.window.__riNativeResolve(parsed.reqId);
+            }
+          });
+        },
+        consumeResponse(reqId) {
+          const val = grantStore.get(reqId) || '';
+          grantStore.delete(reqId);
+          return val;
+        },
+      },
+    };
+
+    const liveTicket = await fetchDeploymentTicket('SGN123456');
+    assert.equal(liveTicket.status, 'ok');
+    assert.equal(liveTicket.mode, 'live');
+    assert.equal(liveTicket.grant, 'Fe26.2**demo-grant-token');
+
+    await clearDeploymentTicketMac({ objId: 1000001, supId: 900001, grant: liveTicket.grant });
+    const revRes = await revealDeploymentPhone({ token: 'tok1', objId: 1000001, supId: 900001, grant: liveTicket.grant });
+    assert.equal(revRes.phone, '0901000009');
+    await syncDeploymentOnline({ objId: 1000001, supId: 900001, contract: 'SGN123456', grant: liveTicket.grant });
+    await completeDeploymentTicket({ objId: 1000001, supId: 900001, outDoorReUsed: 2, reasonHiFPT: 2, grant: liveTicket.grant });
+
+    for (const ep of [
+      DEPLOYMENT_ENDPOINTS.getEquipmentOnDep,
+      DEPLOYMENT_ENDPOINTS.clearEquipment,
+      DEPLOYMENT_ENDPOINTS.revealPhone,
+      DEPLOYMENT_ENDPOINTS.syncOnline,
+      DEPLOYMENT_ENDPOINTS.statusCompleted,
+    ]) {
+      const req = capturedFoxRequests.find((r) => r.url === ep);
+      assert.ok(req, `Expected request to ${ep}`);
+      assert.equal(req.headers['x-resource-grant'], 'Fe26.2**demo-grant-token', `Expected x-resource-grant on ${ep}`);
+    }
+  } finally {
+    if (hadWin18) {
+      globalThis.window = prevWin18;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
+  for (const token of [
+    'deploy_ticket',
+    '/api/ticket/get-ticket-info',
+    '/api/equipment/clear-equipment',
+    '/api/contract/sync-online',
+    '/api/status/completed',
+    '/api/contract/reveal-phone',
+    '/api/record/get-e-contract-record',
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Built deployment ticket bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: FOX-ERP Phiếu triển khai tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

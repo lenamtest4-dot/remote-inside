@@ -12,6 +12,8 @@ import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +21,7 @@ import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
@@ -32,11 +35,13 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
+import org.json.JSONTokener
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.Charset
+import java.util.ArrayDeque
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutorService
@@ -45,6 +50,7 @@ import java.util.concurrent.Executors
 class MainActivity : AppCompatActivity() {
 
     private lateinit var consoleWebView: WebView
+    private lateinit var ssoWebView: WebView
     private lateinit var portalOverlay: LinearLayout
     private lateinit var portalWebView: WebView
     private lateinit var portalProgress: ProgressBar
@@ -56,6 +62,26 @@ class MainActivity : AppCompatActivity() {
 
     private val httpExecutor: ExecutorService = Executors.newCachedThreadPool()
     private val pendingResponses = ConcurrentHashMap<String, String>()
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    private data class SsoWarmupTask(
+        val reqId: String,
+        val url: String,
+        val targetHost: String,
+        val timeoutMs: Int
+    )
+
+    private val ssoQueue = ArrayDeque<SsoWarmupTask>()
+    private var activeSsoTask: SsoWarmupTask? = null
+    private var activeSsoSawAuth: Boolean = false
+    private var activeSsoLastUrl: String = ""
+    private var ssoSettleRunnable: Runnable? = null
+    private var ssoTimeoutRunnable: Runnable? = null
+
+    private var portalLoginActive: Boolean = false
+    private var portalLoginTargetHost: String = ""
+    private var portalLoginSawAuthHost: Boolean = false
+    private var portalAutoCloseRunnable: Runnable? = null
 
     @Volatile
     private var webViewUserAgent: String = ""
@@ -71,6 +97,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         consoleWebView = findViewById(R.id.consoleWebView)
+        ssoWebView = findViewById(R.id.ssoWebView)
         portalOverlay = findViewById(R.id.portalOverlay)
         portalWebView = findViewById(R.id.portalWebView)
         portalProgress = findViewById(R.id.portalProgress)
@@ -83,9 +110,11 @@ class MainActivity : AppCompatActivity() {
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(consoleWebView, true)
+        cookieManager.setAcceptThirdPartyCookies(ssoWebView, true)
         cookieManager.setAcceptThirdPartyCookies(portalWebView, true)
 
         setupConsoleWebView()
+        setupSsoWebView()
         setupPortalWebView()
         setupOverlayButtons()
         setupBackHandler()
@@ -244,6 +273,11 @@ class MainActivity : AppCompatActivity() {
                 favicon: Bitmap?
             ) {
                 tvPortalUrl.text = url.orEmpty()
+                portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+                portalAutoCloseRunnable = null
+                if (portalLoginActive && isAuthUrl(url)) {
+                    portalLoginSawAuthHost = true
+                }
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
@@ -253,6 +287,28 @@ class MainActivity : AppCompatActivity() {
                     tvPortalTitle.text = title
                 }
                 CookieManager.getInstance().flush()
+                if (portalLoginActive &&
+                    portalLoginSawAuthHost &&
+                    portalOverlay.visibility == View.VISIBLE &&
+                    isTargetPortalUrl(url, portalLoginTargetHost)
+                ) {
+                    portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+                    val targetHost = portalLoginTargetHost
+                    val autoClose = Runnable {
+                        portalAutoCloseRunnable = null
+                        if (!isDestroyed && !isFinishing && portalOverlay.visibility == View.VISIBLE) {
+                            CookieManager.getInstance().flush()
+                            Toast.makeText(
+                                this@MainActivity,
+                                "Đã đăng nhập IAM — đang đồng bộ tất cả cổng…",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            closePortalOverlay(completedHost = targetHost, loginCompleted = true)
+                        }
+                    }
+                    portalAutoCloseRunnable = autoClose
+                    mainHandler.postDelayed(autoClose, 900L)
+                }
             }
 
             override fun onReceivedSslError(
@@ -270,12 +326,227 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupSsoWebView() {
+        val settings = ssoWebView.settings
+        settings.javaScriptEnabled = true
+        settings.domStorageEnabled = true
+        settings.databaseEnabled = true
+        settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+        settings.blockNetworkImage = true
+        settings.mediaPlaybackRequiresUserGesture = true
+        settings.allowFileAccess = false
+        settings.allowContentAccess = false
+
+        ssoWebView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                val scheme = request?.url?.scheme?.lowercase(Locale.US).orEmpty()
+                return scheme != "http" && scheme != "https"
+            }
+
+            override fun onPageStarted(
+                view: WebView?,
+                url: String?,
+                favicon: Bitmap?
+            ) {
+                if (url.isNullOrBlank() || url == "about:blank") return
+                if (activeSsoTask == null) return
+                ssoSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                ssoSettleRunnable = null
+                activeSsoLastUrl = url
+                if (isAuthUrl(url)) {
+                    activeSsoSawAuth = true
+                }
+            }
+
+            override fun onPageFinished(view: WebView?, url: String?) {
+                if (url.isNullOrBlank() || url == "about:blank") return
+                val task = activeSsoTask ?: return
+                activeSsoLastUrl = url
+                CookieManager.getInstance().flush()
+                ssoSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                ssoSettleRunnable = null
+
+                val taskReqId = task.reqId
+                if (isAuthUrl(url)) {
+                    activeSsoSawAuth = true
+                    val runnable = Runnable {
+                        val current = activeSsoTask ?: return@Runnable
+                        if (current.reqId != taskReqId) return@Runnable
+                        finishActiveSsoTask(
+                            ok = false,
+                            status = "needs_login",
+                            finalUrl = activeSsoLastUrl.ifBlank { current.url }
+                        )
+                    }
+                    ssoSettleRunnable = runnable
+                    mainHandler.postDelayed(runnable, 2200L)
+                    return
+                }
+
+                if (isTargetPortalUrl(url, task.targetHost)) {
+                    val delayMs = if (activeSsoSawAuth) 1200L else 1800L
+                    val runnable = Runnable {
+                        val current = activeSsoTask ?: return@Runnable
+                        if (current.reqId != taskReqId) return@Runnable
+                        val checkJs = """
+                            (function() {
+                              var pwd = !!document.querySelector('input[type="password"]');
+                              var title = String(document.title || '');
+                              var hasFrameset = !!document.querySelector('frameset');
+                              return JSON.stringify({
+                                href: String(location.href || ''),
+                                hasPwd: pwd,
+                                title: title,
+                                hasFrameset: hasFrameset
+                              });
+                            })();
+                        """.trimIndent()
+                        ssoWebView.evaluateJavascript(checkJs) { jsResult ->
+                            val stillCurrent = activeSsoTask ?: return@evaluateJavascript
+                            if (stillCurrent.reqId != taskReqId) return@evaluateJavascript
+                            val rawStr = runCatching {
+                                JSONTokener(jsResult ?: "null").nextValue() as? String
+                            }.getOrNull()
+                            val meta = runCatching {
+                                if (!rawStr.isNullOrBlank()) JSONObject(rawStr) else null
+                            }.getOrNull()
+                            val domHref = meta?.optString("href", "").orEmpty()
+                            val effectiveUrl = domHref.ifBlank { activeSsoLastUrl.ifBlank { url } }
+                            val hasPwd = meta?.optBoolean("hasPwd", false) ?: false
+                            val title = meta?.optString("title", "").orEmpty()
+                            val hasFrameset = meta?.optBoolean("hasFrameset", false) ?: false
+                            val hasLoginTitle =
+                                !hasFrameset && SSO_LOGIN_TITLE_RE.containsMatchIn(title)
+
+                            if (!hasPwd &&
+                                !hasLoginTitle &&
+                                isTargetPortalUrl(effectiveUrl, stillCurrent.targetHost)
+                            ) {
+                                finishActiveSsoTask(
+                                    ok = true,
+                                    status = "ok",
+                                    finalUrl = effectiveUrl
+                                )
+                            } else {
+                                finishActiveSsoTask(
+                                    ok = false,
+                                    status = "needs_login",
+                                    finalUrl = effectiveUrl
+                                )
+                            }
+                        }
+                    }
+                    ssoSettleRunnable = runnable
+                    mainHandler.postDelayed(runnable, delayMs)
+                }
+            }
+
+            override fun onReceivedSslError(
+                view: WebView?,
+                handler: SslErrorHandler?,
+                error: SslError?
+            ) {
+                handler?.cancel()
+                if (activeSsoTask != null) {
+                    finishActiveSsoTask(
+                        ok = false,
+                        status = "ssl_error",
+                        finalUrl = activeSsoLastUrl
+                    )
+                }
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true && activeSsoTask != null) {
+                    finishActiveSsoTask(
+                        ok = false,
+                        status = "network_error",
+                        finalUrl = activeSsoLastUrl
+                    )
+                }
+            }
+        }
+    }
+
+    private fun startNextSsoTask() {
+        if (activeSsoTask != null || isDestroyed || isFinishing) {
+            return
+        }
+        val next = ssoQueue.poll() ?: return
+        activeSsoTask = next
+        activeSsoSawAuth = false
+        activeSsoLastUrl = next.url
+        ssoSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+        ssoSettleRunnable = null
+        ssoTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+
+        val timeoutTask = Runnable {
+            val current = activeSsoTask ?: return@Runnable
+            if (current.reqId != next.reqId) return@Runnable
+            val fallbackStatus = if (activeSsoSawAuth || isAuthUrl(activeSsoLastUrl)) {
+                "needs_login"
+            } else {
+                "timeout"
+            }
+            finishActiveSsoTask(
+                ok = false,
+                status = fallbackStatus,
+                finalUrl = activeSsoLastUrl.ifBlank { current.url }
+            )
+        }
+        ssoTimeoutRunnable = timeoutTask
+        mainHandler.postDelayed(timeoutTask, next.timeoutMs.toLong())
+        ssoWebView.loadUrl(next.url)
+    }
+
+    private fun finishActiveSsoTask(ok: Boolean, status: String, finalUrl: String) {
+        val task = activeSsoTask ?: return
+        activeSsoTask = null
+        ssoSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+        ssoSettleRunnable = null
+        ssoTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        ssoTimeoutRunnable = null
+        runCatching { CookieManager.getInstance().flush() }
+        runCatching { ssoWebView.stopLoading() }
+        if (ssoQueue.isEmpty() && !isDestroyed && !isFinishing) {
+            runCatching { ssoWebView.loadUrl("about:blank") }
+        }
+        deliverBridgeResponse(
+            task.reqId,
+            JSONObject().apply {
+                put("ok", ok)
+                put("status", status)
+                put("finalUrl", finalUrl.ifBlank { task.url })
+                put("sawAuth", activeSsoSawAuth)
+            }
+        )
+        startNextSsoTask()
+    }
+
     private fun setupOverlayButtons() {
         btnPortalBack.setOnClickListener {
-            closePortalOverlay()
+            val curUrl = portalWebView.url.orEmpty()
+            val curHost = runCatching { Uri.parse(curUrl).host }.getOrNull().orEmpty()
+            val loggedIn =
+                portalLoginActive &&
+                    portalLoginSawAuthHost &&
+                    isAllowedPortalHost(curHost) &&
+                    !isAuthUrl(curUrl)
+            closePortalOverlay(completedHost = curHost, loginCompleted = loggedIn)
         }
         btnPortalDone.setOnClickListener {
-            closePortalOverlay()
+            val curUrl = portalWebView.url.orEmpty()
+            val curHost = runCatching { Uri.parse(curUrl).host }.getOrNull().orEmpty()
+            val loggedIn = isAllowedPortalHost(curHost) && !isAuthUrl(curUrl)
+            closePortalOverlay(completedHost = curHost, loginCompleted = loggedIn)
         }
         btnPortalReload.setOnClickListener {
             portalWebView.reload()
@@ -291,7 +562,14 @@ class MainActivity : AppCompatActivity() {
                         if (portalWebView.canGoBack()) {
                             portalWebView.goBack()
                         } else {
-                            closePortalOverlay()
+                            val curUrl = portalWebView.url.orEmpty()
+                            val curHost = runCatching { Uri.parse(curUrl).host }.getOrNull().orEmpty()
+                            val loggedIn =
+                                portalLoginActive &&
+                                    portalLoginSawAuthHost &&
+                                    isAllowedPortalHost(curHost) &&
+                                    !isAuthUrl(curUrl)
+                            closePortalOverlay(completedHost = curHost, loginCompleted = loggedIn)
                         }
                         return
                     }
@@ -322,6 +600,11 @@ class MainActivity : AppCompatActivity() {
             if (isDestroyed || isFinishing) {
                 return@runOnUiThread
             }
+            portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+            portalAutoCloseRunnable = null
+            portalLoginActive = (mode == "login")
+            portalLoginTargetHost = parsed.host.orEmpty()
+            portalLoginSawAuthHost = false
             tvPortalTitle.text = if (title.isNotBlank()) title else fallbackTitle
             tvPortalUrl.text = url
             portalProgress.visibility = View.VISIBLE
@@ -331,25 +614,37 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun closePortalOverlay() {
+    private fun closePortalOverlay(completedHost: String = "", loginCompleted: Boolean = false) {
+        portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+        portalAutoCloseRunnable = null
+        portalLoginActive = false
+        portalLoginTargetHost = ""
+        portalLoginSawAuthHost = false
         if (portalOverlay.visibility != View.VISIBLE) {
             return
         }
         portalOverlay.visibility = View.GONE
         CookieManager.getInstance().flush()
         consoleWebView.evaluateJavascript(
-            "window.__riOnPortalBrowserClosed && window.__riOnPortalBrowserClosed();",
+            "window.__riOnPortalBrowserClosed && window.__riOnPortalBrowserClosed(${JSONObject.quote(completedHost)}, ${if (loginCompleted) "true" else "false"});",
             null
         )
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null)
+        ssoQueue.clear()
+        activeSsoTask = null
         httpExecutor.shutdownNow()
         pendingResponses.clear()
         runCatching {
             consoleWebView.removeJavascriptInterface("RemoteInsideNative")
             (consoleWebView.parent as? ViewGroup)?.removeView(consoleWebView)
             consoleWebView.destroy()
+        }
+        runCatching {
+            (ssoWebView.parent as? ViewGroup)?.removeView(ssoWebView)
+            ssoWebView.destroy()
         }
         runCatching {
             (portalWebView.parent as? ViewGroup)?.removeView(portalWebView)
@@ -365,6 +660,41 @@ class MainActivity : AppCompatActivity() {
             host.endsWith(".fpt.net") ||
             host == "fcam.vn" ||
             host.endsWith(".fcam.vn")
+    }
+
+    private fun isAuthHost(rawHost: String?): Boolean {
+        val host = rawHost?.trim()?.lowercase(Locale.US).orEmpty()
+        if (host.isEmpty()) return false
+        if (host == "iam.fpt.net" ||
+            host.endsWith(".iam.fpt.net") ||
+            host == "login.microsoftonline.com" ||
+            host == "login.microsoft.com" ||
+            host == "login.live.com" ||
+            host.endsWith(".microsoftonline.com")
+        ) {
+            return true
+        }
+        return AUTH_HOST_PREFIX_RE.containsMatchIn(host)
+    }
+
+    private fun isLoginPath(rawPath: String?): Boolean {
+        val path = rawPath.orEmpty()
+        return LOGIN_PATH_RE.containsMatchIn(path)
+    }
+
+    private fun isAuthUrl(rawUrl: String?): Boolean {
+        if (rawUrl.isNullOrBlank()) return false
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return false
+        return isAuthHost(uri.host) || isLoginPath(uri.path)
+    }
+
+    private fun isTargetPortalUrl(rawUrl: String?, targetHost: String): Boolean {
+        if (rawUrl.isNullOrBlank() || targetHost.isBlank()) return false
+        val uri = runCatching { Uri.parse(rawUrl) }.getOrNull() ?: return false
+        val host = uri.host?.trim()?.lowercase(Locale.US).orEmpty()
+        val expected = targetHost.trim().lowercase(Locale.US)
+        val hostMatches = host == expected || host.endsWith(".$expected")
+        return hostMatches && !isAuthHost(host) && !isLoginPath(uri.path)
     }
 
     private fun deliverBridgeResponse(reqId: String, resultJson: JSONObject) {
@@ -630,6 +960,50 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun warmPortalSession(payloadJson: String) {
+            val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val reqId = payload.optString("reqId", "")
+            val url = payload.optString("url", "")
+            val timeoutMs = payload.optInt("timeout", 12000).coerceIn(3000, 20000)
+            if (reqId.isBlank()) return
+
+            val uri = runCatching { Uri.parse(url) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase(Locale.US).orEmpty()
+            val host = uri?.host?.trim()?.lowercase(Locale.US).orEmpty()
+            if (uri == null ||
+                (scheme != "http" && scheme != "https") ||
+                !isAllowedPortalHost(host) ||
+                isAuthHost(host)
+            ) {
+                deliverBridgeResponse(
+                    reqId,
+                    JSONObject().apply {
+                        put("ok", false)
+                        put("status", "invalid_url")
+                        put("finalUrl", url)
+                    }
+                )
+                return
+            }
+
+            runOnUiThread {
+                if (isDestroyed || isFinishing) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "destroyed")
+                            put("finalUrl", url)
+                        }
+                    )
+                    return@runOnUiThread
+                }
+                ssoQueue.add(SsoWarmupTask(reqId, url, host, timeoutMs))
+                startNextSsoTask()
+            }
+        }
+
+        @JavascriptInterface
         fun openExternalBrowser(url: String) {
             val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return
             if (!"https".equals(parsed.scheme, ignoreCase = true)) {
@@ -681,6 +1055,8 @@ class MainActivity : AppCompatActivity() {
                     if (!isDestroyed && !isFinishing) {
                         portalWebView.clearCache(true)
                         portalWebView.clearHistory()
+                        ssoWebView.clearCache(true)
+                        ssoWebView.clearHistory()
                     }
                 }
                 true
@@ -715,5 +1091,11 @@ class MainActivity : AppCompatActivity() {
         private const val MAX_REDIRECTS = 10
         private const val MAX_RESPONSE_BYTES = 8 * 1024 * 1024
         private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
+        private val AUTH_HOST_PREFIX_RE =
+            Regex("^(iam|sso|login|auth|signin|oauth|cas|sts)[.-]", RegexOption.IGNORE_CASE)
+        private val LOGIN_PATH_RE =
+            Regex("/(loginpage\\.aspx|account/login|auth/login|login(?:/|$))", RegexOption.IGNORE_CASE)
+        private val SSO_LOGIN_TITLE_RE =
+            Regex("\\b(iam|sign\\s*in|đăng\\s*nhập|login)\\b", RegexOption.IGNORE_CASE)
     }
 }

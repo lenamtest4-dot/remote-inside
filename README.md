@@ -1,4 +1,4 @@
-# Remote Inside (v0.11.1)
+# Remote Inside (v0.12.0)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)** và **MacBook / PC** khi đi hiện trường.
 
@@ -8,19 +8,19 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 - **Vật tư** (`nextgen.fpt.net/resource/recall`) — Tra cứu & cập nhật vật tư thu hồi *(đang chờ quét ghép tiếp)*
 - **Radius** (`radius-portal.fpt.net`) — Bỏ IPNAT, Bỏ IPv6 *(đang chờ quét ghép tiếp)*
 
-> **An toàn thông tin:** Remote Inside không lưu mật khẩu hay mã đăng nhập. Cả App Android lẫn bản PC đều chạy trực tiếp qua VPN công ty và phiên đăng nhập IAM chính chủ của bạn.
+> **An toàn thông tin:** Remote Inside không lưu mật khẩu hay mã đăng nhập. Cả App Android lẫn bản PC đều chạy trực tiếp qua VPN công ty và phiên đăng nhập IAM (Azure AD) chính chủ của bạn — chỉ cần **đăng nhập IAM 1 lần**, app tự đồng bộ phiên SSO sang toàn bộ các cổng dùng chung IAM (`Inside`, `Partner/FOX-ERP`, `Port`, `Vật tư`, `Radius`).
 
 ---
 
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.11.1.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.12.0.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
 3. Bật **VPN công ty**, mở biểu tượng app **Remote Inside** trên màn hình chính.
-4. Nếu trạng thái báo **Cần đăng nhập IAM**, chạm thẳng vào ô trạng thái (hoặc nút **Tiện ích** ở góc trên bên phải -> **Đăng nhập Inside (IAM)** / **Đăng nhập Port (FTTH NEW)**) để đăng nhập IAM trong trình duyệt bảo mật ngay bên trong app -> bấm **Xong** để quay lại thao tác ngay.
+4. Nếu trạng thái báo **Cần đăng nhập IAM**, chạm thẳng vào ô trạng thái (hoặc nút **Tiện ích** ở góc trên bên phải -> **Đăng nhập IAM (1 lần cho tất cả)**) -> bấm **Azure AD** đăng nhập 1 lần -> app tự đóng màn hình đăng nhập và đồng bộ phiên sang tất cả cổng dùng chung IAM (`Inside`, `Partner`, `FOX-ERP`, `Port`, `Vật tư`, `Radius`).
 
 > **Cập nhật đè trực tiếp từ bản v0.10.1 trở đi:**
 > Các bản phát hành từ `v0.10.1` trở lên đều được ký bằng khóa Release cố định (`remoteinside`) trên GitHub Actions, nên mọi máy cài về sau chỉ cần tải file `.apk` mới về bấm **Cập nhật (Cài đè)** không cần gỡ bản cũ. *(Riêng máy nào đang cài bản thử `v0.10.0` dạng debug cần gỡ `v0.10.0` một lần duy nhất trước khi cài `v0.10.1`.)*

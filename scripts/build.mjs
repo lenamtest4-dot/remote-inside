@@ -74,6 +74,8 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @connect      nextgen.fpt.net
 // @connect      radius-portal.fpt.net
 // @connect      radius-apigateway.fpt.net
+// @connect      iam.fpt.net
+// @connect      login.microsoftonline.com
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue

@@ -6,6 +6,15 @@
     android:fitsSystemWindows="true">
 
     <WebView
+        android:id="@+id/ssoWebView"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:alpha="0"
+        android:clickable="false"
+        android:focusable="false"
+        android:visibility="invisible" />
+
+    <WebView
         android:id="@+id/consoleWebView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />

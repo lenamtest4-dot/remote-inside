@@ -4,6 +4,15 @@
 
 export const PORTAL_ORDER = ['inside', 'port', 'camera', 'recall', 'radius'];
 
+export const IAM_SSO_TARGETS = [
+  { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
+  { id: 'partner', portalId: 'inside', label: 'Partner', url: 'https://partner.fpt.net/monitor' },
+  { id: 'fox_erp', portalId: 'inside', label: 'FOX-ERP', url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket' },
+  { id: 'port', portalId: 'port', label: 'Port (FTTH NEW)', url: 'http://port.fpt.net/' },
+  { id: 'recall', portalId: 'recall', label: 'Vật tư', url: 'https://nextgen.fpt.net/resource/recall' },
+  { id: 'radius', portalId: 'radius', label: 'Radius', url: 'http://radius-portal.fpt.net/networkConnection' },
+];
+
 export const PORTALS = {
   inside: {
     id: 'inside',
@@ -11,6 +20,7 @@ export const PORTALS = {
     fullName: 'inside.fpt.net',
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
+    iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 7 lệnh',
     description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
@@ -85,6 +95,7 @@ export const PORTALS = {
     url: 'http://port.fpt.net/',
     sessionCheckUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
     hosts: ['port.fpt.net', 'mvcport.fpt.net'],
+    iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 3 lệnh',
     description: 'FTTH NEW: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi mới và Thu hồi Port.',
@@ -120,6 +131,7 @@ export const PORTALS = {
     fullName: 'fli-mngt.fcam.vn',
     url: 'https://fli-mngt.fcam.vn/',
     hosts: ['fli-mngt.fcam.vn'],
+    iamSso: false,
     status: 'planned',
     statusLabel: 'Sắp ghép',
     description: 'Kiểm tra trạng thái và hỗ trợ xử lý lỗi Camera.',
@@ -145,8 +157,9 @@ export const PORTALS = {
     id: 'recall',
     label: 'Vật tư',
     fullName: 'nextgen.fpt.net/resource/recall',
-    url: 'https://nextgen.fpt.net/resource/recall/',
+    url: 'https://nextgen.fpt.net/resource/recall',
     hosts: ['nextgen.fpt.net'],
+    iamSso: true,
     status: 'priority',
     statusLabel: 'Thu hồi & Tồn nợ',
     description:
@@ -190,6 +203,7 @@ export const PORTALS = {
     fullName: 'radius-portal.fpt.net',
     url: 'http://radius-portal.fpt.net/networkConnection',
     hosts: ['radius-portal.fpt.net'],
+    iamSso: true,
     status: 'planned',
     statusLabel: 'Sắp ghép',
     description: 'Kiểm tra kết nối và bỏ IPNAT, IPv6 cho hợp đồng.',

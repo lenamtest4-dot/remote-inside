@@ -4,6 +4,7 @@
  */
 
 import {
+  IAM_SSO_TARGETS,
   PORTALS,
   PORTAL_ORDER,
   normalizeContractId,
@@ -24,12 +25,15 @@ import {
   setState,
 } from '../core/storage.js';
 import {
+  canWarmPortalSession,
   checkPortalSession,
+  clearWarmSessionCache,
   detectIamRedirect,
   isAndroidAppEnv,
   isUserscriptEnv,
   openExternalOrPortalUrl,
   requestPortal,
+  syncIamSsoSessions,
 } from '../core/transport.js';
 import {
   buildScanReport,
@@ -314,6 +318,8 @@ export function mountRemoteInside({
     result: null,
     logs: [],
     isWide: false,
+    iamSyncing: false,
+    iamSyncText: '',
     openViews: {},
     viewReloadKeys: {},
     confirmAction: null,
@@ -516,18 +522,110 @@ export function mountRemoteInside({
     ].slice(0, 20);
   }
 
+  function getUnifiedIamLoginUrl() {
+    const active = PORTALS[state.activePortalId];
+    if (active && active.iamSso && active.url) {
+      return active.url;
+    }
+    return PORTALS.inside.url;
+  }
+
   function syncSessionPillOrRenderMain() {
     const pillEl = mainLayer.querySelector('.ri-status-pill');
     if (pillEl) {
-      pillEl.setAttribute('data-state', state.sessionStatus.state);
+      const displayState = state.iamSyncing ? 'checking' : state.sessionStatus.state;
+      const displayLabel = state.iamSyncing
+        ? state.iamSyncText || 'Đang đồng bộ IAM…'
+        : state.sessionStatus.label;
+      pillEl.setAttribute('data-state', displayState);
       pillEl.title = state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM';
       const labelSpan = pillEl.querySelector('span:last-child');
       if (labelSpan) {
-        labelSpan.textContent = state.sessionStatus.label;
+        labelSpan.textContent = displayLabel;
       }
       return;
     }
     renderMain();
+  }
+
+  async function runUnifiedIamSync({ skipHost = '', announceResult = true } = {}) {
+    if (state.iamSyncing || !canWarmPortalSession()) {
+      return null;
+    }
+    state.iamSyncing = true;
+    state.iamSyncText = 'Đồng bộ IAM…';
+    syncSessionPillOrRenderMain();
+
+    let report = null;
+    try {
+      report = await syncIamSsoSessions({
+        targets: IAM_SSO_TARGETS,
+        skipHost,
+        force: true,
+        afterTarget: async (target) => {
+          if (target.id === 'port') {
+            await bootstrapMvcPortSession();
+          }
+        },
+        onProgress: ({ index, total }) => {
+          state.iamSyncText = `Đồng bộ IAM (${index}/${total})…`;
+          syncSessionPillOrRenderMain();
+        },
+      });
+    } finally {
+      state.iamSyncing = false;
+      state.iamSyncText = '';
+    }
+
+    await refreshSessionStatus();
+
+    if (announceResult && report) {
+      const okLabels = report.okTargets.map((t) => t.label);
+      const needsLogin = report.needsLoginTargets;
+      const offline = report.offlineTargets;
+
+      if (needsLogin.length === 0 && offline.length === 0) {
+        state.result = {
+          status: 'ok',
+          title: 'Đã đồng bộ IAM cho tất cả cổng',
+          message: `Đăng nhập 1 lần hoàn tất. Đã sẵn sàng: ${okLabels.join(', ')}.`,
+        };
+      } else if (okLabels.length > 0) {
+        const parts = [`Đã sẵn sàng: ${okLabels.join(', ')}.`];
+        if (needsLogin.length > 0) {
+          parts.push(
+            `${needsLogin.map((t) => t.label).join(', ')} yêu cầu xác nhận Azure AD thêm 1 chạm khi mở.`
+          );
+        }
+        if (offline.length > 0) {
+          parts.push(
+            `Chưa chạm tới được (kiểm tra VPN): ${offline.map((t) => t.label).join(', ')}.`
+          );
+        }
+        state.result = {
+          status: 'ok',
+          title: `Đã đồng bộ ${okLabels.length}/${report.results.length} cổng IAM`,
+          message: parts.join(' '),
+          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : '',
+          showLoginBtn: needsLogin.length > 0,
+        };
+      } else {
+        const parts = ['Phiên IAM (Azure AD) chưa sẵn sàng để đồng bộ.'];
+        if (offline.length > 0) {
+          parts.push(
+            `Không chạm tới được (kiểm tra VPN): ${offline.map((t) => t.label).join(', ')}.`
+          );
+        }
+        state.result = {
+          status: 'iam_expired',
+          title: 'Chưa hoàn tất đăng nhập IAM',
+          message: parts.join(' '),
+          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : getUnifiedIamLoginUrl(),
+        };
+      }
+      renderMain();
+    }
+    return report;
   }
 
   async function refreshSessionStatus() {
@@ -3413,18 +3511,25 @@ export function mountRemoteInside({
 
   function renderTopBar() {
     const isAndroid = isAndroidAppEnv();
+    const pillState = state.iamSyncing ? 'checking' : state.sessionStatus.state;
+    const pillLabel = state.iamSyncing
+      ? state.iamSyncText || 'Đang đồng bộ IAM…'
+      : state.sessionStatus.label;
     const pill = el(
       'button',
       {
         type: 'button',
         className: 'ri-status-pill',
-        'data-state': state.sessionStatus.state,
+        'data-state': pillState,
         title: state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM',
         onClick: () => {
+          if (state.iamSyncing) {
+            return;
+          }
           if (isAndroid && state.sessionStatus.state === 'iam_expired') {
             openExternalOrPortalUrl(
-              state.sessionStatus.loginUrl || PORTALS[state.activePortalId].url,
-              { mode: 'login', title: 'Đăng nhập IAM', pageWindow }
+              state.sessionStatus.loginUrl || getUnifiedIamLoginUrl(),
+              { mode: 'login', title: 'Đăng nhập IAM (1 lần cho tất cả)', pageWindow }
             );
             return;
           }
@@ -3433,7 +3538,7 @@ export function mountRemoteInside({
       },
       [
         el('span', { className: 'ri-status-dot' }),
-        el('span', { text: state.sessionStatus.label }),
+        el('span', { text: pillLabel }),
       ]
     );
 
@@ -3753,7 +3858,7 @@ export function mountRemoteInside({
       });
       extraBtns.push(copySummaryBtn);
     }
-    if (res.status === 'iam_expired' && res.loginUrl) {
+    if ((res.status === 'iam_expired' || res.showLoginBtn) && res.loginUrl) {
       if (state.activePortalId === 'port' && isLoggedInPortHost()) {
         extraBtns.push(
           el('button', {
@@ -8616,31 +8721,31 @@ export function mountRemoteInside({
         ]),
         el('p', {
           className: 'ri-sheet-sub',
-          text: `Phiên bản v${versionStr} — Dùng chung phiên đăng nhập IAM & VPN công ty trên điện thoại.`,
+          text: `Phiên bản v${versionStr} — Chỉ cần đăng nhập IAM (Azure AD) 1 lần trên điện thoại.`,
         }),
         el('div', { className: 'ri-privacy-note' }, [
           el('div', {
-            text: 'Ứng dụng không lưu mật khẩu hay token. Toàn bộ thao tác chạy trực tiếp bằng cookie phiên IAM hợp lệ trong WebView bảo mật.',
+            text: 'Ứng dụng không lưu mật khẩu hay token. Chỉ cần đăng nhập IAM (Azure AD) 1 lần — ứng dụng tự đồng bộ phiên cho Inside, FOX-ERP/Partner, Port, Vật tư và Radius.',
           }),
         ]),
         el('div', { className: 'ri-result-actions' }, [
           el('button', {
             type: 'button',
             className: 'ri-primary-btn',
-            text: 'Đăng nhập Inside (IAM)',
-            onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+            text: 'Đăng nhập IAM (1 lần cho tất cả)',
+            onClick: () =>
+              openLogin(getUnifiedIamLoginUrl(), 'Đăng nhập IAM (Azure AD)'),
           }),
           el('button', {
             type: 'button',
-            className: 'ri-primary-btn',
-            text: 'Đăng nhập Port (FTTH NEW)',
-            onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-primary-btn',
-            text: 'Đăng nhập FOX-ERP / Partner',
-            onClick: () => openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
+            className: 'ri-secondary-btn',
+            disabled: state.iamSyncing,
+            text: state.iamSyncing ? 'Đang đồng bộ…' : 'Đồng bộ lại phiên tất cả cổng IAM',
+            onClick: () => {
+              state.appMenuOpen = false;
+              renderScanner();
+              runUnifiedIamSync({ force: true, announceResult: true });
+            },
           }),
           el('button', {
             type: 'button',
@@ -8669,6 +8774,7 @@ export function mountRemoteInside({
             className: 'ri-danger-btn',
             text: 'Đăng xuất (Xóa cookie phiên)',
             onClick: () => {
+              clearWarmSessionCache();
               if (
                 typeof window !== 'undefined' &&
                 window.RemoteInsideNative &&
@@ -8688,6 +8794,53 @@ export function mountRemoteInside({
               refreshSessionStatus();
             },
           }),
+        ]),
+        el('details', { className: 'ri-confirm-input-wrap' }, [
+          el('summary', {
+            className: 'ri-summary-toggle',
+            text: 'Mở trang cổng riêng lẻ (khi cần)',
+          }),
+          el('div', { className: 'ri-result-actions' }, [
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Inside',
+              onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Port',
+              onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'FOX-ERP / Partner',
+              onClick: () =>
+                openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Vật tư',
+              onClick: () => openLogin(PORTALS.recall.url, 'Mở cổng Vật tư'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Radius',
+              onClick: () => openLogin(PORTALS.radius.url, 'Mở cổng Radius'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Camera (đăng nhập riêng)',
+              onClick: () => openLogin(PORTALS.camera.url, 'Đăng nhập Camera'),
+            }),
+          ]),
+        ]),
+        el('div', { className: 'ri-sheet-buttons' }, [
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
@@ -8930,7 +9083,13 @@ export function mountRemoteInside({
   }
 
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {
-    window.__riOnPortalBrowserClosed = () => {
+    window.__riOnPortalBrowserClosed = (completedHost = '', loginCompleted = false) => {
+      clearWarmSessionCache();
+      const cleanHost = String(completedHost || '').trim().toLowerCase();
+      if (loginCompleted && canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
+        runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
+        return;
+      }
       refreshSessionStatus();
     };
     window.__riHandleBack = () => {

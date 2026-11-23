@@ -5,11 +5,13 @@
 
 import { PORTALS, normalizeContractId, validateContractId } from '../config/portals.js';
 import {
+  canWarmPortalSession,
   checkPortalSession,
   detectIamRedirect,
   isUserscriptEnv,
   requestPortal,
   sleep,
+  warmPortalSession,
 } from '../core/transport.js';
 
 /**
@@ -604,7 +606,7 @@ function getLocationCandidates() {
   return candidates;
 }
 
-async function fetchInsideEndpoint(url, acceptHtml = false) {
+async function fetchInsideEndpoint(url, acceptHtml = false, _didSsoWarmup = false) {
   const res = await requestPortal({
     url,
     method: 'GET',
@@ -625,6 +627,15 @@ async function fetchInsideEndpoint(url, acceptHtml = false) {
     requestedUrl: url,
   });
   if (iam.expired) {
+    if (!_didSsoWarmup && canWarmPortalSession()) {
+      const warmUrl = /mvc\.inside\.fpt\.net/i.test(url)
+        ? 'http://mvc.inside.fpt.net/'
+        : PORTALS.inside.url;
+      const warm = await warmPortalSession(warmUrl, { timeout: 12000 });
+      if (warm && warm.ok) {
+        return fetchInsideEndpoint(url, acceptHtml, true);
+      }
+    }
     return { iamExpired: true, loginUrl: res.finalUrl || PORTALS.inside.url };
   }
 
@@ -860,16 +871,19 @@ export async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
     searchValue: contractId,
   });
 
-  const res = await requestPortal({
-    url: INSIDE_ENDPOINTS.kill_session.search,
-    method: 'POST',
-    headers: {
-      ...AJAX_HEADERS,
-      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    },
-    data: body.toString(),
-    timeout: 15000,
-  });
+  const sendSearch = () =>
+    requestPortal({
+      url: INSIDE_ENDPOINTS.kill_session.search,
+      method: 'POST',
+      headers: {
+        ...AJAX_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      },
+      data: body.toString(),
+      timeout: 15000,
+    });
+
+  let res = await sendSearch();
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -880,12 +894,33 @@ export async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
     };
   }
 
-  const iam = detectIamRedirect({
+  let iam = detectIamRedirect({
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
     requestedUrl: INSIDE_ENDPOINTS.kill_session.search,
   });
+  if (iam.expired && canWarmPortalSession()) {
+    const warm = await warmPortalSession('http://mvc.inside.fpt.net/', { timeout: 12000 });
+    if (warm && warm.ok) {
+      res = await sendSearch();
+      if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+        return {
+          status: 'error',
+          message:
+            'Không kết nối được tới mvc.inside.fpt.net để tìm phiên đang chạy. Hãy kiểm tra VPN.',
+          loginUrl: PORTALS.inside.url,
+          sessions: [],
+        };
+      }
+      iam = detectIamRedirect({
+        status: res.status,
+        finalUrl: res.finalUrl,
+        responseText: res.responseText,
+        requestedUrl: INSIDE_ENDPOINTS.kill_session.search,
+      });
+    }
+  }
   if (iam.expired) {
     return {
       status: 'iam_expired',
@@ -2823,11 +2858,14 @@ export async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = 
     return { status: 'ok', mode: 'live', meta: INSIDE_BYPASS_META_CACHE.meta };
   }
 
-  const res = await requestPortal({
-    url: INSIDE_ENDPOINTS.bypass.page,
-    method: 'GET',
-    timeout: 15000,
-  });
+  const fetchPage = () =>
+    requestPortal({
+      url: INSIDE_ENDPOINTS.bypass.page,
+      method: 'GET',
+      timeout: 15000,
+    });
+
+  let res = await fetchPage();
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -2837,12 +2875,32 @@ export async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = 
     };
   }
 
-  const iam = detectIamRedirect({
+  let iam = detectIamRedirect({
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
     requestedUrl: INSIDE_ENDPOINTS.bypass.page,
   });
+  if (iam.expired && canWarmPortalSession()) {
+    const warm = await warmPortalSession('http://mvc.inside.fpt.net/', { timeout: 12000 });
+    if (warm && warm.ok) {
+      res = await fetchPage();
+      if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+        return {
+          status: 'error',
+          message:
+            'Không kết nối được tới trang CheckList ByPass (mvc.inside.fpt.net). Hãy kiểm tra VPN.',
+          loginUrl: PORTALS.inside.url,
+        };
+      }
+      iam = detectIamRedirect({
+        status: res.status,
+        finalUrl: res.finalUrl,
+        responseText: res.responseText,
+        requestedUrl: INSIDE_ENDPOINTS.bypass.page,
+      });
+    }
+  }
   if (iam.expired) {
     INSIDE_BYPASS_META_CACHE.meta = null;
     INSIDE_BYPASS_META_CACHE.expiresAt = 0;

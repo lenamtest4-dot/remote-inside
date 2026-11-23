@@ -1354,6 +1354,15 @@
   cursor: not-allowed;
 }
 
+.ri-summary-toggle {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+  padding: 6px 2px;
+  user-select: none;
+}
+
 .ri-privacy-note {
   margin: 10px 0;
   padding: 10px;

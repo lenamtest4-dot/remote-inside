@@ -1,6 +1,6 @@
 {
   "name": "remote-inside",
-  "version": "0.11.2",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "Remote Inside - Bang dieu khien hien truong FPT 1 man hinh cho 5 cong cu noi bo",

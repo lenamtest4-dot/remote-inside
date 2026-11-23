@@ -1024,6 +1024,8 @@ export function mountRemoteInside({
     state.deploySummary = { ...summary, ticket: target };
     state.deployNotice = '';
     state.deployArmedAction = '';
+    state.deployEditingPhoneToken = '';
+    state.deployEditingPhoneValue = '';
     applyDeployTicketDraftFromSummary(state.deploySummary);
     renderConfirm();
     await Promise.all([refreshDeployEquipmentsInModal(), refreshDeployPaymentInModal()]);
@@ -1309,6 +1311,9 @@ export function mountRemoteInside({
           grant: state.deployGrant || '',
         }),
       onOk: async () => {
+        if (state.deployRevealedPhones && item.PhoneToken) {
+          delete state.deployRevealedPhones[item.PhoneToken];
+        }
         state.deployEditingPhoneToken = '';
         state.deployEditingPhoneValue = '';
         await loadDeployExtrasForModal({ forceReload: true });

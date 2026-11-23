@@ -27,6 +27,7 @@ const MODULE_ORDER = [
   'adapters/deployment.js',
   'adapters/port.js',
   'adapters/recall.js',
+  'adapters/equipment.js',
   'adapters/portals.js',
   'ui/app.js',
   'main.js',

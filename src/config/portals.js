@@ -148,9 +148,9 @@ export const PORTALS = {
     url: 'https://nextgen.fpt.net/resource/recall/',
     hosts: ['nextgen.fpt.net'],
     status: 'priority',
-    statusLabel: 'Thu hồi vật tư',
+    statusLabel: 'Thu hồi & Tồn nợ',
     description:
-      'Phiếu thu hồi vật tư NextGen: xem danh sách, thêm/sửa thiết bị, thêm TB phụ, tạo phiếu mới (+) và ghi chú.',
+      'NextGen Vật tư: Phiếu thu hồi vật tư và tra cứu tồn nợ vật tư theo KTV.',
     actions: [
       {
         id: 'manage_recall',
@@ -161,6 +161,17 @@ export const PORTALS = {
         requiresConfirm: true,
         requiresContract: false,
         confirmNote: 'Đọc và thao tác trực tiếp trên trang chi tiết phiếu thu hồi NextGen.',
+      },
+      {
+        id: 'equipment_debt',
+        label: 'Tồn nợ vật tư (KTV)',
+        description:
+          'Chọn vật tư để xem danh sách KTV đang giữ (tự lọc bỏ tồn = 0) và tổng tồn trên Báo cáo nợ.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tự động gom toàn bộ trang Báo cáo tồn công nợ theo NV và lọc theo từng vật tư.',
       },
       {
         id: 'lookup_recall',

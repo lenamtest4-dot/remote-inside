@@ -20,7 +20,7 @@
 (function () {
   'use strict';
   const __REMOTE_INSIDE_VERSION__ = "0.11.2";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-filter-row > button {\n  flex: 0 0 auto;\n  white-space: nowrap;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  max-height: 320px;\n  overflow-y: auto;\n  margin-top: 8px;\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n}\n\n.ri-debt-name {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 42px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -171,9 +171,9 @@ const PORTALS = {
     url: 'https://nextgen.fpt.net/resource/recall/',
     hosts: ['nextgen.fpt.net'],
     status: 'priority',
-    statusLabel: 'Thu hồi vật tư',
+    statusLabel: 'Thu hồi & Tồn nợ',
     description:
-      'Phiếu thu hồi vật tư NextGen: xem danh sách, thêm/sửa thiết bị, thêm TB phụ, tạo phiếu mới (+) và ghi chú.',
+      'NextGen Vật tư: Phiếu thu hồi vật tư và tra cứu tồn nợ vật tư theo KTV.',
     actions: [
       {
         id: 'manage_recall',
@@ -184,6 +184,17 @@ const PORTALS = {
         requiresConfirm: true,
         requiresContract: false,
         confirmNote: 'Đọc và thao tác trực tiếp trên trang chi tiết phiếu thu hồi NextGen.',
+      },
+      {
+        id: 'equipment_debt',
+        label: 'Tồn nợ vật tư (KTV)',
+        description:
+          'Chọn vật tư để xem danh sách KTV đang giữ (tự lọc bỏ tồn = 0) và tổng tồn trên Báo cáo nợ.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tự động gom toàn bộ trang Báo cáo tồn công nợ theo NV và lọc theo từng vật tư.',
       },
       {
         id: 'lookup_recall',
@@ -9512,6 +9523,646 @@ async function runRecallAction(actionId, rawContractId, ctx = {}) {
   };
 }
 
+// --- adapters/equipment.js ---
+/**
+ * Adapter doc Bao cao Ton cong no vat tu theo NV tren NextGen
+ * (https://nextgen.fpt.net/resource/equipment/ -> Bao cao / Bao cao no -> Ton cong no theo NV).
+ *
+ * Bang Radzen co ~91 cot vat tu theo nhom va phan trang theo danh sach KTV (~10-100 dong/trang).
+ * Adapter nay tu tang page-size len muc toi da (100/trang), duyet du tat ca cac trang,
+ * va loc theo tung vat tu de chi hien thi cac KTV dang ton > 0.
+ *
+ * Luu y Single-IIFE bundle: moi ten ham/hang top-level phai doc nhat trong toan bo src/.
+ */
+const EQUIPMENT_ENDPOINTS = {
+  base: 'https://nextgen.fpt.net/resource/equipment/',
+  rootPath: '/resource/equipment',
+};
+function cleanEquipmentText(raw) {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getEquipmentElText(el) {
+  if (!el) return '';
+  return cleanEquipmentText(el.innerText !== undefined ? el.innerText : el.textContent);
+}
+function isEquipmentPortalLocation(loc) {
+  if (!loc) return false;
+  const host = String(loc.hostname || '').toLowerCase();
+  const path = String(loc.pathname || '').toLowerCase();
+  return host === 'nextgen.fpt.net' && path.startsWith(EQUIPMENT_ENDPOINTS.rootPath);
+}
+function parseEquipmentDebtNumber(raw) {
+  const s = cleanEquipmentText(raw).replace(/\s+/g, '');
+  if (!s) return 0;
+  if (/^-?\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+  if (/^-?\d+,\d+$/.test(s)) {
+    const n = Number(s.replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+  const stripped = s.replace(/[^0-9.-]/g, '');
+  if (!stripped || stripped === '-' || stripped === '.') return 0;
+  const fallback = Number(stripped);
+  return Number.isFinite(fallback) ? fallback : 0;
+}
+function findEquipmentDebtGrid(doc) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  const grids = Array.from(doc.querySelectorAll('.rz-data-grid'));
+  for (const grid of grids) {
+    if (typeof grid.querySelectorAll !== 'function') continue;
+    const headText = Array.from(grid.querySelectorAll('thead th, thead td'))
+      .map((cell) => getEquipmentElText(cell))
+      .join(' ');
+    if (/nhân viên/i.test(headText)) {
+      return grid;
+    }
+  }
+  return (
+    grids.find(
+      (g) => typeof g.querySelector === 'function' && Boolean(g.querySelector('table.rz-grid-table'))
+    ) || null
+  );
+}
+
+function findEquipmentTableInGrid(grid) {
+  if (!grid || typeof grid.querySelector !== 'function') return null;
+  return grid.querySelector('table.rz-grid-table') || grid.querySelector('table') || null;
+}
+function parseEquipmentDebtPagerInfo(scopeEl) {
+  const fallback = { currentPage: 1, totalPages: 1, totalItems: 0, rawText: '' };
+  if (!scopeEl || typeof scopeEl.querySelector !== 'function') return fallback;
+  const summaryEl = scopeEl.querySelector('.rz-pager-summary');
+  const rawText = getEquipmentElText(summaryEl);
+  if (!rawText) return fallback;
+
+  const enMatch = rawText.match(/Page\s+(\d+)\s+of\s+(\d+)\s*(?:\((\d+)\s+items?\))?/i);
+  if (enMatch) {
+    return {
+      currentPage: Math.max(1, Number(enMatch[1]) || 1),
+      totalPages: Math.max(1, Number(enMatch[2]) || 1),
+      totalItems: Number(enMatch[3]) || 0,
+      rawText,
+    };
+  }
+
+  const viMatch = rawText.match(/Trang\s+(\d+)\s*(?:\/|trên|của)\s*(\d+)/i);
+  if (viMatch) {
+    const countMatch = rawText.match(/\((\d+)/);
+    return {
+      currentPage: Math.max(1, Number(viMatch[1]) || 1),
+      totalPages: Math.max(1, Number(viMatch[2]) || 1),
+      totalItems: countMatch ? Number(countMatch[1]) || 0 : 0,
+      rawText,
+    };
+  }
+
+  return fallback;
+}
+function findEquipmentDebtPageControls(doc) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') {
+    return {
+      hasDebtTab: false,
+      isDebtTabActive: false,
+      tabEl: null,
+      viewListBtn: null,
+      grid: null,
+    };
+  }
+  const tabs = Array.from(doc.querySelectorAll('.rz-tabview-nav li, [role="tab"]'));
+  const tabEl =
+    tabs.find((el) => /^tồn công nợ theo nv$/i.test(getEquipmentElText(el))) || null;
+  const isDebtTabActive = Boolean(
+    tabEl &&
+      (/rz-tabview-selected/i.test(String(tabEl.className || '')) ||
+        (typeof tabEl.getAttribute === 'function' && tabEl.getAttribute('aria-selected') === 'true'))
+  );
+
+  const viewListBtn =
+    Array.from(doc.querySelectorAll('button')).find((b) =>
+      /xem danh sách/i.test(getEquipmentElText(b))
+    ) || null;
+
+  const grid = findEquipmentDebtGrid(doc);
+  return {
+    hasDebtTab: Boolean(tabEl),
+    isDebtTabActive,
+    tabEl,
+    viewListBtn,
+    grid,
+  };
+}
+function parseEquipmentDebtColumns(tableEl) {
+  if (!tableEl || typeof tableEl.querySelectorAll !== 'function') {
+    return { staffColIndex: 0, materials: [] };
+  }
+  const theadRows = Array.from(tableEl.querySelectorAll('thead tr'));
+  if (theadRows.length === 0) {
+    return { staffColIndex: 0, materials: [] };
+  }
+
+  let staffColIndex = 0;
+  const materials = [];
+
+  if (theadRows.length >= 2) {
+    const topCells = Array.from(theadRows[0].querySelectorAll('th, td'));
+    const groupBySubIdx = [];
+    let leadingFixedCount = 0;
+
+    for (let idx = 0; idx < topCells.length; idx += 1) {
+      const cell = topCells[idx];
+      const text = getEquipmentElText(cell);
+      const rSpan = Math.max(1, Number(cell.rowSpan || (cell.getAttribute && cell.getAttribute('rowspan')) || 1));
+      const cSpan = Math.max(1, Number(cell.colSpan || (cell.getAttribute && cell.getAttribute('colspan')) || 1));
+
+      if (/^nhân viên$/i.test(text) || rSpan >= 2) {
+        if (/^nhân viên$/i.test(text)) {
+          staffColIndex = leadingFixedCount;
+        }
+        leadingFixedCount += cSpan;
+        continue;
+      }
+
+      for (let k = 0; k < cSpan; k += 1) {
+        groupBySubIdx.push(text || 'Khác');
+      }
+    }
+
+    const subCells = Array.from(theadRows[1].querySelectorAll('th, td'));
+    for (let i = 0; i < subCells.length; i += 1) {
+      const colIndex = i + leadingFixedCount;
+      const matName = getEquipmentElText(subCells[i]) || `Vật tư #${colIndex}`;
+      materials.push({
+        key: `col_${colIndex}`,
+        colIndex,
+        group: groupBySubIdx[i] || 'Khác',
+        name: matName,
+      });
+    }
+
+    return { staffColIndex, materials };
+  }
+
+  const singleCells = Array.from(theadRows[0].querySelectorAll('th, td'));
+  for (let i = 0; i < singleCells.length; i += 1) {
+    const text = getEquipmentElText(singleCells[i]);
+    if (i === 0 || /^nhân viên$/i.test(text)) {
+      if (/^nhân viên$/i.test(text)) staffColIndex = i;
+      continue;
+    }
+    materials.push({
+      key: `col_${i}`,
+      colIndex: i,
+      group: 'Vật tư',
+      name: text || `Vật tư #${i}`,
+    });
+  }
+
+  return { staffColIndex, materials };
+}
+function parseEquipmentDebtPageRows(tableEl, columnsInfo) {
+  if (!tableEl || typeof tableEl.querySelectorAll !== 'function') return [];
+  const staffIdx = columnsInfo && Number.isFinite(columnsInfo.staffColIndex)
+    ? columnsInfo.staffColIndex
+    : 0;
+  const materials = (columnsInfo && Array.isArray(columnsInfo.materials) && columnsInfo.materials) || [];
+  const trList = Array.from(tableEl.querySelectorAll('tbody tr'));
+  const parsed = [];
+
+  for (const tr of trList) {
+    if (!tr || typeof tr.querySelectorAll !== 'function') continue;
+    const cells = Array.from(tr.querySelectorAll('td, th'));
+    if (cells.length < 2) continue;
+    const staff = getEquipmentElText(cells[staffIdx]);
+    if (!staff) continue;
+
+    const stocks = {};
+    for (const mat of materials) {
+      const cell = cells[mat.colIndex];
+      if (!cell) continue;
+      const qty = parseEquipmentDebtNumber(getEquipmentElText(cell));
+      if (qty > 0) {
+        stocks[mat.key] = qty;
+      }
+    }
+    parsed.push({ staff, stocks });
+  }
+
+  return parsed;
+}
+function buildEquipmentDebtDataset(materials = [], rowsInput = [], meta = {}) {
+  const rowMap = new Map();
+  for (const r of rowsInput) {
+    if (!r || !r.staff) continue;
+    rowMap.set(r.staff, {
+      staff: r.staff,
+      stocks: r.stocks && typeof r.stocks === 'object' ? { ...r.stocks } : {},
+    });
+  }
+  const rows = Array.from(rowMap.values());
+
+  const matTotals = new Map();
+  const matCounts = new Map();
+  for (const row of rows) {
+    for (const [key, val] of Object.entries(row.stocks)) {
+      const qty = Number(val || 0);
+      if (qty > 0) {
+        matTotals.set(key, (matTotals.get(key) || 0) + qty);
+        matCounts.set(key, (matCounts.get(key) || 0) + 1);
+      }
+    }
+  }
+
+  const enrichedMaterials = materials.map((mat) => ({
+    ...mat,
+    totalQty: matTotals.get(mat.key) || 0,
+    holderCount: matCounts.get(mat.key) || 0,
+  }));
+
+  const groupMap = new Map();
+  for (const mat of enrichedMaterials) {
+    const gName = mat.group || 'Khác';
+    if (!groupMap.has(gName)) {
+      groupMap.set(gName, { name: gName, materialCount: 0, activeMaterialCount: 0 });
+    }
+    const gObj = groupMap.get(gName);
+    gObj.materialCount += 1;
+    if (mat.holderCount > 0) {
+      gObj.activeMaterialCount += 1;
+    }
+  }
+
+  return {
+    materials: enrichedMaterials,
+    groups: Array.from(groupMap.values()),
+    rows,
+    totalStaff: rows.length,
+    totalMaterials: enrichedMaterials.length,
+    activeMaterials: enrichedMaterials.filter((m) => m.holderCount > 0).length,
+    meta,
+  };
+}
+function queryEquipmentDebtHolders(
+  dataset,
+  materialKey,
+  { sortBy = 'qty_desc', staffSearch = '' } = {}
+) {
+  if (!dataset || !materialKey) {
+    return { material: null, holders: [], totalQty: 0, holderCount: 0 };
+  }
+  const material = (dataset.materials || []).find((m) => m.key === materialKey) || null;
+  const q = cleanEquipmentText(staffSearch).toLowerCase();
+  const holders = [];
+  let totalQty = 0;
+
+  for (const row of dataset.rows || []) {
+    const qty = Number((row.stocks && row.stocks[materialKey]) || 0);
+    if (!(qty > 0)) continue;
+    totalQty += qty;
+    if (q && !row.staff.toLowerCase().includes(q)) continue;
+    holders.push({ staff: row.staff, qty });
+  }
+
+  if (sortBy === 'name_asc') {
+    holders.sort((a, b) => a.staff.localeCompare(b.staff));
+  } else {
+    holders.sort((a, b) => b.qty - a.qty || a.staff.localeCompare(b.staff));
+  }
+
+  return {
+    material,
+    holders,
+    totalQty,
+    holderCount: holders.length,
+  };
+}
+function queryEquipmentDebtByStaff(dataset, staffName) {
+  const target = cleanEquipmentText(staffName);
+  if (!dataset || !target) {
+    return { staff: target, items: [], totalQty: 0, itemCount: 0 };
+  }
+  const row = (dataset.rows || []).find((r) => r.staff === target);
+  if (!row) {
+    return { staff: target, items: [], totalQty: 0, itemCount: 0 };
+  }
+
+  const items = [];
+  let totalQty = 0;
+  for (const mat of dataset.materials || []) {
+    const qty = Number((row.stocks && row.stocks[mat.key]) || 0);
+    if (!(qty > 0)) continue;
+    totalQty += qty;
+    items.push({
+      key: mat.key,
+      group: mat.group || 'Khác',
+      name: mat.name,
+      qty,
+    });
+  }
+  items.sort((a, b) => b.qty - a.qty || a.name.localeCompare(b.name));
+
+  return {
+    staff: row.staff,
+    items,
+    totalQty,
+    itemCount: items.length,
+  };
+}
+function formatEquipmentDebtClipboardText(queryResult) {
+  if (!queryResult || !queryResult.material) return '';
+  const { material, holders = [], totalQty = 0, holderCount = holders.length } = queryResult;
+  const header = `Tồn vật tư: ${material.name}${material.group ? ` (${material.group})` : ''}`;
+  const summary = `Tổng tồn: ${totalQty} • ${holderCount} KTV đang giữ`;
+  if (holders.length === 0) {
+    return `${header}\n${summary}\n(Không có KTV đang tồn)`;
+  }
+  const lines = holders.map((h, i) => `${i + 1}. ${h.staff}: ${h.qty}`);
+  return `${header}\n${summary}\n${lines.join('\n')}`;
+}
+
+function isEquipmentPagerDisabled(el) {
+  if (!el) return true;
+  if (el.disabled) return true;
+  const cls = String(el.className || '');
+  if (/rz-state-disabled|disabled/i.test(cls)) return true;
+  if (typeof el.getAttribute === 'function') {
+    const disAttr = el.getAttribute('disabled');
+    if (disAttr !== null && disAttr !== undefined && disAttr !== 'false') {
+      return true;
+    }
+    if (el.getAttribute('aria-disabled') === 'true') {
+      return true;
+    }
+  }
+  return false;
+}
+
+function readEquipmentGridSignature(grid) {
+  const pager = parseEquipmentDebtPagerInfo(grid);
+  const table = findEquipmentTableInGrid(grid);
+  const rows = table && typeof table.querySelectorAll === 'function'
+    ? Array.from(table.querySelectorAll('tbody tr'))
+    : [];
+  const firstCell =
+    rows[0] && typeof rows[0].querySelector === 'function'
+      ? rows[0].querySelector('td, th')
+      : null;
+  const firstStaff = getEquipmentElText(firstCell);
+  return `${pager.currentPage}/${pager.totalPages}/${pager.totalItems}|${rows.length}|${firstStaff}`;
+}
+
+async function waitForEquipmentGridChange(grid, prevSig, timeoutMs = 4500) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(150);
+    const nextSig = readEquipmentGridSignature(grid);
+    if (nextSig !== prevSig) {
+      return true;
+    }
+  }
+  return false;
+}
+async function collectEquipmentDebtFromDocument(
+  doc,
+  { onProgress = null, maxPages = 30, waitMs = 4500 } = {}
+) {
+  const ctrls = findEquipmentDebtPageControls(doc);
+  const grid = ctrls.grid;
+  if (!grid) {
+    return {
+      status: 'needs_report_loaded',
+      hasDebtTab: ctrls.hasDebtTab,
+      isDebtTabActive: ctrls.isDebtTabActive,
+      hasViewListBtn: Boolean(ctrls.viewListBtn),
+      message:
+        'Chưa thấy bảng "Tồn công nợ theo NV" trên trang. Hãy vào Báo cáo → Báo cáo nợ → Xem danh sách.',
+    };
+  }
+
+  let table = findEquipmentTableInGrid(grid);
+  let pagerInfo = parseEquipmentDebtPagerInfo(grid);
+
+  // Step A: Tang page size len muc lon nhat (thuong la 100/trang) de giam so trang can quet
+  if (pagerInfo.totalPages > 1 && typeof grid.querySelector === 'function') {
+    const pagerEl = grid.querySelector('.rz-pager');
+    const dd = pagerEl && typeof pagerEl.querySelector === 'function'
+      ? pagerEl.querySelector('.rz-dropdown')
+      : null;
+    if (dd) {
+      const currentSize = parseEquipmentDebtNumber(getEquipmentElText(dd));
+      const ddId = dd.id || '';
+      let panel = null;
+      if (ddId && typeof doc.getElementById === 'function') {
+        panel = doc.getElementById(`popup-${ddId}`) || doc.getElementById(`popup${ddId}`);
+      }
+      if (!panel && typeof doc.querySelectorAll === 'function') {
+        panel =
+          Array.from(doc.querySelectorAll('.rz-dropdown-panel')).find((p) => {
+            const items = Array.from(p.querySelectorAll('.rz-dropdown-item')).map((x) =>
+              getEquipmentElText(x)
+            );
+            return items.includes('100') || items.includes('50') || items.includes('25');
+          }) || null;
+      }
+
+      if (panel && typeof panel.querySelectorAll === 'function') {
+        const numericItems = Array.from(panel.querySelectorAll('.rz-dropdown-item'))
+          .map((item) => ({
+            el: item,
+            size: parseEquipmentDebtNumber(getEquipmentElText(item)),
+          }))
+          .filter((x) => x.size > 0);
+        numericItems.sort((a, b) => b.size - a.size);
+        const best = numericItems[0];
+        if (best && best.size > currentSize && typeof best.el.click === 'function') {
+          const prevSig = readEquipmentGridSignature(grid);
+          if (typeof dd.click === 'function') {
+            dd.click();
+            await sleep(80);
+          }
+          best.el.click();
+          await waitForEquipmentGridChange(grid, prevSig, Math.min(waitMs, 3000));
+          pagerInfo = parseEquipmentDebtPagerInfo(grid);
+        }
+      }
+    }
+  }
+
+  // Step B: Neu dang khong o trang 1, quay ve trang 1 truoc khi quet
+  if (pagerInfo.currentPage > 1 && typeof grid.querySelector === 'function') {
+    const pagerEl = grid.querySelector('.rz-pager');
+    const firstBtn =
+      pagerEl && typeof pagerEl.querySelector === 'function'
+        ? pagerEl.querySelector('.rz-pager-first')
+        : null;
+    if (firstBtn && !isEquipmentPagerDisabled(firstBtn) && typeof firstBtn.click === 'function') {
+      const prevSig = readEquipmentGridSignature(grid);
+      firstBtn.click();
+      await waitForEquipmentGridChange(grid, prevSig, waitMs);
+      pagerInfo = parseEquipmentDebtPagerInfo(grid);
+    }
+  }
+
+  // Step C: Duyet qua toan bo cac trang va gop danh sach KTV
+  let columnsInfo = null;
+  const staffMap = new Map();
+  let pagesScanned = 0;
+
+  for (let step = 0; step < maxPages; step += 1) {
+    table = findEquipmentTableInGrid(grid);
+    pagerInfo = parseEquipmentDebtPagerInfo(grid);
+    if (!table) break;
+
+    if (!columnsInfo) {
+      columnsInfo = parseEquipmentDebtColumns(table);
+    }
+    const pageRows = parseEquipmentDebtPageRows(table, columnsInfo);
+    for (const row of pageRows) {
+      staffMap.set(row.staff, row);
+    }
+    pagesScanned += 1;
+
+    if (typeof onProgress === 'function') {
+      onProgress({
+        currentPage: pagerInfo.currentPage,
+        totalPages: pagerInfo.totalPages,
+        collectedStaff: staffMap.size,
+        totalItems: pagerInfo.totalItems,
+      });
+    }
+
+    if (pagerInfo.currentPage >= pagerInfo.totalPages) {
+      break;
+    }
+
+    const pagerEl = typeof grid.querySelector === 'function' ? grid.querySelector('.rz-pager') : null;
+    const nextBtn =
+      pagerEl && typeof pagerEl.querySelector === 'function'
+        ? pagerEl.querySelector('.rz-pager-next')
+        : null;
+    if (!nextBtn || isEquipmentPagerDisabled(nextBtn) || typeof nextBtn.click !== 'function') {
+      break;
+    }
+
+    const prevSig = readEquipmentGridSignature(grid);
+    nextBtn.click();
+    const changed = await waitForEquipmentGridChange(grid, prevSig, waitMs);
+    if (!changed) {
+      break;
+    }
+  }
+
+  const finalMaterials = (columnsInfo && columnsInfo.materials) || [];
+  const dataset = buildEquipmentDebtDataset(finalMaterials, Array.from(staffMap.values()), {
+    pagesScanned,
+    totalPages: pagerInfo.totalPages,
+    expectedItems: pagerInfo.totalItems,
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    dataset,
+  };
+}
+function triggerEquipmentDebtTab(doc) {
+  const ctrls = findEquipmentDebtPageControls(doc);
+  if (!ctrls.tabEl) {
+    return { ok: false, error: 'Không tìm thấy tab "Tồn công nợ theo NV" trên trang.' };
+  }
+  const target =
+    typeof ctrls.tabEl.querySelector === 'function'
+      ? ctrls.tabEl.querySelector('a') || ctrls.tabEl
+      : ctrls.tabEl;
+  if (!target || typeof target.click !== 'function') {
+    return { ok: false, error: 'Không bấm được tab "Tồn công nợ theo NV".' };
+  }
+  target.click();
+  return { ok: true };
+}
+function triggerEquipmentDebtViewList(doc) {
+  const ctrls = findEquipmentDebtPageControls(doc);
+  if (!ctrls.viewListBtn || typeof ctrls.viewListBtn.click !== 'function') {
+    return { ok: false, error: 'Không tìm thấy nút "Xem danh sách" trên trang Báo cáo nợ.' };
+  }
+  ctrls.viewListBtn.click();
+  return { ok: true };
+}
+function buildDemoEquipmentDebtDataset() {
+  const materials = [
+    { key: 'col_1', colIndex: 1, group: 'Cap', name: 'Day thue bao quang dem chat FTTH 1core (Mẫu)' },
+    { key: 'col_2', colIndex: 2, group: 'Cap', name: 'Cap ben chat (Mẫu)' },
+    { key: 'col_3', colIndex: 3, group: 'Modem', name: 'Access Point AX3000CV2 (Mẫu)' },
+    { key: 'col_4', colIndex: 4, group: 'Modem', name: 'Internet Hub AX3000GZV3 (Mẫu)' },
+    { key: 'col_5', colIndex: 5, group: 'Vat tu FPT Play box', name: 'FPT Play Box 650 (Mẫu)' },
+    { key: 'col_6', colIndex: 6, group: 'FPT Camera', name: 'FCAM-IQ 4S (Mẫu)' },
+  ];
+  const rows = [
+    { staff: 'KTV.MAU01', stocks: { col_1: 1200, col_3: 2, col_5: 1 } },
+    { staff: 'KTV.MAU02', stocks: { col_1: 650, col_4: 3, col_6: 2 } },
+    { staff: 'KTV.MAU03', stocks: { col_1: 480, col_3: 1 } },
+    { staff: 'KTV.MAU04', stocks: { col_4: 1, col_5: 2, col_6: 1 } },
+    { staff: 'KTV.MAU05', stocks: { col_6: 4 } },
+  ];
+  return buildEquipmentDebtDataset(materials, rows, {
+    pagesScanned: 1,
+    totalPages: 1,
+    expectedItems: rows.length,
+  });
+}
+async function loadEquipmentDebtContext(ctx = {}) {
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      dataset: buildDemoEquipmentDebtDataset(),
+    };
+  }
+
+  const loc = ctx.pageLocation || null;
+  const doc = ctx.pageDocument || null;
+
+  if (!isEquipmentPortalLocation(loc) || !doc) {
+    return {
+      status: 'needs_equipment_page',
+      mode: 'live',
+      url: EQUIPMENT_ENDPOINTS.base,
+      message:
+        'Tồn nợ vật tư chạy trên trang Quản lý vật tư (nextgen.fpt.net/resource/equipment/). Bấm nút bên dưới để mở trang, vào Báo cáo → Báo cáo nợ → Xem danh sách.',
+    };
+  }
+
+  const ctrls = findEquipmentDebtPageControls(doc);
+  const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
+  const bodyRows =
+    table && typeof table.querySelectorAll === 'function'
+      ? table.querySelectorAll('tbody tr').length
+      : 0;
+
+  if (!ctrls.grid || !table || bodyRows === 0) {
+    return {
+      status: 'needs_report_loaded',
+      mode: 'live',
+      hasDebtTab: ctrls.hasDebtTab,
+      isDebtTabActive: ctrls.isDebtTabActive,
+      hasViewListBtn: Boolean(ctrls.viewListBtn),
+      message: ctrls.hasDebtTab
+        ? 'Đang ở trang Báo cáo nợ nhưng bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để tải danh sách.'
+        : 'Trên trang Quản lý vật tư, hãy mở menu Báo cáo → Báo cáo nợ → bấm Xem danh sách rồi bấm Đọc lại.',
+    };
+  }
+
+  return collectEquipmentDebtFromDocument(doc, {
+    onProgress: ctx.onProgress,
+    maxPages: ctx.maxPages || 30,
+    waitMs: ctx.waitMs || 4500,
+  });
+}
+
 // --- adapters/portals.js ---
 /**
  * Bo dieu phoi thao tac chung cho ca 5 cong noi bo FPT.
@@ -9619,6 +10270,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
  * Giao dien dieu khien Remote Inside (1 man hinh toi uu Android & MacBook).
  * Toan bo chuoi tu nguoi dung deu duoc gan bang textContent de dam bao an toan.
  */
+
 
 
 
@@ -9937,6 +10589,24 @@ function mountRemoteInside({
     recallArmedCreate: false,
     recallReturnPending: false,
     recallReturnLabel: '',
+    equipDebtLoading: false,
+    equipDebtProgress: '',
+    equipDebtError: '',
+    equipDebtStatus: '',
+    equipDebtMode: '',
+    equipDebtNotice: '',
+    equipDebtNoticeTone: 'info',
+    equipDebtDataset: null,
+    equipDebtHasTab: false,
+    equipDebtTabActive: false,
+    equipDebtHasViewBtn: false,
+    equipDebtViewMode: 'by_material',
+    equipDebtGroup: '',
+    equipDebtOnlyNonZero: true,
+    equipDebtSearch: '',
+    equipDebtSelectedKey: '',
+    equipDebtSort: 'qty_desc',
+    equipDebtSelectedStaff: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -10137,6 +10807,27 @@ function mountRemoteInside({
     state.recallReturnLabel = '';
   }
 
+  function resetEquipDebtModalState() {
+    state.equipDebtLoading = false;
+    state.equipDebtProgress = '';
+    state.equipDebtError = '';
+    state.equipDebtStatus = '';
+    state.equipDebtMode = '';
+    state.equipDebtNotice = '';
+    state.equipDebtNoticeTone = 'info';
+    state.equipDebtDataset = null;
+    state.equipDebtHasTab = false;
+    state.equipDebtTabActive = false;
+    state.equipDebtHasViewBtn = false;
+    state.equipDebtViewMode = 'by_material';
+    state.equipDebtGroup = '';
+    state.equipDebtOnlyNonZero = true;
+    state.equipDebtSearch = '';
+    state.equipDebtSelectedKey = '';
+    state.equipDebtSort = 'qty_desc';
+    state.equipDebtSelectedStaff = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -10225,6 +10916,7 @@ function mountRemoteInside({
     state.portHistoryRows = [];
     resetDeployModalState();
     resetRecallModalState();
+    resetEquipDebtModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -11492,6 +12184,81 @@ function mountRemoteInside({
     }
   }
 
+  async function loadEquipmentDebtModal() {
+    state.equipDebtLoading = true;
+    state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
+    state.equipDebtError = '';
+    state.equipDebtNotice = '';
+    renderConfirm();
+
+    try {
+      const res = await loadEquipmentDebtContext({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+        onProgress: (p) => {
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+            return;
+          }
+          const nextMsg = `Đang gom trang ${p.currentPage}/${p.totalPages} (${p.collectedStaff}${
+            p.totalItems ? `/${p.totalItems}` : ''
+          } KTV)…`;
+          if (nextMsg !== state.equipDebtProgress) {
+            state.equipDebtProgress = nextMsg;
+            renderConfirm();
+          }
+        },
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+        return;
+      }
+      state.equipDebtLoading = false;
+      state.equipDebtProgress = '';
+      state.equipDebtStatus = res.status || 'needs_equipment_page';
+      state.equipDebtMode = res.mode || 'live';
+      state.equipDebtHasTab = Boolean(res.hasDebtTab);
+      state.equipDebtTabActive = Boolean(res.isDebtTabActive);
+      state.equipDebtHasViewBtn = Boolean(res.hasViewListBtn);
+      state.equipDebtError = res.status !== 'ok' && res.message ? '' : '';
+
+      if (res.status === 'ok' && res.dataset) {
+        state.equipDebtDataset = res.dataset;
+        const mats = res.dataset.materials || [];
+        const hasCurrentMat = mats.some((m) => m.key === state.equipDebtSelectedKey);
+        if (!hasCurrentMat) {
+          const firstActive = mats.find((m) => m.holderCount > 0) || mats[0];
+          state.equipDebtSelectedKey = firstActive ? firstActive.key : '';
+        }
+        const rows = res.dataset.rows || [];
+        const hasCurrentStaff = rows.some((r) => r.staff === state.equipDebtSelectedStaff);
+        if (!hasCurrentStaff) {
+          const firstWithStock =
+            rows.find((r) => Object.keys(r.stocks || {}).length > 0) || rows[0];
+          state.equipDebtSelectedStaff = firstWithStock ? firstWithStock.staff : '';
+        }
+        addLog(
+          'Vật tư',
+          'Đọc tồn nợ KTV',
+          `${res.dataset.totalStaff} KTV • ${res.dataset.activeMaterials} VT`,
+          'ok'
+        );
+      } else {
+        state.equipDebtDataset = null;
+        if (res.status !== 'ok' && res.message) {
+          state.equipDebtNotice = res.message;
+          state.equipDebtNoticeTone = 'warn';
+        }
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+        return;
+      }
+      state.equipDebtLoading = false;
+      state.equipDebtProgress = '';
+      state.equipDebtError = err && err.message ? err.message : 'Lỗi đọc báo cáo tồn nợ vật tư.';
+    }
+    renderConfirm();
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
@@ -11537,6 +12304,8 @@ function mountRemoteInside({
         loadPortAssignModal(state.contractInput);
       } else if (state.activePortalId === 'recall' && action.id === 'manage_recall') {
         loadRecallModal(state.contractInput, { clearNotice: true });
+      } else if (state.activePortalId === 'recall' && action.id === 'equipment_debt') {
+        loadEquipmentDebtModal();
       }
       return;
     }
@@ -13738,6 +14507,7 @@ function mountRemoteInside({
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
+    const isEquipmentDebt = portal.id === 'recall' && act.id === 'equipment_debt';
 
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
@@ -13751,6 +14521,8 @@ function mountRemoteInside({
             ? 'CheckList ByPass'
             : isRecallManage
             ? 'Phiếu thu hồi vật tư'
+            : isEquipmentDebt
+            ? 'Tồn nợ vật tư theo KTV'
             : `Xác nhận ${act.label}?`,
         }),
         el('button', {
@@ -13771,11 +14543,13 @@ function mountRemoteInside({
           ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
           : isRecallManage
           ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
+          : isEquipmentDebt
+          ? 'Chọn vật tư để xem ngay những KTV đang giữ (tự lọc bỏ KTV tồn = 0).'
           : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
     ];
 
-    if (contractId) {
+    if (contractId && !isEquipmentDebt) {
       sheetParts.push(
         el('div', { className: 'ri-confirm-contract' }, [
           el('span', {
@@ -13804,7 +14578,8 @@ function mountRemoteInside({
         (isInsideBox && state.boxTab === 'history') ||
         isInsideKill ||
         isInsideDeploy ||
-        isRecallManage
+        isRecallManage ||
+        isEquipmentDebt
           ? 'Đóng'
           : 'Hủy',
       onClick: () => {
@@ -16271,6 +17046,527 @@ function mountRemoteInside({
           ])
         );
       }
+    } else if (isEquipmentDebt) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.equipDebtLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: state.equipDebtProgress || 'Đang đọc bảng Tồn công nợ theo NV…' }),
+          ])
+        );
+      } else if (state.equipDebtError) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.equipDebtError }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'needs_equipment_page') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Báo cáo tồn nợ vật tư chạy trên trang Quản lý vật tư NextGen (nextgen.fpt.net/resource/equipment/).',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Mở Quản lý vật tư (NextGen)',
+                onClick: () => {
+                  openExternalOrPortalUrl(EQUIPMENT_ENDPOINTS.base, {
+                    mode: 'portal',
+                    title: 'Quản lý vật tư NextGen',
+                    pageWindow,
+                  });
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'needs_report_loaded') {
+        const promptBtns = [];
+        if (state.equipDebtHasTab && !state.equipDebtTabActive) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Chuyển tab Tồn công nợ theo NV',
+              onClick: () => {
+                const tRes = triggerEquipmentDebtTab(pageDocument);
+                if (!tRes.ok) {
+                  state.equipDebtNotice = tRes.error;
+                  state.equipDebtNoticeTone = 'error';
+                  renderConfirm();
+                  return;
+                }
+                state.equipDebtLoading = true;
+                state.equipDebtProgress = 'Đang chuyển sang tab Tồn công nợ theo NV…';
+                renderConfirm();
+                setTimeout(() => {
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    loadEquipmentDebtModal();
+                  }
+                }, 800);
+              },
+            })
+          );
+        } else if (state.equipDebtHasViewBtn) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Bấm "Xem danh sách" & tải dữ liệu',
+              onClick: () => {
+                const vRes = triggerEquipmentDebtViewList(pageDocument);
+                if (!vRes.ok) {
+                  state.equipDebtNotice = vRes.error;
+                  state.equipDebtNoticeTone = 'error';
+                  renderConfirm();
+                  return;
+                }
+                state.equipDebtLoading = true;
+                state.equipDebtProgress = 'Đang tải danh sách tồn nợ từ hệ thống…';
+                renderConfirm();
+                setTimeout(() => {
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    loadEquipmentDebtModal();
+                  }
+                }, 1500);
+              },
+            })
+          );
+        }
+        promptBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đọc lại dữ liệu',
+            onClick: () => loadEquipmentDebtModal(),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thu gọn để thao tác',
+            onClick: () => {
+              state.isOpen = false;
+              render();
+            },
+          })
+        );
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Trên trang Quản lý vật tư, bạn bấm Báo cáo → Báo cáo nợ → Xem danh sách rồi bấm Đọc lại dữ liệu.',
+            }),
+            el('div', { className: 'ri-result-actions' }, promptBtns),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'ok' && state.equipDebtDataset) {
+        const ds = state.equipDebtDataset;
+        const meta = ds.meta || {};
+        const statsLabel = [
+          `${ds.totalStaff} KTV`,
+          `${ds.activeMaterials}/${ds.totalMaterials} VT đang tồn`,
+          meta.pagesScanned > 1 ? `đã gom ${meta.pagesScanned} trang` : '',
+        ]
+          .filter(Boolean)
+          .join(' • ');
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-field-hint', text: statsLabel }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại dữ liệu',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+            el('div', { className: 'ri-mode-row' }, [
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.equipDebtViewMode === 'by_material' ? ' is-active' : ''}`,
+                text: 'Theo vật tư',
+                onClick: () => {
+                  state.equipDebtViewMode = 'by_material';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.equipDebtViewMode === 'by_staff' ? ' is-active' : ''}`,
+                text: 'Theo KTV',
+                onClick: () => {
+                  state.equipDebtViewMode = 'by_staff';
+                  renderConfirm();
+                },
+              }),
+            ]),
+          ])
+        );
+
+        if (state.equipDebtNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.equipDebtNoticeTone || 'info',
+            }, [el('div', { text: state.equipDebtNotice })])
+          );
+        }
+
+        if (state.equipDebtViewMode === 'by_staff') {
+          const allRows = Array.isArray(ds.rows) ? ds.rows : [];
+          const activeRows = allRows.filter((r) => Object.keys(r.stocks || {}).length > 0);
+          const staffSource = activeRows.length > 0 ? activeRows : allRows;
+
+          const staffSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-debt-staff-select' },
+            staffSource.map((r) => {
+              const itemCount = Object.keys(r.stocks || {}).length;
+              const o = el('option', {
+                value: r.staff,
+                text: `${r.staff} (${itemCount} loại VT)`,
+              });
+              if (r.staff === state.equipDebtSelectedStaff) o.selected = true;
+              return o;
+            })
+          );
+          staffSel.value = state.equipDebtSelectedStaff;
+
+          const staffResultsSlot = el('div', { 'data-ri-slot': 'debt-staff-results' });
+
+          function renderDebtStaffSlot() {
+            staffResultsSlot.textContent = '';
+            const staffRes = queryEquipmentDebtByStaff(ds, state.equipDebtSelectedStaff);
+            if (!staffRes.staff) {
+              staffResultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có KTV nào đang giữ vật tư tồn.' }),
+                ])
+              );
+              return;
+            }
+            staffResultsSlot.appendChild(
+              el('div', { className: 'ri-olt-detected' }, [
+                el('div', { className: 'ri-olt-detected-title', text: staffRes.staff }),
+                el('div', {
+                  className: 'ri-olt-detected-sub',
+                  text: `Đang giữ ${staffRes.itemCount} loại vật tư • Tổng SL: ${staffRes.totalQty}`,
+                }),
+              ])
+            );
+            if (staffRes.items.length === 0) {
+              staffResultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'KTV này hiện không còn tồn vật tư nào (> 0).' }),
+                ])
+              );
+              return;
+            }
+            staffResultsSlot.appendChild(
+              el(
+                'div',
+                { className: 'ri-debt-list' },
+                staffRes.items.map((it) =>
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-debt-row',
+                      onClick: () => {
+                        state.equipDebtViewMode = 'by_material';
+                        state.equipDebtGroup = '';
+                        state.equipDebtSearch = '';
+                        state.equipDebtSelectedKey = it.key;
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('div', { className: 'ri-debt-row-main' }, [
+                        el('div', { className: 'ri-debt-name', text: it.name }),
+                        el('div', { className: 'ri-debt-sub', text: it.group }),
+                      ]),
+                      el('span', { className: 'ri-debt-qty', text: String(it.qty) }),
+                    ]
+                  )
+                )
+              )
+            );
+          }
+
+          staffSel.addEventListener('change', (e) => {
+            state.equipDebtSelectedStaff = e.target.value;
+            renderDebtStaffSlot();
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-debt-staff-select',
+                text: `Chọn KTV (${staffSource.length} KTV có tồn)`,
+              }),
+              staffSel,
+            ]),
+            staffResultsSlot
+          );
+          renderDebtStaffSlot();
+        } else {
+          const groups = Array.isArray(ds.groups) ? ds.groups : [];
+          const materials = Array.isArray(ds.materials) ? ds.materials : [];
+
+          const groupSel = el('select', { className: 'ri-select', id: 'ri-debt-group' }, [
+            el('option', { value: '', text: `Tất cả nhóm (${ds.totalMaterials} VT)` }),
+            ...groups.map((g) => {
+              const o = el('option', {
+                value: g.name,
+                text: `${g.name} (${g.activeMaterialCount}/${g.materialCount} có tồn)`,
+              });
+              if (g.name === state.equipDebtGroup) o.selected = true;
+              return o;
+            }),
+          ]);
+          groupSel.value = state.equipDebtGroup;
+
+          const nonZeroToggleBtn = el('button', {
+            type: 'button',
+            className: `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`,
+            text: state.equipDebtOnlyNonZero ? 'Chỉ VT có tồn (Bật)' : 'Cả VT tồn = 0',
+          });
+
+          const matSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-debt-mat-search',
+            placeholder: 'Tìm nhanh vật tư (VD: AX3000, Box, Cap, IQ 4S)…',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.equipDebtSearch,
+          });
+          matSearchInput.value = state.equipDebtSearch;
+
+          const matCountSpan = el('span', { className: 'ri-text-btn' });
+          const matSel = el('select', { className: 'ri-select', id: 'ri-debt-material' });
+          const resultsSlot = el('div', { 'data-ri-slot': 'debt-results' });
+
+          function populateDebtMaterials() {
+            const q = String(state.equipDebtSearch || '').trim().toLowerCase();
+            const filtered = materials.filter((m) => {
+              if (state.equipDebtGroup && m.group !== state.equipDebtGroup) return false;
+              if (state.equipDebtOnlyNonZero && !(m.holderCount > 0)) return false;
+              if (
+                q &&
+                !m.name.toLowerCase().includes(q) &&
+                !String(m.group || '').toLowerCase().includes(q)
+              ) {
+                return false;
+              }
+              return true;
+            });
+
+            matCountSpan.textContent = `${filtered.length} vật tư`;
+            matSel.textContent = '';
+            if (filtered.length === 0) {
+              matSel.appendChild(el('option', { value: '', text: '-- Không có vật tư khớp lọc --' }));
+              state.equipDebtSelectedKey = '';
+              return;
+            }
+
+            let matched = filtered.some((m) => m.key === state.equipDebtSelectedKey);
+            if (!matched) {
+              state.equipDebtSelectedKey = filtered[0].key;
+              matched = true;
+            }
+            for (const m of filtered) {
+              const suffix =
+                m.holderCount > 0 ? ` — ${m.holderCount} KTV (Tổng: ${m.totalQty})` : ' — Tồn: 0';
+              const o = el('option', { value: m.key, text: `${m.name}${suffix}` });
+              if (m.key === state.equipDebtSelectedKey) o.selected = true;
+              matSel.appendChild(o);
+            }
+            matSel.value = state.equipDebtSelectedKey;
+          }
+
+          function renderDebtResultsSlot() {
+            resultsSlot.textContent = '';
+            if (!state.equipDebtSelectedKey) {
+              resultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có vật tư phù hợp bộ lọc hiện tại.' }),
+                ])
+              );
+              return;
+            }
+
+            const qRes = queryEquipmentDebtHolders(ds, state.equipDebtSelectedKey, {
+              sortBy: state.equipDebtSort,
+            });
+            const mat = qRes.material;
+            if (!mat) return;
+
+            resultsSlot.appendChild(
+              el('div', { className: 'ri-olt-detected' }, [
+                el('div', {
+                  className: 'ri-olt-detected-title',
+                  text: `${mat.name} (${mat.group || 'Khác'})`,
+                }),
+                el('div', {
+                  className: 'ri-olt-detected-sub',
+                  text: `Tổng tồn: ${qRes.totalQty} • ${qRes.holderCount} KTV đang giữ (đã bỏ KTV tồn = 0)`,
+                }),
+              ])
+            );
+
+            resultsSlot.appendChild(
+              el('div', { className: 'ri-recall-toolbar ri-confirm-input-wrap' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text:
+                    state.equipDebtSort === 'qty_desc'
+                      ? 'Sắp xếp: Nhiều → Ít'
+                      : 'Sắp xếp: Tên A → Z',
+                  onClick: () => {
+                    state.equipDebtSort =
+                      state.equipDebtSort === 'qty_desc' ? 'name_asc' : 'qty_desc';
+                    renderDebtResultsSlot();
+                  },
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-primary-btn',
+                  disabled: qRes.holders.length === 0,
+                  text: `Chép danh sách (${qRes.holderCount} KTV)`,
+                  onClick: async () => {
+                    const text = formatEquipmentDebtClipboardText(qRes);
+                    if (!text) return;
+                    await copyTextSafe(text);
+                    state.equipDebtNotice = `Đã chép danh sách tồn "${mat.name}" (${qRes.holderCount} KTV).`;
+                    state.equipDebtNoticeTone = 'ok';
+                    renderConfirm();
+                  },
+                }),
+              ])
+            );
+
+            if (qRes.holders.length === 0) {
+              resultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có KTV nào đang tồn vật tư này.' }),
+                ])
+              );
+              return;
+            }
+
+            resultsSlot.appendChild(
+              el(
+                'div',
+                { className: 'ri-debt-list' },
+                qRes.holders.map((h, idx) =>
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-debt-row',
+                      onClick: () => {
+                        state.equipDebtSelectedStaff = h.staff;
+                        state.equipDebtViewMode = 'by_staff';
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('div', { className: 'ri-debt-row-main' }, [
+                        el('div', {
+                          className: 'ri-debt-name',
+                          text: `${idx + 1}. ${h.staff}`,
+                        }),
+                        el('div', { className: 'ri-debt-sub', text: 'Chạm để xem toàn bộ VT của KTV' }),
+                      ]),
+                      el('span', { className: 'ri-debt-qty', text: String(h.qty) }),
+                    ]
+                  )
+                )
+              )
+            );
+          }
+
+          groupSel.addEventListener('change', (e) => {
+            state.equipDebtGroup = e.target.value;
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          nonZeroToggleBtn.addEventListener('click', () => {
+            state.equipDebtOnlyNonZero = !state.equipDebtOnlyNonZero;
+            nonZeroToggleBtn.className = `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`;
+            nonZeroToggleBtn.textContent = state.equipDebtOnlyNonZero
+              ? 'Chỉ VT có tồn (Bật)'
+              : 'Cả VT tồn = 0';
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          matSearchInput.addEventListener('input', (e) => {
+            state.equipDebtSearch = e.target.value;
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          matSel.addEventListener('change', (e) => {
+            state.equipDebtSelectedKey = e.target.value;
+            renderDebtResultsSlot();
+          });
+
+          populateDebtMaterials();
+          renderDebtResultsSlot();
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-debt-group',
+                text: 'Nhóm vật tư & bộ lọc',
+              }),
+              el('div', { className: 'ri-debt-filter-row' }, [groupSel, nonZeroToggleBtn]),
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-debt-mat-search',
+                  text: 'Chọn vật tư',
+                }),
+                matCountSpan,
+              ]),
+              matSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [matSel]),
+            resultsSlot
+          );
+        }
+      }
     } else if (isPortRelease) {
       confirmBtn.textContent = 'Xác nhận Thu hồi Port';
 
@@ -17041,7 +18337,7 @@ function mountRemoteInside({
             type: 'button',
             className: 'ri-primary-btn',
             text: 'Đăng nhập Vật tư (NextGen)',
-            onClick: () => openLogin(RECALL_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
+            onClick: () => openLogin(EQUIPMENT_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
           }),
           el('button', {
             type: 'button',

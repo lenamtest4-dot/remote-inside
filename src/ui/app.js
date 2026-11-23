@@ -112,6 +112,15 @@ import {
   triggerRecallSelectTicket,
   triggerRecallSubmitNote,
 } from '../adapters/recall.js';
+import {
+  EQUIPMENT_ENDPOINTS,
+  formatEquipmentDebtClipboardText,
+  loadEquipmentDebtContext,
+  queryEquipmentDebtByStaff,
+  queryEquipmentDebtHolders,
+  triggerEquipmentDebtTab,
+  triggerEquipmentDebtViewList,
+} from '../adapters/equipment.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function formatVndAmount(amount) {
@@ -423,6 +432,24 @@ export function mountRemoteInside({
     recallArmedCreate: false,
     recallReturnPending: false,
     recallReturnLabel: '',
+    equipDebtLoading: false,
+    equipDebtProgress: '',
+    equipDebtError: '',
+    equipDebtStatus: '',
+    equipDebtMode: '',
+    equipDebtNotice: '',
+    equipDebtNoticeTone: 'info',
+    equipDebtDataset: null,
+    equipDebtHasTab: false,
+    equipDebtTabActive: false,
+    equipDebtHasViewBtn: false,
+    equipDebtViewMode: 'by_material',
+    equipDebtGroup: '',
+    equipDebtOnlyNonZero: true,
+    equipDebtSearch: '',
+    equipDebtSelectedKey: '',
+    equipDebtSort: 'qty_desc',
+    equipDebtSelectedStaff: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -623,6 +650,27 @@ export function mountRemoteInside({
     state.recallReturnLabel = '';
   }
 
+  function resetEquipDebtModalState() {
+    state.equipDebtLoading = false;
+    state.equipDebtProgress = '';
+    state.equipDebtError = '';
+    state.equipDebtStatus = '';
+    state.equipDebtMode = '';
+    state.equipDebtNotice = '';
+    state.equipDebtNoticeTone = 'info';
+    state.equipDebtDataset = null;
+    state.equipDebtHasTab = false;
+    state.equipDebtTabActive = false;
+    state.equipDebtHasViewBtn = false;
+    state.equipDebtViewMode = 'by_material';
+    state.equipDebtGroup = '';
+    state.equipDebtOnlyNonZero = true;
+    state.equipDebtSearch = '';
+    state.equipDebtSelectedKey = '';
+    state.equipDebtSort = 'qty_desc';
+    state.equipDebtSelectedStaff = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -711,6 +759,7 @@ export function mountRemoteInside({
     state.portHistoryRows = [];
     resetDeployModalState();
     resetRecallModalState();
+    resetEquipDebtModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -1978,6 +2027,81 @@ export function mountRemoteInside({
     }
   }
 
+  async function loadEquipmentDebtModal() {
+    state.equipDebtLoading = true;
+    state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
+    state.equipDebtError = '';
+    state.equipDebtNotice = '';
+    renderConfirm();
+
+    try {
+      const res = await loadEquipmentDebtContext({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+        onProgress: (p) => {
+          if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+            return;
+          }
+          const nextMsg = `Đang gom trang ${p.currentPage}/${p.totalPages} (${p.collectedStaff}${
+            p.totalItems ? `/${p.totalItems}` : ''
+          } KTV)…`;
+          if (nextMsg !== state.equipDebtProgress) {
+            state.equipDebtProgress = nextMsg;
+            renderConfirm();
+          }
+        },
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+        return;
+      }
+      state.equipDebtLoading = false;
+      state.equipDebtProgress = '';
+      state.equipDebtStatus = res.status || 'needs_equipment_page';
+      state.equipDebtMode = res.mode || 'live';
+      state.equipDebtHasTab = Boolean(res.hasDebtTab);
+      state.equipDebtTabActive = Boolean(res.isDebtTabActive);
+      state.equipDebtHasViewBtn = Boolean(res.hasViewListBtn);
+      state.equipDebtError = res.status !== 'ok' && res.message ? '' : '';
+
+      if (res.status === 'ok' && res.dataset) {
+        state.equipDebtDataset = res.dataset;
+        const mats = res.dataset.materials || [];
+        const hasCurrentMat = mats.some((m) => m.key === state.equipDebtSelectedKey);
+        if (!hasCurrentMat) {
+          const firstActive = mats.find((m) => m.holderCount > 0) || mats[0];
+          state.equipDebtSelectedKey = firstActive ? firstActive.key : '';
+        }
+        const rows = res.dataset.rows || [];
+        const hasCurrentStaff = rows.some((r) => r.staff === state.equipDebtSelectedStaff);
+        if (!hasCurrentStaff) {
+          const firstWithStock =
+            rows.find((r) => Object.keys(r.stocks || {}).length > 0) || rows[0];
+          state.equipDebtSelectedStaff = firstWithStock ? firstWithStock.staff : '';
+        }
+        addLog(
+          'Vật tư',
+          'Đọc tồn nợ KTV',
+          `${res.dataset.totalStaff} KTV • ${res.dataset.activeMaterials} VT`,
+          'ok'
+        );
+      } else {
+        state.equipDebtDataset = null;
+        if (res.status !== 'ok' && res.message) {
+          state.equipDebtNotice = res.message;
+          state.equipDebtNoticeTone = 'warn';
+        }
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') {
+        return;
+      }
+      state.equipDebtLoading = false;
+      state.equipDebtProgress = '';
+      state.equipDebtError = err && err.message ? err.message : 'Lỗi đọc báo cáo tồn nợ vật tư.';
+    }
+    renderConfirm();
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
@@ -2023,6 +2147,8 @@ export function mountRemoteInside({
         loadPortAssignModal(state.contractInput);
       } else if (state.activePortalId === 'recall' && action.id === 'manage_recall') {
         loadRecallModal(state.contractInput, { clearNotice: true });
+      } else if (state.activePortalId === 'recall' && action.id === 'equipment_debt') {
+        loadEquipmentDebtModal();
       }
       return;
     }
@@ -4224,6 +4350,7 @@ export function mountRemoteInside({
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
+    const isEquipmentDebt = portal.id === 'recall' && act.id === 'equipment_debt';
 
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
@@ -4237,6 +4364,8 @@ export function mountRemoteInside({
             ? 'CheckList ByPass'
             : isRecallManage
             ? 'Phiếu thu hồi vật tư'
+            : isEquipmentDebt
+            ? 'Tồn nợ vật tư theo KTV'
             : `Xác nhận ${act.label}?`,
         }),
         el('button', {
@@ -4257,11 +4386,13 @@ export function mountRemoteInside({
           ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
           : isRecallManage
           ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
+          : isEquipmentDebt
+          ? 'Chọn vật tư để xem ngay những KTV đang giữ (tự lọc bỏ KTV tồn = 0).'
           : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
     ];
 
-    if (contractId) {
+    if (contractId && !isEquipmentDebt) {
       sheetParts.push(
         el('div', { className: 'ri-confirm-contract' }, [
           el('span', {
@@ -4290,7 +4421,8 @@ export function mountRemoteInside({
         (isInsideBox && state.boxTab === 'history') ||
         isInsideKill ||
         isInsideDeploy ||
-        isRecallManage
+        isRecallManage ||
+        isEquipmentDebt
           ? 'Đóng'
           : 'Hủy',
       onClick: () => {
@@ -6757,6 +6889,527 @@ export function mountRemoteInside({
           ])
         );
       }
+    } else if (isEquipmentDebt) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.equipDebtLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: state.equipDebtProgress || 'Đang đọc bảng Tồn công nợ theo NV…' }),
+          ])
+        );
+      } else if (state.equipDebtError) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.equipDebtError }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'needs_equipment_page') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Báo cáo tồn nợ vật tư chạy trên trang Quản lý vật tư NextGen (nextgen.fpt.net/resource/equipment/).',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Mở Quản lý vật tư (NextGen)',
+                onClick: () => {
+                  openExternalOrPortalUrl(EQUIPMENT_ENDPOINTS.base, {
+                    mode: 'portal',
+                    title: 'Quản lý vật tư NextGen',
+                    pageWindow,
+                  });
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'needs_report_loaded') {
+        const promptBtns = [];
+        if (state.equipDebtHasTab && !state.equipDebtTabActive) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Chuyển tab Tồn công nợ theo NV',
+              onClick: () => {
+                const tRes = triggerEquipmentDebtTab(pageDocument);
+                if (!tRes.ok) {
+                  state.equipDebtNotice = tRes.error;
+                  state.equipDebtNoticeTone = 'error';
+                  renderConfirm();
+                  return;
+                }
+                state.equipDebtLoading = true;
+                state.equipDebtProgress = 'Đang chuyển sang tab Tồn công nợ theo NV…';
+                renderConfirm();
+                setTimeout(() => {
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    loadEquipmentDebtModal();
+                  }
+                }, 800);
+              },
+            })
+          );
+        } else if (state.equipDebtHasViewBtn) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Bấm "Xem danh sách" & tải dữ liệu',
+              onClick: () => {
+                const vRes = triggerEquipmentDebtViewList(pageDocument);
+                if (!vRes.ok) {
+                  state.equipDebtNotice = vRes.error;
+                  state.equipDebtNoticeTone = 'error';
+                  renderConfirm();
+                  return;
+                }
+                state.equipDebtLoading = true;
+                state.equipDebtProgress = 'Đang tải danh sách tồn nợ từ hệ thống…';
+                renderConfirm();
+                setTimeout(() => {
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    loadEquipmentDebtModal();
+                  }
+                }, 1500);
+              },
+            })
+          );
+        }
+        promptBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đọc lại dữ liệu',
+            onClick: () => loadEquipmentDebtModal(),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thu gọn để thao tác',
+            onClick: () => {
+              state.isOpen = false;
+              render();
+            },
+          })
+        );
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Trên trang Quản lý vật tư, bạn bấm Báo cáo → Báo cáo nợ → Xem danh sách rồi bấm Đọc lại dữ liệu.',
+            }),
+            el('div', { className: 'ri-result-actions' }, promptBtns),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'ok' && state.equipDebtDataset) {
+        const ds = state.equipDebtDataset;
+        const meta = ds.meta || {};
+        const statsLabel = [
+          `${ds.totalStaff} KTV`,
+          `${ds.activeMaterials}/${ds.totalMaterials} VT đang tồn`,
+          meta.pagesScanned > 1 ? `đã gom ${meta.pagesScanned} trang` : '',
+        ]
+          .filter(Boolean)
+          .join(' • ');
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-field-hint', text: statsLabel }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại dữ liệu',
+                onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+            el('div', { className: 'ri-mode-row' }, [
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.equipDebtViewMode === 'by_material' ? ' is-active' : ''}`,
+                text: 'Theo vật tư',
+                onClick: () => {
+                  state.equipDebtViewMode = 'by_material';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.equipDebtViewMode === 'by_staff' ? ' is-active' : ''}`,
+                text: 'Theo KTV',
+                onClick: () => {
+                  state.equipDebtViewMode = 'by_staff';
+                  renderConfirm();
+                },
+              }),
+            ]),
+          ])
+        );
+
+        if (state.equipDebtNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.equipDebtNoticeTone || 'info',
+            }, [el('div', { text: state.equipDebtNotice })])
+          );
+        }
+
+        if (state.equipDebtViewMode === 'by_staff') {
+          const allRows = Array.isArray(ds.rows) ? ds.rows : [];
+          const activeRows = allRows.filter((r) => Object.keys(r.stocks || {}).length > 0);
+          const staffSource = activeRows.length > 0 ? activeRows : allRows;
+
+          const staffSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-debt-staff-select' },
+            staffSource.map((r) => {
+              const itemCount = Object.keys(r.stocks || {}).length;
+              const o = el('option', {
+                value: r.staff,
+                text: `${r.staff} (${itemCount} loại VT)`,
+              });
+              if (r.staff === state.equipDebtSelectedStaff) o.selected = true;
+              return o;
+            })
+          );
+          staffSel.value = state.equipDebtSelectedStaff;
+
+          const staffResultsSlot = el('div', { 'data-ri-slot': 'debt-staff-results' });
+
+          function renderDebtStaffSlot() {
+            staffResultsSlot.textContent = '';
+            const staffRes = queryEquipmentDebtByStaff(ds, state.equipDebtSelectedStaff);
+            if (!staffRes.staff) {
+              staffResultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có KTV nào đang giữ vật tư tồn.' }),
+                ])
+              );
+              return;
+            }
+            staffResultsSlot.appendChild(
+              el('div', { className: 'ri-olt-detected' }, [
+                el('div', { className: 'ri-olt-detected-title', text: staffRes.staff }),
+                el('div', {
+                  className: 'ri-olt-detected-sub',
+                  text: `Đang giữ ${staffRes.itemCount} loại vật tư • Tổng SL: ${staffRes.totalQty}`,
+                }),
+              ])
+            );
+            if (staffRes.items.length === 0) {
+              staffResultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'KTV này hiện không còn tồn vật tư nào (> 0).' }),
+                ])
+              );
+              return;
+            }
+            staffResultsSlot.appendChild(
+              el(
+                'div',
+                { className: 'ri-debt-list' },
+                staffRes.items.map((it) =>
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-debt-row',
+                      onClick: () => {
+                        state.equipDebtViewMode = 'by_material';
+                        state.equipDebtGroup = '';
+                        state.equipDebtSearch = '';
+                        state.equipDebtSelectedKey = it.key;
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('div', { className: 'ri-debt-row-main' }, [
+                        el('div', { className: 'ri-debt-name', text: it.name }),
+                        el('div', { className: 'ri-debt-sub', text: it.group }),
+                      ]),
+                      el('span', { className: 'ri-debt-qty', text: String(it.qty) }),
+                    ]
+                  )
+                )
+              )
+            );
+          }
+
+          staffSel.addEventListener('change', (e) => {
+            state.equipDebtSelectedStaff = e.target.value;
+            renderDebtStaffSlot();
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-debt-staff-select',
+                text: `Chọn KTV (${staffSource.length} KTV có tồn)`,
+              }),
+              staffSel,
+            ]),
+            staffResultsSlot
+          );
+          renderDebtStaffSlot();
+        } else {
+          const groups = Array.isArray(ds.groups) ? ds.groups : [];
+          const materials = Array.isArray(ds.materials) ? ds.materials : [];
+
+          const groupSel = el('select', { className: 'ri-select', id: 'ri-debt-group' }, [
+            el('option', { value: '', text: `Tất cả nhóm (${ds.totalMaterials} VT)` }),
+            ...groups.map((g) => {
+              const o = el('option', {
+                value: g.name,
+                text: `${g.name} (${g.activeMaterialCount}/${g.materialCount} có tồn)`,
+              });
+              if (g.name === state.equipDebtGroup) o.selected = true;
+              return o;
+            }),
+          ]);
+          groupSel.value = state.equipDebtGroup;
+
+          const nonZeroToggleBtn = el('button', {
+            type: 'button',
+            className: `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`,
+            text: state.equipDebtOnlyNonZero ? 'Chỉ VT có tồn (Bật)' : 'Cả VT tồn = 0',
+          });
+
+          const matSearchInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-debt-mat-search',
+            placeholder: 'Tìm nhanh vật tư (VD: AX3000, Box, Cap, IQ 4S)…',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.equipDebtSearch,
+          });
+          matSearchInput.value = state.equipDebtSearch;
+
+          const matCountSpan = el('span', { className: 'ri-text-btn' });
+          const matSel = el('select', { className: 'ri-select', id: 'ri-debt-material' });
+          const resultsSlot = el('div', { 'data-ri-slot': 'debt-results' });
+
+          function populateDebtMaterials() {
+            const q = String(state.equipDebtSearch || '').trim().toLowerCase();
+            const filtered = materials.filter((m) => {
+              if (state.equipDebtGroup && m.group !== state.equipDebtGroup) return false;
+              if (state.equipDebtOnlyNonZero && !(m.holderCount > 0)) return false;
+              if (
+                q &&
+                !m.name.toLowerCase().includes(q) &&
+                !String(m.group || '').toLowerCase().includes(q)
+              ) {
+                return false;
+              }
+              return true;
+            });
+
+            matCountSpan.textContent = `${filtered.length} vật tư`;
+            matSel.textContent = '';
+            if (filtered.length === 0) {
+              matSel.appendChild(el('option', { value: '', text: '-- Không có vật tư khớp lọc --' }));
+              state.equipDebtSelectedKey = '';
+              return;
+            }
+
+            let matched = filtered.some((m) => m.key === state.equipDebtSelectedKey);
+            if (!matched) {
+              state.equipDebtSelectedKey = filtered[0].key;
+              matched = true;
+            }
+            for (const m of filtered) {
+              const suffix =
+                m.holderCount > 0 ? ` — ${m.holderCount} KTV (Tổng: ${m.totalQty})` : ' — Tồn: 0';
+              const o = el('option', { value: m.key, text: `${m.name}${suffix}` });
+              if (m.key === state.equipDebtSelectedKey) o.selected = true;
+              matSel.appendChild(o);
+            }
+            matSel.value = state.equipDebtSelectedKey;
+          }
+
+          function renderDebtResultsSlot() {
+            resultsSlot.textContent = '';
+            if (!state.equipDebtSelectedKey) {
+              resultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có vật tư phù hợp bộ lọc hiện tại.' }),
+                ])
+              );
+              return;
+            }
+
+            const qRes = queryEquipmentDebtHolders(ds, state.equipDebtSelectedKey, {
+              sortBy: state.equipDebtSort,
+            });
+            const mat = qRes.material;
+            if (!mat) return;
+
+            resultsSlot.appendChild(
+              el('div', { className: 'ri-olt-detected' }, [
+                el('div', {
+                  className: 'ri-olt-detected-title',
+                  text: `${mat.name} (${mat.group || 'Khác'})`,
+                }),
+                el('div', {
+                  className: 'ri-olt-detected-sub',
+                  text: `Tổng tồn: ${qRes.totalQty} • ${qRes.holderCount} KTV đang giữ (đã bỏ KTV tồn = 0)`,
+                }),
+              ])
+            );
+
+            resultsSlot.appendChild(
+              el('div', { className: 'ri-recall-toolbar ri-confirm-input-wrap' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text:
+                    state.equipDebtSort === 'qty_desc'
+                      ? 'Sắp xếp: Nhiều → Ít'
+                      : 'Sắp xếp: Tên A → Z',
+                  onClick: () => {
+                    state.equipDebtSort =
+                      state.equipDebtSort === 'qty_desc' ? 'name_asc' : 'qty_desc';
+                    renderDebtResultsSlot();
+                  },
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-primary-btn',
+                  disabled: qRes.holders.length === 0,
+                  text: `Chép danh sách (${qRes.holderCount} KTV)`,
+                  onClick: async () => {
+                    const text = formatEquipmentDebtClipboardText(qRes);
+                    if (!text) return;
+                    await copyTextSafe(text);
+                    state.equipDebtNotice = `Đã chép danh sách tồn "${mat.name}" (${qRes.holderCount} KTV).`;
+                    state.equipDebtNoticeTone = 'ok';
+                    renderConfirm();
+                  },
+                }),
+              ])
+            );
+
+            if (qRes.holders.length === 0) {
+              resultsSlot.appendChild(
+                el('div', { className: 'ri-sheet-status' }, [
+                  el('div', { text: 'Không có KTV nào đang tồn vật tư này.' }),
+                ])
+              );
+              return;
+            }
+
+            resultsSlot.appendChild(
+              el(
+                'div',
+                { className: 'ri-debt-list' },
+                qRes.holders.map((h, idx) =>
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-debt-row',
+                      onClick: () => {
+                        state.equipDebtSelectedStaff = h.staff;
+                        state.equipDebtViewMode = 'by_staff';
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('div', { className: 'ri-debt-row-main' }, [
+                        el('div', {
+                          className: 'ri-debt-name',
+                          text: `${idx + 1}. ${h.staff}`,
+                        }),
+                        el('div', { className: 'ri-debt-sub', text: 'Chạm để xem toàn bộ VT của KTV' }),
+                      ]),
+                      el('span', { className: 'ri-debt-qty', text: String(h.qty) }),
+                    ]
+                  )
+                )
+              )
+            );
+          }
+
+          groupSel.addEventListener('change', (e) => {
+            state.equipDebtGroup = e.target.value;
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          nonZeroToggleBtn.addEventListener('click', () => {
+            state.equipDebtOnlyNonZero = !state.equipDebtOnlyNonZero;
+            nonZeroToggleBtn.className = `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`;
+            nonZeroToggleBtn.textContent = state.equipDebtOnlyNonZero
+              ? 'Chỉ VT có tồn (Bật)'
+              : 'Cả VT tồn = 0';
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          matSearchInput.addEventListener('input', (e) => {
+            state.equipDebtSearch = e.target.value;
+            populateDebtMaterials();
+            renderDebtResultsSlot();
+          });
+
+          matSel.addEventListener('change', (e) => {
+            state.equipDebtSelectedKey = e.target.value;
+            renderDebtResultsSlot();
+          });
+
+          populateDebtMaterials();
+          renderDebtResultsSlot();
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-debt-group',
+                text: 'Nhóm vật tư & bộ lọc',
+              }),
+              el('div', { className: 'ri-debt-filter-row' }, [groupSel, nonZeroToggleBtn]),
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-debt-mat-search',
+                  text: 'Chọn vật tư',
+                }),
+                matCountSpan,
+              ]),
+              matSearchInput,
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [matSel]),
+            resultsSlot
+          );
+        }
+      }
     } else if (isPortRelease) {
       confirmBtn.textContent = 'Xác nhận Thu hồi Port';
 
@@ -7527,7 +8180,7 @@ export function mountRemoteInside({
             type: 'button',
             className: 'ri-primary-btn',
             text: 'Đăng nhập Vật tư (NextGen)',
-            onClick: () => openLogin(RECALL_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
+            onClick: () => openLogin(EQUIPMENT_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
           }),
           el('button', {
             type: 'button',

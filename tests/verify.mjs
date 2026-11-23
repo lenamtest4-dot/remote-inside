@@ -149,6 +149,23 @@ import {
   triggerRecallSelectTicket,
   triggerRecallSubmitNote,
 } from '../src/adapters/recall.js';
+import {
+  EQUIPMENT_ENDPOINTS,
+  buildDemoEquipmentDebtDataset,
+  buildEquipmentDebtDataset,
+  collectEquipmentDebtFromDocument,
+  findEquipmentDebtGrid,
+  findEquipmentDebtPageControls,
+  formatEquipmentDebtClipboardText,
+  isEquipmentPortalLocation,
+  loadEquipmentDebtContext,
+  parseEquipmentDebtColumns,
+  parseEquipmentDebtNumber,
+  parseEquipmentDebtPageRows,
+  parseEquipmentDebtPagerInfo,
+  queryEquipmentDebtByStaff,
+  queryEquipmentDebtHolders,
+} from '../src/adapters/equipment.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -2901,6 +2918,212 @@ async function runTests() {
     'Built recall bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: Vật tư thu hồi (NextGen Blazor DOM bridge) tests passed.');
+
+  console.log('20. Testing Quản lý vật tư — Tồn công nợ theo NV adapter & multi-page collector...');
+  assert.ok(PORTALS.recall.actions.some((a) => a.id === 'equipment_debt'));
+  assert.equal(
+    isEquipmentPortalLocation({ hostname: 'nextgen.fpt.net', pathname: '/resource/equipment/' }),
+    true
+  );
+  assert.equal(
+    isEquipmentPortalLocation({ hostname: 'nextgen.fpt.net', pathname: '/resource/recall/' }),
+    false
+  );
+  assert.equal(parseEquipmentDebtNumber('2134'), 2134);
+  assert.equal(parseEquipmentDebtNumber('0'), 0);
+  assert.equal(parseEquipmentDebtNumber('12,5'), 12.5);
+  assert.equal(parseEquipmentDebtNumber(''), 0);
+
+  const mockSummaryHost = {
+    querySelector: (sel) =>
+      sel === '.rz-pager-summary' ? { innerText: 'Page 2 of 13 (121 items)' } : null,
+  };
+  assert.deepEqual(parseEquipmentDebtPagerInfo(mockSummaryHost), {
+    currentPage: 2,
+    totalPages: 13,
+    totalItems: 121,
+    rawText: 'Page 2 of 13 (121 items)',
+  });
+
+  // 2-page mock Blazor Radzen grid with grouped composite header (colSpan + rowSpan=2)
+  let equipPageSize = 10;
+  let equipPageIndex = 1;
+  const equipAllRowsData = [
+    ['KTV.MAU01', '500', '0', '2', '0', '0'],
+    ['KTV.MAU02', '0', '10', '5', '0', '3'],
+    ['KTV.MAU03', '250', '0', '0', '0', '1'],
+    ['KTV.MAU04', '0', '0', '4', '0', '0'],
+  ];
+  const makeEquipCell = (txt, extra = {}) => ({
+    innerText: txt,
+    colSpan: extra.colSpan || 1,
+    rowSpan: extra.rowSpan || 1,
+    getAttribute: (k) => {
+      if (k === 'colspan' && extra.colSpan) return String(extra.colSpan);
+      if (k === 'rowspan' && extra.rowSpan) return String(extra.rowSpan);
+      return null;
+    },
+  });
+  const equipTheadRow0 = {
+    querySelectorAll: () => [
+      makeEquipCell('Nhân viên', { colSpan: 1, rowSpan: 2 }),
+      makeEquipCell('Cap', { colSpan: 2 }),
+      makeEquipCell('Modem', { colSpan: 2 }),
+      makeEquipCell('FPT Camera', { colSpan: 1 }),
+    ],
+  };
+  const equipTheadRow1 = {
+    querySelectorAll: () => [
+      makeEquipCell('Cap 1core'),
+      makeEquipCell('Cap 5'),
+      makeEquipCell('AX3000'),
+      makeEquipCell('AC1000'),
+      makeEquipCell('FCAM-IQ 4S'),
+    ],
+  };
+  const makeEquipBodyTr = (arr) => ({
+    querySelectorAll: () => arr.map((v) => ({ innerText: v })),
+    querySelector: () => ({ innerText: arr[0] }),
+  });
+  const equipCurrentSlice = () => {
+    const start = (equipPageIndex - 1) * (equipPageSize >= 100 ? 2 : 2);
+    return equipAllRowsData.slice(start, start + 2);
+  };
+  const mockEquipTable = {
+    className: 'rz-grid-table',
+    querySelectorAll: (sel) => {
+      if (sel === 'thead tr') return [equipTheadRow0, equipTheadRow1];
+      if (sel === 'tbody tr') return equipCurrentSlice().map(makeEquipBodyTr);
+      return [];
+    },
+  };
+  const equipDdItem10 = { innerText: '10', click: () => { equipPageSize = 10; } };
+  const equipDdItem25 = { innerText: '25', click: () => { equipPageSize = 25; } };
+  const equipDdItem100 = { innerText: '100', click: () => { equipPageSize = 100; } };
+  const equipDd = { id: 'mockdd', get innerText() { return String(equipPageSize); }, click: () => {} };
+  const equipPagerNext = {
+    get className() {
+      return equipPageIndex >= 2 ? 'rz-pager-next rz-state-disabled' : 'rz-pager-next';
+    },
+    getAttribute: () => (equipPageIndex >= 2 ? '' : null),
+    click: () => {
+      if (equipPageIndex < 2) equipPageIndex += 1;
+    },
+  };
+  const equipPagerFirst = {
+    get className() {
+      return equipPageIndex <= 1 ? 'rz-pager-first rz-state-disabled' : 'rz-pager-first';
+    },
+    getAttribute: () => (equipPageIndex <= 1 ? '' : null),
+    click: () => {
+      equipPageIndex = 1;
+    },
+  };
+  const mockEquipPager = {
+    querySelector: (sel) => {
+      if (sel === '.rz-dropdown') return equipDd;
+      if (sel === '.rz-pager-next') return equipPagerNext;
+      if (sel === '.rz-pager-first') return equipPagerFirst;
+      return null;
+    },
+  };
+  const mockEquipGrid = {
+    querySelectorAll: (sel) => {
+      if (sel === 'thead th, thead td') return [makeEquipCell('Nhân viên')];
+      return [];
+    },
+    querySelector: (sel) => {
+      if (sel === 'table.rz-grid-table') return mockEquipTable;
+      if (sel === '.rz-pager') return mockEquipPager;
+      if (sel === '.rz-pager-summary') {
+        return { innerText: `Page ${equipPageIndex} of 2 (4 items)` };
+      }
+      return null;
+    },
+  };
+  const mockEquipDoc = {
+    getElementById: (id) =>
+      id === 'popup-mockdd'
+        ? { querySelectorAll: () => [equipDdItem10, equipDdItem25, equipDdItem100] }
+        : null,
+    querySelectorAll: (sel) => {
+      if (sel === '.rz-data-grid') return [mockEquipGrid];
+      if (sel.includes('rz-tabview-nav')) {
+        return [{ innerText: 'Tồn công nợ theo NV', className: 'rz-tabview-selected' }];
+      }
+      if (sel === 'button') return [{ innerText: 'Xem danh sách' }];
+      return [];
+    },
+  };
+
+  const equipProgressCalls = [];
+  const collectedDebt = await collectEquipmentDebtFromDocument(mockEquipDoc, {
+    onProgress: (p) => equipProgressCalls.push(p),
+    waitMs: 500,
+  });
+  assert.equal(collectedDebt.status, 'ok');
+  assert.equal(equipPageSize, 100, 'Collector must bump Radzen dropdown to max 100/page');
+  assert.equal(collectedDebt.dataset.totalStaff, 4, 'Collector must gather all 4 KTV across 2 pages');
+  assert.equal(collectedDebt.dataset.totalMaterials, 5);
+  assert.equal(collectedDebt.dataset.activeMaterials, 4, 'AC1000 has 0 stock everywhere');
+  assert.equal(collectedDebt.dataset.meta.pagesScanned, 2);
+  assert.equal(equipProgressCalls.length, 2);
+
+  // Check querying by material filters out 0-stock KTV and sorts qty_desc & name_asc
+  const ax3000Query = queryEquipmentDebtHolders(collectedDebt.dataset, 'col_3', { sortBy: 'qty_desc' });
+  assert.equal(ax3000Query.material.group, 'Modem');
+  assert.equal(ax3000Query.material.name, 'AX3000');
+  assert.equal(ax3000Query.totalQty, 11);
+  assert.equal(ax3000Query.holderCount, 3, 'Must exclude KTV.MAU03 who has 0 AX3000');
+  assert.deepEqual(ax3000Query.holders, [
+    { staff: 'KTV.MAU02', qty: 5 },
+    { staff: 'KTV.MAU04', qty: 4 },
+    { staff: 'KTV.MAU01', qty: 2 },
+  ]);
+  const ax3000Alpha = queryEquipmentDebtHolders(collectedDebt.dataset, 'col_3', { sortBy: 'name_asc' });
+  assert.deepEqual(
+    ax3000Alpha.holders.map((h) => h.staff),
+    ['KTV.MAU01', 'KTV.MAU02', 'KTV.MAU04']
+  );
+  const zeroMatQuery = queryEquipmentDebtHolders(collectedDebt.dataset, 'col_4');
+  assert.equal(zeroMatQuery.totalQty, 0);
+  assert.equal(zeroMatQuery.holderCount, 0);
+
+  // Check querying by KTV and clipboard formatting
+  const staff2Debt = queryEquipmentDebtByStaff(collectedDebt.dataset, 'KTV.MAU02');
+  assert.equal(staff2Debt.itemCount, 3);
+  assert.equal(staff2Debt.totalQty, 18);
+  assert.equal(staff2Debt.items[0].name, 'Cap 5');
+
+  const copiedDebtText = formatEquipmentDebtClipboardText(ax3000Query);
+  assert.ok(copiedDebtText.includes('Tồn vật tư: AX3000 (Modem)'));
+  assert.ok(copiedDebtText.includes('Tổng tồn: 11 • 3 KTV đang giữ'));
+  assert.ok(copiedDebtText.includes('1. KTV.MAU02: 5'));
+
+  // Demo mode check
+  const demoEquipCtx = await loadEquipmentDebtContext({ forceDemo: true });
+  assert.equal(demoEquipCtx.status, 'ok');
+  assert.equal(demoEquipCtx.mode, 'demo');
+  assert.equal(demoEquipCtx.dataset.totalStaff, 5);
+  assert.equal(demoEquipCtx.dataset.activeMaterials, 5, '1 demo material intentionally has 0 stock');
+
+  // Verify equipment tokens in built bundles & 0 PII matches
+  for (const token of [
+    'equipment_debt',
+    'collectEquipmentDebtFromDocument',
+    'queryEquipmentDebtHolders',
+    'formatEquipmentDebtClipboardText',
+    EQUIPMENT_ENDPOINTS.base,
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Built equipment debt bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: Quản lý vật tư — Tồn công nợ theo NV tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

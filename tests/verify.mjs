@@ -11,10 +11,12 @@ import {
   validateContractId,
 } from '../src/config/portals.js';
 import {
+  DEFAULT_EQUIPMENT_DEBT_FILTER,
   STORAGE_KEYS,
   addRecentContract,
   clearRecentContracts,
   consumePendingRecallContract,
+  getEffectiveEquipmentDebtFilter,
   getEquipmentDebtFilter,
   getRecentContracts,
   getState,
@@ -3305,6 +3307,16 @@ async function runTests() {
     set: (k, v) => filterStore.set(k, v),
   };
   assert.equal(getEquipmentDebtFilter(filterAdapter), null);
+  assert.deepEqual(DEFAULT_EQUIPMENT_DEBT_FILTER, {
+    region: '10.Vũng Tàu',
+    province: 'Hồ Chí Minh - Bà Rịa - Vũng Tàu',
+    partner: 'Phuong Nam VTU',
+  });
+  assert.deepEqual(
+    getEffectiveEquipmentDebtFilter(filterAdapter),
+    DEFAULT_EQUIPMENT_DEBT_FILTER,
+    'Effective equipment debt filter must fall back to fixed default preset'
+  );
   assert.equal(setEquipmentDebtFilter({ region: '01.Vung Mau' }, filterAdapter), false);
   assert.equal(
     setEquipmentDebtFilter(
@@ -3318,8 +3330,119 @@ async function runTests() {
     province: 'Tinh Mau',
     partner: 'Doi Tac Mau',
   });
+  assert.deepEqual(
+    getEffectiveEquipmentDebtFilter(filterAdapter),
+    {
+      region: '01.Vung Mau',
+      province: 'Tinh Mau',
+      partner: 'Doi Tac Mau',
+    },
+    'Effective equipment debt filter must prefer custom saved override'
+  );
   assert.equal(setEquipmentDebtFilter(null, filterAdapter), true);
   assert.equal(getEquipmentDebtFilter(filterAdapter), null);
+  assert.deepEqual(
+    getEffectiveEquipmentDebtFilter(filterAdapter),
+    DEFAULT_EQUIPMENT_DEBT_FILTER,
+    'Effective equipment debt filter must return default preset after clearing override'
+  );
+
+  // Regression: Radzen transient "Page 1 of 1 (1 items)" during page-size bump (2 -> 5) must NOT truncate rows
+  const transientRowsData = [
+    ['KTV.MAU01', '100', '0', '1', '0', '0'],
+    ['KTV.MAU02', '200', '0', '2', '0', '0'],
+    ['KTV.MAU03', '300', '0', '3', '0', '0'],
+    ['KTV.MAU04', '400', '0', '4', '0', '0'],
+    ['KTV.MAU05', '500', '0', '5', '0', '0'],
+    ['KTV.MAU06', '600', '0', '6', '0', '0'],
+  ];
+  let trSummaryState = 'Page 1 of 3 (6 items)';
+  let trVisibleSize = 2;
+  let trPageIdx = 1;
+  let trDdValue = '2';
+  const trDdItem2 = { innerText: '2', click: () => {} };
+  const trDdItem5 = {
+    innerText: '5',
+    click: () => {
+      trDdValue = '5';
+      trSummaryState = 'Page 1 of 1 (1 items)';
+      setTimeout(() => {
+        trVisibleSize = 5;
+        trPageIdx = 1;
+        trSummaryState = 'Page 1 of 2 (6 items)';
+      }, 180);
+    },
+  };
+  const trDdEl = {
+    id: 'trdd',
+    get innerText() {
+      return trDdValue;
+    },
+    click: () => {},
+  };
+  const trNextBtn = {
+    get className() {
+      return trPageIdx >= 2 ? 'rz-pager-next rz-state-disabled' : 'rz-pager-next';
+    },
+    getAttribute: () => (trPageIdx >= 2 ? '' : null),
+    click: () => {
+      if (trPageIdx < 2) {
+        trPageIdx += 1;
+        trSummaryState = 'Page 2 of 2 (6 items)';
+      }
+    },
+  };
+  const trTable = {
+    className: 'rz-grid-table',
+    querySelectorAll: (sel) => {
+      if (sel === 'thead tr') return [equipTheadRow0, equipTheadRow1];
+      if (sel === 'tbody tr') {
+        const start = (trPageIdx - 1) * trVisibleSize;
+        return transientRowsData.slice(start, start + trVisibleSize).map(makeEquipBodyTr);
+      }
+      return [];
+    },
+  };
+  const trGrid = {
+    querySelectorAll: (sel) =>
+      sel === 'thead th, thead td' ? [makeEquipCell('Nhân viên')] : [],
+    querySelector: (sel) => {
+      if (sel === 'table.rz-grid-table') return trTable;
+      if (sel === '.rz-pager') {
+        return {
+          querySelector: (s) => {
+            if (s === '.rz-dropdown') return trDdEl;
+            if (s === '.rz-pager-next') return trNextBtn;
+            return null;
+          },
+        };
+      }
+      if (sel === '.rz-pager-summary') {
+        return { innerText: trSummaryState };
+      }
+      return null;
+    },
+  };
+  const transientDoc = {
+    getElementById: (id) =>
+      id === 'popup-trdd' ? { querySelectorAll: () => [trDdItem2, trDdItem5] } : null,
+    querySelectorAll: (sel) => {
+      if (sel === '.rz-data-grid') return [trGrid];
+      if (sel.includes('rz-tabview-nav')) {
+        return [{ innerText: 'Tồn công nợ theo NV', className: 'rz-tabview-selected' }];
+      }
+      if (sel === 'button') return [{ innerText: 'Xem danh sách' }];
+      return [];
+    },
+  };
+  const transientRes = await collectEquipmentDebtFromDocument(transientDoc, { waitMs: 1500 });
+  assert.equal(transientRes.status, 'ok');
+  assert.equal(
+    transientRes.dataset.totalStaff,
+    6,
+    'Collector must ignore transient Page 1 of 1 (1 items) summary and collect all 6 KTV across 2 pages'
+  );
+  assert.equal(transientRes.dataset.meta.pagesScanned, 2);
 
   assert.equal(
     normalizeEquipmentMatchKey('01.Vu\u0303ng M\u00e2\u0303u'),
@@ -3423,6 +3546,13 @@ async function runTests() {
   assert.equal(cascadeReg.length > 0 && cascadeProv.length > 0 && cascadePartner === 'Doi Tac Mau', true);
   assert.equal(readEquipmentFilterOptions(cascadeDoc, 'partner').current, 'Doi Tac Mau');
 
+  const appSourceText = fs.readFileSync(path.join(ROOT_DIR, 'src', 'ui', 'app.js'), 'utf8');
+  assert.equal(
+    appSourceText.includes('equipDebtHasDebtTab'),
+    false,
+    'src/ui/app.js must not reference misspelled state.equipDebtHasDebtTab'
+  );
+
   for (const token of [
     'equipment_debt',
     'collectEquipmentDebtFromDocument',
@@ -3431,6 +3561,8 @@ async function runTests() {
     'getEquipmentRealBodyRows',
     'waitForEquipmentDebtTabOpen',
     'EQUIPMENT_DEBT_FILTER',
+    'DEFAULT_EQUIPMENT_DEBT_FILTER',
+    'getEffectiveEquipmentDebtFilter',
     'applyEquipmentDebtFilterToPage',
     EQUIPMENT_ENDPOINTS.base,
   ]) {

@@ -232,7 +232,17 @@ export async function selectEquipmentFilterOption(
   const curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
   if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
     if (waitNextKind) {
-      const existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      let existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      if (existingNext.options.length === 0) {
+        const waitAlreadyPopulatingDeadline = Date.now() + 1200;
+        while (Date.now() < waitAlreadyPopulatingDeadline) {
+          await sleep(150);
+          existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+          if (existingNext.options.length > 0) {
+            break;
+          }
+        }
+      }
       if (existingNext.options.length > 0) {
         return { ok: true, skipped: true, picked: curText };
       }
@@ -253,12 +263,29 @@ export async function selectEquipmentFilterOption(
     await sleep(180);
   }
 
-  const panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  let panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  let items =
+    panel && typeof panel.querySelectorAll === 'function'
+      ? Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'))
+      : [];
+  if (items.length === 0) {
+    const waitItemsDeadline = Date.now() + 2500;
+    while (Date.now() < waitItemsDeadline) {
+      await sleep(150);
+      panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+      items =
+        panel && typeof panel.querySelectorAll === 'function'
+          ? Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'))
+          : [];
+      if (items.length > 0) {
+        break;
+      }
+    }
+  }
   if (!panel || typeof panel.querySelectorAll !== 'function') {
     return { ok: false, error: `Không mở được danh sách chọn cho "${fieldKind}".` };
   }
 
-  const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
   let match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm);
   if (!match) {
     match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm));
@@ -676,22 +703,42 @@ function readEquipmentGridSnapshotState(grid) {
 async function waitForEquipmentPageContentChange(
   grid,
   prevState,
-  { mode = 'page', timeoutMs = 5500 } = {}
+  { mode = 'page', targetPageSize = 0, timeoutMs = 5500 } = {}
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await sleep(150);
     const next = readEquipmentGridSnapshotState(grid);
     if (next.rowCount === 0) continue;
+
+    // Bo qua trang thai tam cua Radzen Blazor khi dang nap lai ("Page 1 of 1 (1 items)")
+    const isTransientSummary =
+      prevState.totalItems > 1 && next.totalItems > 0 && next.totalItems < prevState.totalItems;
+    if (isTransientSummary) continue;
+
+    if (mode === 'pagesize') {
+      const expectedRows =
+        targetPageSize > 0 && prevState.totalItems > 0
+          ? Math.min(targetPageSize, prevState.totalItems)
+          : 0;
+      const pageSizeChanged =
+        expectedRows > prevState.rowCount
+          ? next.rowCount >= expectedRows
+          : prevState.rowCount === 0
+          ? next.rowCount !== prevState.rowCount
+          : next.rowCount > prevState.rowCount;
+      if (pageSizeChanged) {
+        await sleep(220);
+        return true;
+      }
+      continue;
+    }
+
     const contentChanged =
       next.firstStaff !== prevState.firstStaff ||
       next.lastStaff !== prevState.lastStaff ||
       next.rowCount !== prevState.rowCount;
-    const changed =
-      mode === 'pagesize'
-        ? next.rowCount !== prevState.rowCount || next.totalPages !== prevState.totalPages
-        : contentChanged;
-    if (changed) {
+    if (contentChanged) {
       await sleep(180);
       return true;
     }
@@ -762,7 +809,8 @@ export async function collectEquipmentDebtFromDocument(
           best.el.click();
           await waitForEquipmentPageContentChange(grid, prevSnap, {
             mode: 'pagesize',
-            timeoutMs: Math.min(waitMs, 3500),
+            targetPageSize: best.size,
+            timeoutMs: Math.max(waitMs, 6500),
           });
           pagerInfo = parseEquipmentDebtPagerInfo(grid);
         }

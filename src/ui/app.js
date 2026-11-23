@@ -10,10 +10,12 @@ import {
   validateContractId,
 } from '../config/portals.js';
 import {
+  DEFAULT_EQUIPMENT_DEBT_FILTER,
   STORAGE_KEYS,
   addRecentContract,
   clearRecentContracts,
   consumePendingRecallContract,
+  getEffectiveEquipmentDebtFilter,
   getEquipmentDebtFilter,
   getRecentContracts,
   getState,
@@ -119,6 +121,7 @@ import {
   applyEquipmentDebtFilterToPage,
   formatEquipmentDebtClipboardText,
   loadEquipmentDebtContext,
+  normalizeEquipmentMatchKey,
   queryEquipmentDebtByStaff,
   queryEquipmentDebtHolders,
   readEquipmentFilterOptions,
@@ -2057,27 +2060,50 @@ export function mountRemoteInside({
     }
   }
 
+  function pickMatchingFilterOpt(options, target) {
+    if (!target) return '';
+    const key = normalizeEquipmentMatchKey(target);
+    const list = Array.isArray(options) ? options : [];
+    return list.find((opt) => normalizeEquipmentMatchKey(opt) === key) || target;
+  }
+
+  function isSameEquipmentFilter(a, b) {
+    if (!a || !b) return false;
+    return (
+      normalizeEquipmentMatchKey(a.region) === normalizeEquipmentMatchKey(b.region) &&
+      normalizeEquipmentMatchKey(a.province) === normalizeEquipmentMatchKey(b.province) &&
+      normalizeEquipmentMatchKey(a.partner) === normalizeEquipmentMatchKey(b.partner)
+    );
+  }
+
   function syncEquipDebtDraftFromPage() {
     if (!pageDocument) return;
     const rInfo = readEquipmentFilterOptions(pageDocument, 'region');
     const pInfo = readEquipmentFilterOptions(pageDocument, 'province');
     const prInfo = readEquipmentFilterOptions(pageDocument, 'partner');
-    const saved = getEquipmentDebtFilter();
-    state.equipDebtSavedFilter = saved;
+    const activeFilter = getEffectiveEquipmentDebtFilter();
+    state.equipDebtSavedFilter = activeFilter;
     state.equipDebtRegionOpts = rInfo.options || [];
     state.equipDebtProvinceOpts = pInfo.options || [];
     state.equipDebtPartnerOpts = prInfo.options || [];
-    state.equipDebtDraftRegion =
-      rInfo.current || (saved && saved.region) || state.equipDebtDraftRegion || '';
-    state.equipDebtDraftProvince =
-      pInfo.current || (saved && saved.province) || state.equipDebtDraftProvince || '';
-    state.equipDebtDraftPartner =
-      prInfo.current || (saved && saved.partner) || state.equipDebtDraftPartner || '';
+    state.equipDebtDraftRegion = pickMatchingFilterOpt(
+      state.equipDebtRegionOpts,
+      rInfo.current || activeFilter.region
+    );
+    state.equipDebtDraftProvince = pickMatchingFilterOpt(
+      state.equipDebtProvinceOpts,
+      pInfo.current || activeFilter.province
+    );
+    state.equipDebtDraftPartner = pickMatchingFilterOpt(
+      state.equipDebtPartnerOpts,
+      prInfo.current || activeFilter.partner
+    );
   }
 
   async function loadEquipmentDebtModal({ allowAutoSetup = true, autoDepth = 0 } = {}) {
-    const savedFilter = getEquipmentDebtFilter();
-    state.equipDebtSavedFilter = savedFilter;
+    const customSavedFilter = getEquipmentDebtFilter();
+    const activeFilter = getEffectiveEquipmentDebtFilter();
+    state.equipDebtSavedFilter = activeFilter;
     state.equipDebtLoading = true;
     state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
     state.equipDebtError = '';
@@ -2133,8 +2159,8 @@ export function mountRemoteInside({
             return loadEquipmentDebtModal({ allowAutoSetup: true, autoDepth: autoDepth + 1 });
           }
         } else if (res.hasDebtTab && res.isDebtTabActive) {
-          if (res.filterMissing && savedFilter) {
-            const applyRes = await applyEquipmentDebtFilterToPage(pageDocument, savedFilter, {
+          if (res.filterMissing) {
+            const applyRes = await applyEquipmentDebtFilterToPage(pageDocument, activeFilter, {
               onProgress: setModalProgress,
             });
             if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
@@ -2151,12 +2177,11 @@ export function mountRemoteInside({
             }
           }
 
-          const postFilterMissing = res.filterMissing && !savedFilter;
-          if (!postFilterMissing && res.hasViewListBtn) {
+          if (res.hasViewListBtn) {
             setModalProgress('Đang bấm "Xem danh sách" & chờ bảng tải…');
             const vRes = triggerEquipmentDebtViewList(pageDocument);
             if (vRes.ok) {
-              await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 18000 });
+              await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 20000 });
               if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
               return loadEquipmentDebtModal({ allowAutoSetup: false, autoDepth: autoDepth + 1 });
             }
@@ -2172,14 +2197,17 @@ export function mountRemoteInside({
 
       if (res.status === 'ok' && res.dataset) {
         if (
-          !savedFilter &&
+          !customSavedFilter &&
           res.currentFilter &&
           res.currentFilter.region &&
           res.currentFilter.province &&
-          res.currentFilter.partner
+          res.currentFilter.partner &&
+          !isSameEquipmentFilter(res.currentFilter, DEFAULT_EQUIPMENT_DEBT_FILTER)
         ) {
           setEquipmentDebtFilter(res.currentFilter);
           state.equipDebtSavedFilter = res.currentFilter;
+        } else {
+          state.equipDebtSavedFilter = activeFilter;
         }
         state.equipDebtDataset = res.dataset;
         const mats = res.dataset.materials || [];
@@ -7190,17 +7218,30 @@ export function mountRemoteInside({
           }),
         ];
 
-        if (state.equipDebtSavedFilter) {
+        if (getEquipmentDebtFilter()) {
           pickerActions.push(
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               disabled: busy,
-              text: 'Xóa cố định',
+              text: 'Về mặc định',
               onClick: () => {
                 setEquipmentDebtFilter(null);
-                state.equipDebtSavedFilter = null;
-                state.equipDebtNotice = 'Đã xóa bộ lọc cố định đã lưu trên máy.';
+                const defFilter = getEffectiveEquipmentDebtFilter();
+                state.equipDebtSavedFilter = defFilter;
+                state.equipDebtDraftRegion = pickMatchingFilterOpt(
+                  state.equipDebtRegionOpts,
+                  defFilter.region
+                );
+                state.equipDebtDraftProvince = pickMatchingFilterOpt(
+                  state.equipDebtProvinceOpts,
+                  defFilter.province
+                );
+                state.equipDebtDraftPartner = pickMatchingFilterOpt(
+                  state.equipDebtPartnerOpts,
+                  defFilter.partner
+                );
+                state.equipDebtNotice = 'Đã khôi phục bộ lọc mặc định (10.Vũng Tàu • Phuong Nam VTU).';
                 state.equipDebtNoticeTone = 'info';
                 renderConfirm();
               },
@@ -7226,7 +7267,7 @@ export function mountRemoteInside({
         return el('div', { className: 'ri-sheet-status', 'data-tone': 'info' }, [
           el('div', {
             className: 'ri-debt-summary-title',
-            text: 'Bộ lọc cố định (lưu trên máy, lần sau tự điền)',
+            text: 'Bộ lọc cố định (mặc định: 10.Vũng Tàu • Phuong Nam VTU)',
           }),
           el('div', { className: 'ri-debt-picker' }, [regSel, provSel, partnerSel]),
           el('div', { className: 'ri-result-actions' }, pickerActions),
@@ -7285,7 +7326,7 @@ export function mountRemoteInside({
           ])
         );
       } else if (state.equipDebtStatus === 'needs_report_loaded') {
-        if (state.equipDebtHasDebtTab && (state.equipDebtFilterMissing || state.equipDebtFilterEditOpen)) {
+        if (state.equipDebtHasTab && (state.equipDebtFilterMissing || state.equipDebtFilterEditOpen)) {
           if (state.equipDebtNotice) {
             sheetParts.push(
               el('div', {

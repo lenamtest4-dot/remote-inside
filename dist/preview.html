@@ -440,6 +440,11 @@ function consumePendingRecallContract(maxAgeMs = 180000, storageAdapter = null) 
   }
   return cleanId;
 }
+const DEFAULT_EQUIPMENT_DEBT_FILTER = Object.freeze({
+  region: '10.Vũng Tàu',
+  province: 'Hồ Chí Minh - Bà Rịa - Vũng Tàu',
+  partner: 'Phuong Nam VTU',
+});
 
 /**
  * Doc bo loc co dinh (Vung / Tinh thanh / Doi tac) cho Bao cao ton no vat tu KTV.
@@ -456,6 +461,13 @@ function getEquipmentDebtFilter(storageAdapter = null) {
     return null;
   }
   return { region, province, partner };
+}
+
+/**
+ * Tra ve bo loc co dinh tuy chinh hoac bo loc mac dinh duoc cau hinh san.
+ */
+function getEffectiveEquipmentDebtFilter(storageAdapter = null) {
+  return getEquipmentDebtFilter(storageAdapter) || { ...DEFAULT_EQUIPMENT_DEBT_FILTER };
 }
 
 /**
@@ -9783,7 +9795,17 @@ async function selectEquipmentFilterOption(
   const curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
   if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
     if (waitNextKind) {
-      const existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      let existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+      if (existingNext.options.length === 0) {
+        const waitAlreadyPopulatingDeadline = Date.now() + 1200;
+        while (Date.now() < waitAlreadyPopulatingDeadline) {
+          await sleep(150);
+          existingNext = readEquipmentFilterOptions(doc, waitNextKind);
+          if (existingNext.options.length > 0) {
+            break;
+          }
+        }
+      }
       if (existingNext.options.length > 0) {
         return { ok: true, skipped: true, picked: curText };
       }
@@ -9804,12 +9826,29 @@ async function selectEquipmentFilterOption(
     await sleep(180);
   }
 
-  const panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  let panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+  let items =
+    panel && typeof panel.querySelectorAll === 'function'
+      ? Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'))
+      : [];
+  if (items.length === 0) {
+    const waitItemsDeadline = Date.now() + 2500;
+    while (Date.now() < waitItemsDeadline) {
+      await sleep(150);
+      panel = findEquipmentFilterDropdownAndPanel(doc, fieldKind).panel || initialPanel;
+      items =
+        panel && typeof panel.querySelectorAll === 'function'
+          ? Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'))
+          : [];
+      if (items.length > 0) {
+        break;
+      }
+    }
+  }
   if (!panel || typeof panel.querySelectorAll !== 'function') {
     return { ok: false, error: `Không mở được danh sách chọn cho "${fieldKind}".` };
   }
 
-  const items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
   let match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm);
   if (!match) {
     match = items.find((el) => normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm));
@@ -10218,22 +10257,42 @@ function readEquipmentGridSnapshotState(grid) {
 async function waitForEquipmentPageContentChange(
   grid,
   prevState,
-  { mode = 'page', timeoutMs = 5500 } = {}
+  { mode = 'page', targetPageSize = 0, timeoutMs = 5500 } = {}
 ) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await sleep(150);
     const next = readEquipmentGridSnapshotState(grid);
     if (next.rowCount === 0) continue;
+
+    // Bo qua trang thai tam cua Radzen Blazor khi dang nap lai ("Page 1 of 1 (1 items)")
+    const isTransientSummary =
+      prevState.totalItems > 1 && next.totalItems > 0 && next.totalItems < prevState.totalItems;
+    if (isTransientSummary) continue;
+
+    if (mode === 'pagesize') {
+      const expectedRows =
+        targetPageSize > 0 && prevState.totalItems > 0
+          ? Math.min(targetPageSize, prevState.totalItems)
+          : 0;
+      const pageSizeChanged =
+        expectedRows > prevState.rowCount
+          ? next.rowCount >= expectedRows
+          : prevState.rowCount === 0
+          ? next.rowCount !== prevState.rowCount
+          : next.rowCount > prevState.rowCount;
+      if (pageSizeChanged) {
+        await sleep(220);
+        return true;
+      }
+      continue;
+    }
+
     const contentChanged =
       next.firstStaff !== prevState.firstStaff ||
       next.lastStaff !== prevState.lastStaff ||
       next.rowCount !== prevState.rowCount;
-    const changed =
-      mode === 'pagesize'
-        ? next.rowCount !== prevState.rowCount || next.totalPages !== prevState.totalPages
-        : contentChanged;
-    if (changed) {
+    if (contentChanged) {
       await sleep(180);
       return true;
     }
@@ -10303,7 +10362,8 @@ async function collectEquipmentDebtFromDocument(
           best.el.click();
           await waitForEquipmentPageContentChange(grid, prevSnap, {
             mode: 'pagesize',
-            timeoutMs: Math.min(waitMs, 3500),
+            targetPageSize: best.size,
+            timeoutMs: Math.max(waitMs, 6500),
           });
           pagerInfo = parseEquipmentDebtPagerInfo(grid);
         }
@@ -12610,27 +12670,50 @@ function mountRemoteInside({
     }
   }
 
+  function pickMatchingFilterOpt(options, target) {
+    if (!target) return '';
+    const key = normalizeEquipmentMatchKey(target);
+    const list = Array.isArray(options) ? options : [];
+    return list.find((opt) => normalizeEquipmentMatchKey(opt) === key) || target;
+  }
+
+  function isSameEquipmentFilter(a, b) {
+    if (!a || !b) return false;
+    return (
+      normalizeEquipmentMatchKey(a.region) === normalizeEquipmentMatchKey(b.region) &&
+      normalizeEquipmentMatchKey(a.province) === normalizeEquipmentMatchKey(b.province) &&
+      normalizeEquipmentMatchKey(a.partner) === normalizeEquipmentMatchKey(b.partner)
+    );
+  }
+
   function syncEquipDebtDraftFromPage() {
     if (!pageDocument) return;
     const rInfo = readEquipmentFilterOptions(pageDocument, 'region');
     const pInfo = readEquipmentFilterOptions(pageDocument, 'province');
     const prInfo = readEquipmentFilterOptions(pageDocument, 'partner');
-    const saved = getEquipmentDebtFilter();
-    state.equipDebtSavedFilter = saved;
+    const activeFilter = getEffectiveEquipmentDebtFilter();
+    state.equipDebtSavedFilter = activeFilter;
     state.equipDebtRegionOpts = rInfo.options || [];
     state.equipDebtProvinceOpts = pInfo.options || [];
     state.equipDebtPartnerOpts = prInfo.options || [];
-    state.equipDebtDraftRegion =
-      rInfo.current || (saved && saved.region) || state.equipDebtDraftRegion || '';
-    state.equipDebtDraftProvince =
-      pInfo.current || (saved && saved.province) || state.equipDebtDraftProvince || '';
-    state.equipDebtDraftPartner =
-      prInfo.current || (saved && saved.partner) || state.equipDebtDraftPartner || '';
+    state.equipDebtDraftRegion = pickMatchingFilterOpt(
+      state.equipDebtRegionOpts,
+      rInfo.current || activeFilter.region
+    );
+    state.equipDebtDraftProvince = pickMatchingFilterOpt(
+      state.equipDebtProvinceOpts,
+      pInfo.current || activeFilter.province
+    );
+    state.equipDebtDraftPartner = pickMatchingFilterOpt(
+      state.equipDebtPartnerOpts,
+      prInfo.current || activeFilter.partner
+    );
   }
 
   async function loadEquipmentDebtModal({ allowAutoSetup = true, autoDepth = 0 } = {}) {
-    const savedFilter = getEquipmentDebtFilter();
-    state.equipDebtSavedFilter = savedFilter;
+    const customSavedFilter = getEquipmentDebtFilter();
+    const activeFilter = getEffectiveEquipmentDebtFilter();
+    state.equipDebtSavedFilter = activeFilter;
     state.equipDebtLoading = true;
     state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
     state.equipDebtError = '';
@@ -12686,8 +12769,8 @@ function mountRemoteInside({
             return loadEquipmentDebtModal({ allowAutoSetup: true, autoDepth: autoDepth + 1 });
           }
         } else if (res.hasDebtTab && res.isDebtTabActive) {
-          if (res.filterMissing && savedFilter) {
-            const applyRes = await applyEquipmentDebtFilterToPage(pageDocument, savedFilter, {
+          if (res.filterMissing) {
+            const applyRes = await applyEquipmentDebtFilterToPage(pageDocument, activeFilter, {
               onProgress: setModalProgress,
             });
             if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
@@ -12704,12 +12787,11 @@ function mountRemoteInside({
             }
           }
 
-          const postFilterMissing = res.filterMissing && !savedFilter;
-          if (!postFilterMissing && res.hasViewListBtn) {
+          if (res.hasViewListBtn) {
             setModalProgress('Đang bấm "Xem danh sách" & chờ bảng tải…');
             const vRes = triggerEquipmentDebtViewList(pageDocument);
             if (vRes.ok) {
-              await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 18000 });
+              await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 20000 });
               if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
               return loadEquipmentDebtModal({ allowAutoSetup: false, autoDepth: autoDepth + 1 });
             }
@@ -12725,14 +12807,17 @@ function mountRemoteInside({
 
       if (res.status === 'ok' && res.dataset) {
         if (
-          !savedFilter &&
+          !customSavedFilter &&
           res.currentFilter &&
           res.currentFilter.region &&
           res.currentFilter.province &&
-          res.currentFilter.partner
+          res.currentFilter.partner &&
+          !isSameEquipmentFilter(res.currentFilter, DEFAULT_EQUIPMENT_DEBT_FILTER)
         ) {
           setEquipmentDebtFilter(res.currentFilter);
           state.equipDebtSavedFilter = res.currentFilter;
+        } else {
+          state.equipDebtSavedFilter = activeFilter;
         }
         state.equipDebtDataset = res.dataset;
         const mats = res.dataset.materials || [];
@@ -17743,17 +17828,30 @@ function mountRemoteInside({
           }),
         ];
 
-        if (state.equipDebtSavedFilter) {
+        if (getEquipmentDebtFilter()) {
           pickerActions.push(
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               disabled: busy,
-              text: 'Xóa cố định',
+              text: 'Về mặc định',
               onClick: () => {
                 setEquipmentDebtFilter(null);
-                state.equipDebtSavedFilter = null;
-                state.equipDebtNotice = 'Đã xóa bộ lọc cố định đã lưu trên máy.';
+                const defFilter = getEffectiveEquipmentDebtFilter();
+                state.equipDebtSavedFilter = defFilter;
+                state.equipDebtDraftRegion = pickMatchingFilterOpt(
+                  state.equipDebtRegionOpts,
+                  defFilter.region
+                );
+                state.equipDebtDraftProvince = pickMatchingFilterOpt(
+                  state.equipDebtProvinceOpts,
+                  defFilter.province
+                );
+                state.equipDebtDraftPartner = pickMatchingFilterOpt(
+                  state.equipDebtPartnerOpts,
+                  defFilter.partner
+                );
+                state.equipDebtNotice = 'Đã khôi phục bộ lọc mặc định (10.Vũng Tàu • Phuong Nam VTU).';
                 state.equipDebtNoticeTone = 'info';
                 renderConfirm();
               },
@@ -17779,7 +17877,7 @@ function mountRemoteInside({
         return el('div', { className: 'ri-sheet-status', 'data-tone': 'info' }, [
           el('div', {
             className: 'ri-debt-summary-title',
-            text: 'Bộ lọc cố định (lưu trên máy, lần sau tự điền)',
+            text: 'Bộ lọc cố định (mặc định: 10.Vũng Tàu • Phuong Nam VTU)',
           }),
           el('div', { className: 'ri-debt-picker' }, [regSel, provSel, partnerSel]),
           el('div', { className: 'ri-result-actions' }, pickerActions),
@@ -17838,7 +17936,7 @@ function mountRemoteInside({
           ])
         );
       } else if (state.equipDebtStatus === 'needs_report_loaded') {
-        if (state.equipDebtHasDebtTab && (state.equipDebtFilterMissing || state.equipDebtFilterEditOpen)) {
+        if (state.equipDebtHasTab && (state.equipDebtFilterMissing || state.equipDebtFilterEditOpen)) {
           if (state.equipDebtNotice) {
             sheetParts.push(
               el('div', {

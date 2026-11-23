@@ -166,6 +166,12 @@ export function consumePendingRecallContract(maxAgeMs = 180000, storageAdapter =
   return cleanId;
 }
 
+export const DEFAULT_EQUIPMENT_DEBT_FILTER = Object.freeze({
+  region: '10.Vũng Tàu',
+  province: 'Hồ Chí Minh - Bà Rịa - Vũng Tàu',
+  partner: 'Phuong Nam VTU',
+});
+
 /**
  * Doc bo loc co dinh (Vung / Tinh thanh / Doi tac) cho Bao cao ton no vat tu KTV.
  */
@@ -181,6 +187,13 @@ export function getEquipmentDebtFilter(storageAdapter = null) {
     return null;
   }
   return { region, province, partner };
+}
+
+/**
+ * Tra ve bo loc co dinh tuy chinh hoac bo loc mac dinh duoc cau hinh san.
+ */
+export function getEffectiveEquipmentDebtFilter(storageAdapter = null) {
+  return getEquipmentDebtFilter(storageAdapter) || { ...DEFAULT_EQUIPMENT_DEBT_FILTER };
 }
 
 /**

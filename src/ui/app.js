@@ -34,7 +34,15 @@ import {
   extractMatchingFunctionsFromJs,
   scanPageStructure,
 } from '../core/inspector.js';
-import { getCachedInsideContract, runInsideAction } from '../adapters/inside.js';
+import {
+  fetchInsideBoxMacs,
+  fetchInsideOltInit,
+  fetchInsideOltListByLocation,
+  getCachedInsideContract,
+  isExtendedPortOlt,
+  runInsideAction,
+  validateBoxNewMac,
+} from '../adapters/inside.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function el(tag, attrs = {}, children = []) {
@@ -150,6 +158,24 @@ export function mountRemoteInside({
     viewReloadKeys: {},
     confirmAction: null,
     confirmNewMac: '',
+    boxLoading: false,
+    boxError: '',
+    boxLoginUrl: '',
+    boxItems: [],
+    boxSelectedMac: '',
+    boxNewMac: '',
+    oltLoading: false,
+    oltError: '',
+    oltLoginUrl: '',
+    oltLocations: [],
+    oltLocationId: '',
+    oltList: [],
+    oltSearch: '',
+    oltSelectedId: '',
+    oltPorts: [],
+    oltSelectedPorts: [],
+    oltShowAllPorts: false,
+    oltClearMode: 'clear_serial',
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -246,26 +272,158 @@ export function mountRemoteInside({
     }
   }
 
+  function resetConfirmState() {
+    state.confirmAction = null;
+    state.confirmNewMac = '';
+    state.boxLoading = false;
+    state.boxError = '';
+    state.boxLoginUrl = '';
+    state.boxItems = [];
+    state.boxSelectedMac = '';
+    state.boxNewMac = '';
+    state.oltLoading = false;
+    state.oltError = '';
+    state.oltLoginUrl = '';
+    state.oltLocations = [];
+    state.oltLocationId = '';
+    state.oltList = [];
+    state.oltSearch = '';
+    state.oltSelectedId = '';
+    state.oltPorts = [];
+    state.oltSelectedPorts = [];
+    state.oltShowAllPorts = false;
+    state.oltClearMode = 'clear_serial';
+  }
+
+  async function loadBoxMacsForModal(contractId) {
+    state.boxLoading = true;
+    state.boxError = '';
+    state.boxLoginUrl = '';
+    state.boxItems = [];
+    state.boxSelectedMac = '';
+    render();
+
+    try {
+      const res = await fetchInsideBoxMacs(contractId);
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
+        return;
+      }
+      state.boxLoading = false;
+      if (res.status === 'ok') {
+        state.boxItems = Array.isArray(res.items) ? res.items : [];
+        if (state.boxItems.length === 1) {
+          state.boxSelectedMac = state.boxItems[0].MAC;
+        }
+      } else {
+        state.boxError = res.message || 'Không tải được danh sách MAC Box.';
+        state.boxLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
+        return;
+      }
+      state.boxLoading = false;
+      state.boxError = err && err.message ? err.message : 'Lỗi tải danh sách MAC Box.';
+    }
+    render();
+  }
+
+  async function loadOltDataForModal(forceRefresh = false) {
+    state.oltLoading = true;
+    state.oltError = '';
+    state.oltLoginUrl = '';
+    render();
+
+    try {
+      const res = await fetchInsideOltInit({ forceRefresh });
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltLoading = false;
+      if (res.status === 'ok') {
+        state.oltLocations = Array.isArray(res.locations) ? res.locations : [];
+        state.oltLocationId = res.defaultLocationId || '';
+        state.oltList = Array.isArray(res.olts) ? res.olts : [];
+        state.oltPorts = Array.isArray(res.ports) ? res.ports : [];
+        if (state.oltSelectedId && !state.oltList.some((o) => o.id === state.oltSelectedId)) {
+          state.oltSelectedId = '';
+          state.oltSelectedPorts = [];
+        }
+      } else {
+        state.oltError = res.message || 'Không tải được dữ liệu POP OLT.';
+        state.oltLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltLoading = false;
+      state.oltError = err && err.message ? err.message : 'Lỗi tải dữ liệu MonitorOLT.';
+    }
+    render();
+  }
+
+  async function loadOltListForSelectedLocation(locationId) {
+    state.oltLocationId = locationId;
+    state.oltSelectedId = '';
+    state.oltSelectedPorts = [];
+    state.oltShowAllPorts = false;
+    state.oltLoading = true;
+    state.oltError = '';
+    state.oltLoginUrl = '';
+    render();
+
+    try {
+      const res = await fetchInsideOltListByLocation(locationId, { forceRefresh: true });
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltLoading = false;
+      if (res.status === 'ok') {
+        state.oltList = Array.isArray(res.olts) ? res.olts : [];
+      } else {
+        state.oltError = res.message || 'Không tải được danh sách POP OLT cho vùng đã chọn.';
+        state.oltLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltLoading = false;
+      state.oltError = err && err.message ? err.message : 'Lỗi tải danh sách POP OLT.';
+    }
+    render();
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
+    const requiresContract = action.requiresContract !== false;
     const check = validateContractId(state.contractInput);
-    if (!check.valid) {
-      state.result = {
-        status: 'validation_error',
-        title: 'Thiếu Mã hợp đồng',
-        message: check.error,
-      };
-      render();
-      return;
+    if (requiresContract) {
+      if (!check.valid) {
+        state.result = {
+          status: 'validation_error',
+          title: 'Thiếu Mã hợp đồng',
+          message: check.error,
+        };
+        render();
+        return;
+      }
+      state.contractInput = check.value;
+    } else {
+      state.contractInput = normalizeContractId(state.contractInput || '');
     }
 
-    state.contractInput = check.value;
-
     if (action.requiresConfirm) {
+      resetConfirmState();
       state.confirmAction = action;
-      state.confirmNewMac = '';
       render();
+      if (state.activePortalId === 'inside' && action.id === 'reset_mac_box') {
+        loadBoxMacsForModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'clear_osp') {
+        loadOltDataForModal(false);
+      }
       return;
     }
 
@@ -277,12 +435,25 @@ export function mountRemoteInside({
     const portal = PORTALS[state.activePortalId];
     const contractId = normalizeContractId(state.contractInput);
 
-    state.confirmAction = null;
-    state.confirmNewMac = '';
+    resetConfirmState();
     state.isRunning = true;
     state.runningActionId = action.id;
-    state.recentContracts = addRecentContract(contractId);
+    if (contractId) {
+      state.recentContracts = addRecentContract(contractId);
+    }
     render();
+
+    const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
+    const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
+    const logActionLabel =
+      isClearOsp && actionCtx.clearMode === 'config_device'
+        ? 'Clear OSP (Config Device)'
+        : action.label;
+    let logTarget = contractId;
+    if (isClearOsp && actionCtx.oltName) {
+      const baseOlt = portSummary ? `${actionCtx.oltName} (P:${portSummary})` : actionCtx.oltName;
+      logTarget = contractId ? `${contractId} • ${baseOlt}` : baseOlt;
+    }
 
     try {
       const res = await executePortalAction(portal.id, action.id, contractId, actionCtx);
@@ -304,7 +475,7 @@ export function mountRemoteInside({
           : res.status === 'needs_scan' || res.status === 'iam_expired'
           ? 'warn'
           : 'error';
-      addLog(portal.label, action.label, contractId, logKind);
+      addLog(portal.label, logActionLabel, logTarget, logKind);
 
       if (res.status === 'iam_expired') {
         state.sessionStatus = {
@@ -320,7 +491,7 @@ export function mountRemoteInside({
         title: 'Có lỗi khi xử lý',
         message: err && err.message ? err.message : 'Không rõ nguyên nhân.',
       };
-      addLog(portal.label, action.label, contractId, 'error');
+      addLog(portal.label, logActionLabel, logTarget, 'error');
     } finally {
       state.isRunning = false;
       state.runningActionId = '';
@@ -858,8 +1029,7 @@ export function mountRemoteInside({
 
   function closeConsole() {
     state.isOpen = false;
-    state.confirmAction = null;
-    state.confirmNewMac = '';
+    resetConfirmState();
     state.scannerOpen = false;
     render();
   }
@@ -1212,6 +1382,20 @@ export function mountRemoteInside({
         })
       );
     }
+    if (res.sourceUrl) {
+      extraBtns.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-secondary-btn',
+          text: 'Mở trang MonitorOLT gốc',
+          onClick: () => {
+            if (pageWindow && pageWindow.open) {
+              pageWindow.open(res.sourceUrl, '_blank', 'noopener');
+            }
+          },
+        })
+      );
+    }
 
     if (extraBtns.length > 0) {
       children.push(el('div', { className: 'ri-result-actions' }, extraBtns));
@@ -1400,7 +1584,11 @@ export function mountRemoteInside({
     const act = state.confirmAction;
     const portal = PORTALS[state.activePortalId];
     const contractId = normalizeContractId(state.contractInput);
-    const cached = portal.id === 'inside' ? getCachedInsideContract(contractId) : null;
+    const cached =
+      portal.id === 'inside' && contractId ? getCachedInsideContract(contractId) : null;
+
+    const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
+    const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
 
     const sheetParts = [
       el('h2', { className: 'ri-sheet-title', text: `Xác nhận ${act.label}?` }),
@@ -1408,19 +1596,39 @@ export function mountRemoteInside({
         className: 'ri-sheet-sub',
         text: act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
-      el('div', { className: 'ri-confirm-contract' }, [
-        el('span', { text: `Hợp đồng trên ${portal.label}` }),
-        el('span', { className: 'ri-confirm-code', text: contractId }),
-      ]),
     ];
 
-    if (cached && cached.objID) {
+    if (contractId) {
+      sheetParts.push(
+        el('div', { className: 'ri-confirm-contract' }, [
+          el('span', {
+            text: isInsideOlt ? 'Hợp đồng tham chiếu (không bắt buộc)' : `Hợp đồng trên ${portal.label}`,
+          }),
+          el('span', { className: 'ri-confirm-code', text: contractId }),
+        ])
+      );
+    } else if (isInsideOlt) {
+      sheetParts.push(
+        el('div', {
+          className: 'ri-confirm-meta',
+          text: 'Thao tác chọn trực tiếp POP OLT & Port (không bắt buộc nhập Mã hợp đồng).',
+        })
+      );
+    }
+
+    if (cached && cached.objID && !isInsideOlt) {
       const metaText =
         act.id === 'reset_mac' && cached.macAddress
           ? `ObjID: ${cached.objID} • MAC hiện tại: ${cached.macAddress}`
           : `ObjID: ${cached.objID}`;
       sheetParts.push(el('div', { className: 'ri-confirm-meta', text: metaText }));
     }
+
+    const confirmBtn = el('button', {
+      type: 'button',
+      className: 'ri-danger-btn',
+      text: 'Xác nhận thực hiện',
+    });
 
     if (portal.id === 'inside' && act.id === 'reset_mac') {
       const macInput = el('input', {
@@ -1446,6 +1654,480 @@ export function mountRemoteInside({
           macInput,
         ])
       );
+      confirmBtn.addEventListener('click', () =>
+        runConfirmedAction(act, { newMac: state.confirmNewMac })
+      );
+    } else if (isInsideBox) {
+      confirmBtn.textContent = 'Xác nhận đổi MAC Box';
+
+      if (state.boxLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải danh sách MAC Box của hợp đồng ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.boxError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadBoxMacsForModal(contractId),
+          }),
+        ];
+        if (state.boxLoginUrl && /iam|hết hạn/i.test(state.boxError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Đăng nhập IAM',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.boxLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.boxError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.boxItems.length === 0) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', {
+              text: `Hợp đồng ${contractId} hiện chưa có MAC Box nào trên Replace MAC.`,
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Tải lại danh sách',
+                onClick: () => loadBoxMacsForModal(contractId),
+              }),
+            ]),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const listLabel =
+          state.boxItems.length > 1
+            ? `Hợp đồng có ${state.boxItems.length} Box — hãy chạm chọn MAC Box cần thay thế:`
+            : 'MAC Box hiện tại trên hợp đồng:';
+
+        const boxListEl = el(
+          'div',
+          { className: 'ri-box-list' },
+          state.boxItems.map((item) => {
+            const isSelected = state.boxSelectedMac === item.MAC;
+            const subParts = [];
+            if (item.IdContract) subParts.push(`IdContract: ${item.IdContract}`);
+            if (item.Contract) subParts.push(`HĐ: ${item.Contract}`);
+            return el(
+              'button',
+              {
+                type: 'button',
+                className: `ri-box-item${isSelected ? ' is-selected' : ''}`,
+                'aria-pressed': isSelected ? 'true' : 'false',
+                onClick: () => {
+                  state.boxSelectedMac = item.MAC;
+                  render();
+                },
+              },
+              [
+                el('div', { className: 'ri-box-item-main' }, [
+                  el('div', { className: 'ri-box-mac', text: item.MAC }),
+                  subParts.length > 0
+                    ? el('div', { className: 'ri-box-sub', text: subParts.join(' • ') })
+                    : null,
+                ]),
+                el('span', {
+                  className: 'ri-tab-badge',
+                  text: isSelected ? 'Đang chọn' : 'Chọn',
+                }),
+              ]
+            );
+          })
+        );
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: listLabel }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadBoxMacsForModal(contractId),
+              }),
+            ]),
+            boxListEl,
+          ])
+        );
+
+        const macInput = el('input', {
+          type: 'text',
+          className: 'ri-confirm-input',
+          id: 'ri-box-new-mac',
+          placeholder: 'Ví dụ: AABBCCDDEEFF hoặc FBOX001122334455',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          value: state.boxNewMac,
+        });
+        macInput.value = state.boxNewMac;
+
+        const hintEl = el('div', { className: 'ri-field-hint' });
+
+        function syncBoxUi() {
+          const trimmed = String(state.boxNewMac || '').trim();
+          const macCheck = trimmed ? validateBoxNewMac(trimmed) : null;
+          if (!trimmed) {
+            hintEl.textContent =
+              'Nhập 12 ký tự (không gồm FBOX) hoặc 16 ký tự (bắt đầu bằng FBOX).';
+            hintEl.dataset.state = 'neutral';
+          } else if (macCheck.valid) {
+            hintEl.textContent = `Hợp lệ: ${macCheck.value} (${macCheck.value.length} ký tự)`;
+            hintEl.dataset.state = 'ok';
+          } else {
+            hintEl.textContent = macCheck.error;
+            hintEl.dataset.state = 'error';
+          }
+          confirmBtn.disabled =
+            !state.boxSelectedMac || !macCheck || !macCheck.valid;
+        }
+
+        macInput.addEventListener('input', (e) => {
+          state.boxNewMac = e.target.value;
+          syncBoxUi();
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('label', {
+              className: 'ri-confirm-label',
+              for: 'ri-box-new-mac',
+              text: 'MAC Box mới (bắt buộc 12 hoặc 16 ký tự)',
+            }),
+            macInput,
+            hintEl,
+          ])
+        );
+
+        syncBoxUi();
+
+        confirmBtn.addEventListener('click', () => {
+          const selectedItem =
+            state.boxItems.find((x) => x.MAC === state.boxSelectedMac) || {};
+          runConfirmedAction(act, {
+            oldMac: state.boxSelectedMac,
+            idContract:
+              selectedItem.IdContract || (cached && cached.objID ? String(cached.objID) : ''),
+            newMac: state.boxNewMac,
+          });
+        });
+      }
+    } else if (isInsideOlt) {
+      const isConfig = state.oltClearMode === 'config_device';
+      confirmBtn.textContent = isConfig ? 'Xác nhận Config Device' : 'Xác nhận Clear Serial';
+
+      sheetParts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-confirm-label', text: 'Chế độ thao tác trên OLT' }),
+          el('div', { className: 'ri-mode-row' }, [
+            el('button', {
+              type: 'button',
+              className: `ri-mode-btn${!isConfig ? ' is-active' : ''}`,
+              text: 'Clear Serial',
+              onClick: () => {
+                state.oltClearMode = 'clear_serial';
+                render();
+              },
+            }),
+            el('button', {
+              type: 'button',
+              className: `ri-mode-btn${isConfig ? ' is-active' : ''}`,
+              text: 'Config Device',
+              onClick: () => {
+                state.oltClearMode = 'config_device';
+                render();
+              },
+            }),
+          ]),
+        ])
+      );
+
+      if (state.oltLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: 'Đang tải vùng miền & danh sách POP OLT từ MonitorOLT…' }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.oltError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadOltDataForModal(true),
+          }),
+        ];
+        if (state.oltLoginUrl && /iam|hết hạn/i.test(state.oltError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Đăng nhập IAM',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.oltLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.oltError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const locHead = el('div', { className: 'ri-inline-head' }, [
+          el('span', { className: 'ri-confirm-label', text: 'Vùng miền' }),
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Tải lại DS OLT',
+            onClick: () => loadOltDataForModal(true),
+          }),
+        ]);
+
+        if (state.oltLocations.length > 1) {
+          const locSelect = el(
+            'select',
+            { className: 'ri-select', id: 'ri-olt-location' },
+            state.oltLocations.map((loc) => {
+              const opt = el('option', { value: loc.id, text: loc.name });
+              if (loc.id === state.oltLocationId) opt.selected = true;
+              return opt;
+            })
+          );
+          locSelect.value = state.oltLocationId;
+          locSelect.addEventListener('change', (e) => {
+            loadOltListForSelectedLocation(e.target.value);
+          });
+          sheetParts.push(el('div', { className: 'ri-confirm-input-wrap' }, [locHead, locSelect]));
+        } else if (state.oltLocations.length === 1) {
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              locHead,
+              el('div', {
+                className: 'ri-confirm-meta',
+                text: `Vùng hiện tại: ${state.oltLocations[0].name}`,
+              }),
+            ])
+          );
+        }
+
+        const oltCountSpan = el('span', { className: 'ri-text-btn' });
+        const searchInput = el('input', {
+          type: 'text',
+          className: 'ri-confirm-input',
+          id: 'ri-olt-search',
+          placeholder: 'Lọc nhanh tên OLT (ví dụ: BRUP001, GC16…)',
+          autocomplete: 'off',
+          spellcheck: 'false',
+          value: state.oltSearch,
+        });
+        searchInput.value = state.oltSearch;
+
+        const oltSelect = el('select', { className: 'ri-select', id: 'ri-olt-select' });
+
+        function syncOltConfirmState() {
+          const activeOltId = oltSelect.value || state.oltSelectedId;
+          confirmBtn.disabled =
+            !activeOltId || activeOltId === '0' || state.oltSelectedPorts.length === 0;
+        }
+
+        function populateOltSelect(queryText) {
+          const q = String(queryText || '').trim().toLowerCase();
+          const filtered = q
+            ? state.oltList.filter((o) => o.name.toLowerCase().includes(q))
+            : state.oltList;
+
+          oltCountSpan.textContent = q
+            ? `${filtered.length}/${state.oltList.length} OLT`
+            : `${state.oltList.length} OLT`;
+
+          oltSelect.textContent = '';
+          oltSelect.appendChild(
+            el('option', {
+              value: '',
+              text:
+                filtered.length > 0
+                  ? `-- Chọn POP OLT (${filtered.length}) --`
+                  : '-- Không có POP OLT khớp từ khóa --',
+            })
+          );
+
+          let hasSelectedInFiltered = false;
+          for (const item of filtered) {
+            const opt = el('option', { value: item.id, text: item.name });
+            if (item.id === state.oltSelectedId) {
+              opt.selected = true;
+              hasSelectedInFiltered = true;
+            }
+            oltSelect.appendChild(opt);
+          }
+
+          if (hasSelectedInFiltered) {
+            oltSelect.value = state.oltSelectedId;
+          } else {
+            oltSelect.value = '';
+          }
+          syncOltConfirmState();
+        }
+
+        populateOltSelect(state.oltSearch);
+
+        searchInput.addEventListener('input', (e) => {
+          state.oltSearch = e.target.value;
+          populateOltSelect(state.oltSearch);
+        });
+
+        oltSelect.addEventListener('change', (e) => {
+          state.oltSelectedId = e.target.value;
+          state.oltSelectedPorts = [];
+          const picked = state.oltList.find((o) => o.id === state.oltSelectedId);
+          state.oltShowAllPorts = picked ? isExtendedPortOlt(picked.name) : false;
+          render();
+        });
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-olt-search',
+                text: 'POP OLT',
+              }),
+              oltCountSpan,
+            ]),
+            searchInput,
+          ]),
+          el('div', { className: 'ri-confirm-input-wrap' }, [oltSelect])
+        );
+
+        const selectedOltObj = state.oltList.find((o) => o.id === state.oltSelectedId);
+        const isExtOlt = selectedOltObj ? isExtendedPortOlt(selectedOltObj.name) : false;
+        const portsSource =
+          state.oltPorts.length > 0
+            ? state.oltPorts
+            : Array.from({ length: 16 }, (_, idx) => ({
+                value: String(idx + 1),
+                label: `Port ${idx + 1}`,
+                isType2: idx + 1 > 8,
+              }));
+        const hasType2 = portsSource.some((p) => p.isType2);
+        const showAll = isExtOlt || state.oltShowAllPorts;
+        const visiblePorts = showAll ? portsSource : portsSource.filter((p) => !p.isType2);
+
+        const portTools = [];
+        if (!isExtOlt && hasType2) {
+          portTools.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: state.oltShowAllPorts ? 'Ẩn port 9–16' : 'Hiện đủ 16 port',
+              onClick: () => {
+                state.oltShowAllPorts = !state.oltShowAllPorts;
+                render();
+              },
+            })
+          );
+        }
+        if (state.oltSelectedPorts.length > 0) {
+          portTools.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Bỏ chọn',
+              onClick: () => {
+                state.oltSelectedPorts = [];
+                render();
+              },
+            })
+          );
+        }
+
+        const selectedPortSet = new Set(state.oltSelectedPorts);
+        const portOrder = new Map(portsSource.map((p, idx) => [p.value, idx]));
+
+        const portGrid = el(
+          'div',
+          { className: 'ri-port-grid' },
+          visiblePorts.map((p) => {
+            const active = selectedPortSet.has(p.value);
+            const displayLabel = /^\d+$/.test(p.label) ? `Port ${p.label}` : p.label;
+            return el('button', {
+              type: 'button',
+              className: `ri-port-chip${active ? ' is-selected' : ''}`,
+              'aria-pressed': active ? 'true' : 'false',
+              text: displayLabel,
+              onClick: () => {
+                if (selectedPortSet.has(p.value)) {
+                  state.oltSelectedPorts = state.oltSelectedPorts.filter((x) => x !== p.value);
+                } else {
+                  const next = [...state.oltSelectedPorts, p.value];
+                  next.sort((a, b) => (portOrder.get(a) ?? 999) - (portOrder.get(b) ?? 999));
+                  state.oltSelectedPorts = next;
+                }
+                render();
+              },
+            });
+          })
+        );
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `Chọn Port (${state.oltSelectedPorts.length} đã chọn)`,
+              }),
+              el('div', { className: 'ri-embed-toolbar-btns' }, portTools),
+            ]),
+            portGrid,
+          ])
+        );
+
+        syncOltConfirmState();
+
+        confirmBtn.addEventListener('click', () => {
+          const activeOltId = oltSelect.value || state.oltSelectedId;
+          const activeOlt = state.oltList.find((o) => o.id === activeOltId) || {};
+          runConfirmedAction(act, {
+            locationId: state.oltLocationId,
+            oltId: activeOltId,
+            oltName: activeOlt.name || '',
+            ports: state.oltSelectedPorts.slice(),
+            clearMode: state.oltClearMode,
+          });
+        });
+      }
+    } else {
+      confirmBtn.addEventListener('click', () =>
+        runConfirmedAction(act, { newMac: state.confirmNewMac })
+      );
     }
 
     sheetParts.push(
@@ -1455,17 +2137,11 @@ export function mountRemoteInside({
           className: 'ri-secondary-btn',
           text: 'Hủy',
           onClick: () => {
-            state.confirmAction = null;
-            state.confirmNewMac = '';
+            resetConfirmState();
             render();
           },
         }),
-        el('button', {
-          type: 'button',
-          className: 'ri-danger-btn',
-          text: 'Xác nhận thực hiện',
-          onClick: () => runConfirmedAction(act, { newMac: state.confirmNewMac }),
-        }),
+        confirmBtn,
       ])
     );
 

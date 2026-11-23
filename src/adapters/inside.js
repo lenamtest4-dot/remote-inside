@@ -3,7 +3,7 @@
  * Da noi API that cho Tra thong tin HD; cac lenh tac dong manh cho quet mau tung man hinh.
  */
 
-import { PORTALS, validateContractId } from '../config/portals.js';
+import { PORTALS, normalizeContractId, validateContractId } from '../config/portals.js';
 import {
   checkPortalSession,
   detectIamRedirect,
@@ -26,12 +26,29 @@ export const INSIDE_ENDPOINTS = {
     radiusOnline: 'http://radius-portal.fpt.net/public/partial/online-session',
   },
   reset_mac: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/ChangeMAC',
-  reset_mac_box: null,
+  reset_mac_box: {
+    list: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC/GetMacContract',
+    update: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC',
+    log: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC/GetLogByContract',
+  },
   kill_session: 'http://mvc.inside.fpt.net/KillSession/KillSession/DeleteSession',
-  clear_osp: null,
+  clear_osp: {
+    monitor: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/',
+    viewport: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
+    oltList: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/GetOLTList.asp',
+    clearSerial: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ClearSerial.asp',
+    configDevice: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxConfigDeviceType.asp',
+  },
 };
 
 export const INSIDE_CONTRACT_CACHE = new Map();
+export const INSIDE_OLT_CACHE = {
+  locations: [],
+  defaultLocationId: '',
+  ports: [],
+  oltsByLocation: new Map(),
+  fetchedAt: 0,
+};
 
 export function getCachedInsideContract(rawContractId) {
   const check = validateContractId(rawContractId);
@@ -705,7 +722,7 @@ async function resetMacModemLive(contractId, rawNewMac = '') {
   });
 }
 
-function buildInsideMockResult(actionId, contractId) {
+function buildInsideMockResult(actionId, contractId, ctx = {}) {
   switch (actionId) {
     case 'lookup':
       return {
@@ -782,13 +799,22 @@ function buildInsideMockResult(actionId, contractId) {
         title: `Đã Reset MAC Modem cho ${contractId} (Dữ liệu mô phỏng)`,
         message: 'Lệnh mô phỏng thành công: MAC Modem cũ đã được xóa trên bản xem thử.',
       };
-    case 'reset_mac_box':
+    case 'reset_mac_box': {
+      const oldMac = String(ctx.oldMac || `FBOX${contractId}`).trim();
+      const newMac = normalizeBoxMac(ctx.newMac || '') || 'FBOX001122334455';
       return {
         status: 'ok',
         mode: 'demo',
         title: `Đã Reset MAC Box cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: MAC đầu thu Box giả lập đã được xử lý.',
+        message: 'Lệnh mô phỏng thành công: Thay thế MAC Box thành công trên bản xem thử.',
+        summaryFields: [
+          { label: 'Mã hợp đồng', value: contractId },
+          { label: 'MAC Box cũ', value: oldMac },
+          { label: 'MAC Box mới', value: newMac },
+          { label: 'Mã trạng thái', value: '9' },
+        ],
       };
+    }
     case 'kill_session':
       return {
         status: 'ok',
@@ -796,13 +822,27 @@ function buildInsideMockResult(actionId, contractId) {
         title: `Đã Kill Session cho ${contractId} (Dữ liệu mô phỏng)`,
         message: 'Lệnh mô phỏng thành công: Phiên PPPoE giả lập đã được ngắt để quay lại phiên mới.',
       };
-    case 'clear_osp':
+    case 'clear_osp': {
+      const isConfig = ctx.clearMode === 'config_device';
+      const actionLabel = isConfig ? 'Config Device' : 'Clear Serial';
+      const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
+      const portsCsv =
+        Array.isArray(ctx.ports) && ctx.ports.length > 0 ? ctx.ports.join(',') : '1';
+      const fields = [];
+      if (contractId) fields.push({ label: 'Mã hợp đồng', value: contractId });
+      fields.push(
+        { label: 'POP OLT', value: oltLabel },
+        { label: 'Port đã chọn', value: portsCsv },
+        { label: 'Lệnh thực hiện', value: actionLabel }
+      );
       return {
         status: 'ok',
         mode: 'demo',
-        title: `Đã Clear OSP cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: Dữ liệu OSP giả lập đã được làm sạch.',
+        title: `Đã ${actionLabel} cho ${oltLabel} (Dữ liệu mô phỏng)`,
+        message: `Lệnh mô phỏng ${actionLabel} trên Port ${portsCsv} của ${oltLabel} thành công.`,
+        summaryFields: fields,
       };
+    }
     default:
       return {
         status: 'error',
@@ -812,10 +852,888 @@ function buildInsideMockResult(actionId, contractId) {
   }
 }
 
+function makeDefaultOltPorts() {
+  return Array.from({ length: 16 }, (_, idx) => {
+    const portNum = idx + 1;
+    return {
+      value: String(portNum),
+      label: `Port ${portNum}`,
+      isType2: portNum > 8,
+    };
+  });
+}
+
+/**
+ * Chuan hoa MAC Box: bo khoang trang, dau :, dau -, viet hoa.
+ */
+export function normalizeBoxMac(raw) {
+  return String(raw || '')
+    .replace(/[\s:-]+/g, '')
+    .trim()
+    .toUpperCase();
+}
+
+/**
+ * Kiem tra quy tac MAC Box moi giong trang ReplaceMAC cua Inside:
+ * 12 ky tu (khong co FBOX o dau) hoac 16 ky tu (bat dau bang FBOX).
+ */
+export function validateBoxNewMac(raw) {
+  const value = normalizeBoxMac(raw);
+  if (!value) {
+    return {
+      valid: false,
+      value: '',
+      error: 'Vui lòng nhập MAC Box mới (12 ký tự không gồm FBOX, hoặc 16 ký tự bắt đầu bằng FBOX).',
+    };
+  }
+  if (!/^[A-Z0-9]+$/.test(value)) {
+    return {
+      valid: false,
+      value,
+      error: 'MAC Box chỉ gồm chữ cái và số (không chứa ký tự đặc biệt).',
+    };
+  }
+  if (value.length === 12) {
+    if (value.startsWith('FBOX')) {
+      return {
+        valid: false,
+        value,
+        error: 'Nếu nhập 12 ký tự thì không có tiền tố FBOX ở đầu.',
+      };
+    }
+    return { valid: true, value, error: '' };
+  }
+  if (value.length === 16) {
+    if (!value.startsWith('FBOX')) {
+      return {
+        valid: false,
+        value,
+        error: 'Nếu nhập 16 ký tự thì bắt buộc phải bắt đầu bằng FBOX.',
+      };
+    }
+    return { valid: true, value, error: '' };
+  }
+  return {
+    valid: false,
+    value,
+    error: 'Địa chỉ MAC Box phải dài đúng 12 hoặc 16 ký tự.',
+  };
+}
+
+/**
+ * Lay danh sach MAC Box dang gan voi hop dong tu ReplaceMAC/GetMacContract.
+ */
+export async function fetchInsideBoxMacs(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+      items: [],
+    };
+  }
+
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      items: [
+        {
+          MAC: `FBOX${contractId}`,
+          Contract: contractId,
+          IdContract: '1162622263',
+          MacNew: '',
+        },
+        {
+          MAC: 'A42B8C109E4F',
+          Contract: contractId,
+          IdContract: '1162622263',
+          MacNew: '',
+        },
+      ],
+    };
+  }
+
+  const url = `${INSIDE_ENDPOINTS.reset_mac_box.list}?Contract=${encodeURIComponent(
+    contractId
+  )}&NotMAC=`;
+  const outcome = await fetchInsideEndpoint(url, false);
+  if (outcome.iamExpired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: outcome.loginUrl || PORTALS.inside.url,
+      items: [],
+    };
+  }
+  if (outcome.networkError) {
+    return {
+      status: 'error',
+      message: 'Không kết nối được tới mvc.inside.fpt.net. Hãy kiểm tra VPN công ty đã bật chưa.',
+      loginUrl: PORTALS.inside.url,
+      items: [],
+    };
+  }
+  if (!outcome.ok) {
+    return {
+      status: 'error',
+      message: 'Không lấy được danh sách MAC Box từ máy chủ Inside.',
+      loginUrl: PORTALS.inside.url,
+      items: [],
+    };
+  }
+
+  const rawList = Array.isArray(outcome.json && outcome.json.data) ? outcome.json.data : [];
+  const items = rawList
+    .map((row) => ({
+      MAC: nonEmptyStr(row && row.MAC),
+      Contract: nonEmptyStr(row && row.Contract) || contractId,
+      IdContract: nonEmptyStr(row && row.IdContract),
+      MacNew: nonEmptyStr(row && row.MacNew),
+    }))
+    .filter((item) => item.MAC);
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    items,
+  };
+}
+
+/**
+ * Chuan hoa ket qua tra ve tu ReplaceMAC/UpdateMAC.
+ */
+export function parseReplaceMacBoxResponse({
+  contractId,
+  oldMac = '',
+  newMac = '',
+  idContract = '',
+  httpStatus = 0,
+  responseText = '',
+} = {}) {
+  const summaryFields = [{ label: 'Mã hợp đồng', value: contractId }];
+  if (oldMac) summaryFields.push({ label: 'MAC Box cũ', value: oldMac });
+  if (newMac) summaryFields.push({ label: 'MAC Box mới', value: newMac });
+  if (idContract) summaryFields.push({ label: 'IdContract', value: String(idContract) });
+
+  const json = safeJsonParse(responseText);
+  const rawMsg = extractServerResponseMessage(responseText, json);
+
+  if (httpStatus < 200 || httpStatus >= 400) {
+    if (rawMsg) {
+      summaryFields.push({ label: 'Phản hồi hệ thống', value: rawMsg });
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `Reset MAC Box thất bại (HTTP ${httpStatus})`,
+      message: rawMsg || `Máy chủ Inside trả về mã lỗi ${httpStatus}.`,
+      summaryFields,
+    };
+  }
+
+  const statusVal = json && typeof json === 'object' ? json.status : undefined;
+  if (typeof statusVal === 'number') {
+    summaryFields.push({ label: 'Mã trạng thái', value: String(statusVal) });
+  }
+
+  const isSuccess = statusVal === 9 || statusVal === true;
+  const isFailure =
+    statusVal === 0 ||
+    statusVal === false ||
+    (typeof statusVal === 'number' && statusVal !== 9) ||
+    json === false ||
+    (json &&
+      typeof json === 'object' &&
+      (json.success === false || json.result === 0 || json.result === -1)) ||
+    (!isSuccess && Boolean(rawMsg && MUTATION_ERROR_RE.test(rawMsg)));
+
+  const defaultMsg = isFailure
+    ? statusVal === 0
+      ? 'Số hợp đồng hoặc thông tin MAC chưa đúng (status = 0).'
+      : 'Hệ thống Inside không chấp nhận yêu cầu đổi MAC Box này.'
+    : 'Thay thế MAC Box thành công!';
+  const finalMsg = rawMsg || defaultMsg;
+  summaryFields.push({ label: 'Phản hồi hệ thống', value: finalMsg });
+
+  if (isFailure) {
+    return {
+      status: 'error',
+      mode: 'live',
+      title: 'Reset MAC Box chưa thành công',
+      message: finalMsg,
+      summaryFields,
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    title: `Đã Reset MAC Box cho ${contractId}`,
+    message: finalMsg,
+    summaryFields,
+  };
+}
+
+async function resetMacBoxLive(contractId, ctx = {}) {
+  const oldMac = String(ctx.oldMac || '').trim();
+  if (!oldMac) {
+    return {
+      status: 'validation_error',
+      title: 'Chưa chọn MAC Box cũ',
+      message: 'Vui lòng chọn MAC Box hiện tại cần thay thế trước khi xác nhận.',
+    };
+  }
+
+  const macCheck = validateBoxNewMac(ctx.newMac || '');
+  if (!macCheck.valid) {
+    return {
+      status: 'validation_error',
+      title: 'MAC Box mới chưa hợp lệ',
+      message: macCheck.error,
+    };
+  }
+
+  let idContract = String(ctx.idContract || '').trim();
+  if (!idContract) {
+    const cached = INSIDE_CONTRACT_CACHE.get(contractId);
+    if (cached && cached.objID) {
+      idContract = String(cached.objID);
+    }
+  }
+
+  const body = new URLSearchParams({
+    contract: contractId,
+    newmac: macCheck.value,
+    oldmac: oldMac,
+    idcontract: idContract,
+  });
+
+  const res = await requestPortal({
+    url: INSIDE_ENDPOINTS.reset_mac_box.update,
+    method: 'POST',
+    headers: {
+      ...AJAX_HEADERS,
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    },
+    data: body.toString(),
+    timeout: 15000,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'error',
+      message:
+        'Không kết nối được tới mvc.inside.fpt.net để đổi MAC Box. Hãy kiểm tra VPN công ty đã bật chưa.',
+      loginUrl: PORTALS.inside.url,
+    };
+  }
+
+  const iam = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: INSIDE_ENDPOINTS.reset_mac_box.update,
+  });
+  if (iam.expired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: res.finalUrl || PORTALS.inside.url,
+    };
+  }
+
+  return parseReplaceMacBoxResponse({
+    contractId,
+    oldMac,
+    newMac: macCheck.value,
+    idContract,
+    httpStatus: res.status,
+    responseText: res.responseText,
+  });
+}
+
+/**
+ * Tach danh sach POP OLT tu phan hoi GetOLTList.asp (dinh dang id@name$id2@name2).
+ */
+export function parseOltListResponse(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return [];
+  }
+  const tokens = rawText.split('$');
+  const olts = [];
+  const seenIds = new Set();
+
+  for (const token of tokens) {
+    const trimmed = token.trim();
+    if (!trimmed) continue;
+    const atIdx = trimmed.indexOf('@');
+    if (atIdx === -1) continue;
+    const id = trimmed.slice(0, atIdx).trim();
+    const name = trimmed.slice(atIdx + 1).trim();
+    if (!id || id === '0' || !name || seenIds.has(id)) {
+      continue;
+    }
+    seenIds.add(id);
+    olts.push({ id, name });
+  }
+
+  return olts;
+}
+
+/**
+ * OLT co 4 ky tu cuoi la GC16 hoac GC14 ho tro 16 port (type2).
+ */
+export function isExtendedPortOlt(oltName) {
+  const s = String(oltName || '').trim().toUpperCase();
+  const tail = s.slice(-4);
+  return tail === 'GC16' || tail === 'GC14';
+}
+
+function getHtmlAttr(attrs, attrName) {
+  const re = new RegExp(`\\b${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
+  const m = String(attrs || '').match(re);
+  if (!m) return '';
+  return m[1] !== undefined ? m[1] : m[2] !== undefined ? m[2] : m[3] || '';
+}
+
+/**
+ * Trich xuat danh sach Vung mien (fLocationID) va ma mac dinh tu trang MonitorOLT/.
+ */
+export function parseLocationsFromMonitorHtml(htmlText) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { locations: [], defaultLocationId: '' };
+  }
+
+  const locations = [];
+  const seenIds = new Set();
+  let selectedFromAttr = '';
+
+  const selectRe = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi;
+  let sm;
+  while ((sm = selectRe.exec(htmlText)) !== null) {
+    const attrs = sm[1] || '';
+    const selId = getHtmlAttr(attrs, 'id');
+    const selName = getHtmlAttr(attrs, 'name');
+    if (!/^fLocationID$/i.test(selId) && !/^fLocationID$/i.test(selName)) {
+      continue;
+    }
+
+    const inner = sm[2] || '';
+    const optRe = /<option\b([^>]*)>([\s\S]*?)(?=<option\b|<\/option>|<\/select>|$)/gi;
+    let om;
+    while ((om = optRe.exec(inner)) !== null) {
+      const optAttrs = om[1] || '';
+      const id = getHtmlAttr(optAttrs, 'value').trim();
+      const name = stripHtmlTags(om[2]);
+      const isSel = /\bselected\b/i.test(optAttrs);
+      if (!id || id === '0' || id === '-1' || seenIds.has(id)) {
+        continue;
+      }
+      seenIds.add(id);
+      if (isSel && !selectedFromAttr) {
+        selectedFromAttr = id;
+      }
+      locations.push({ id, name: name || `Vùng ${id}`, selected: isSel });
+    }
+    break;
+  }
+
+  const scriptMatch = htmlText.match(
+    /SetCurrentOption\s*\([^,]*fLocationID[^,]*,\s*['"]([^'"]+)['"]\s*\)/i
+  );
+  const scriptDefault = scriptMatch ? scriptMatch[1].trim() : '';
+  const defaultLocationId =
+    selectedFromAttr || scriptDefault || (locations[0] && locations[0].id) || '';
+
+  return {
+    locations: locations.map((loc) => ({
+      id: loc.id,
+      name: loc.name,
+      selected: loc.id === defaultLocationId,
+    })),
+    defaultLocationId,
+  };
+}
+
+/**
+ * Trich xuat danh sach Port checkbox tu ViewPortPON.Asp (fallback 1..16).
+ */
+export function parseOltPortsFromHtml(htmlText) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return makeDefaultOltPorts();
+  }
+
+  const cleanedHtml = htmlText
+    .replace(new RegExp('<script\\b[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+    .replace(new RegExp('<style\\b[\\s\\S]*?</' + 'style>', 'gi'), ' ');
+
+  const ports = [];
+  const seenValues = new Set();
+  const liRe = /<li\b([^>]*)>([\s\S]*?)<\/li>/gi;
+  let lm;
+  while ((lm = liRe.exec(cleanedHtml)) !== null) {
+    const liAttrs = lm[1] || '';
+    const liBody = lm[2] || '';
+    const inputRe = /<input\b([^>]*)>/gi;
+    let im;
+    let cbValue = '';
+    while ((im = inputRe.exec(liBody)) !== null) {
+      const attrs = im[1] || '';
+      if (getHtmlAttr(attrs, 'type').toLowerCase() === 'checkbox') {
+        cbValue = getHtmlAttr(attrs, 'value').trim();
+        break;
+      }
+    }
+    if (!cbValue || seenValues.has(cbValue)) {
+      continue;
+    }
+    seenValues.add(cbValue);
+    const spanMatch = liBody.match(/<span\b[^>]*>([\s\S]*?)<\/span>/i);
+    const labelText = spanMatch ? stripHtmlTags(spanMatch[1]) : stripHtmlTags(liBody);
+    const numVal = Number(cbValue);
+    const isType2 = /\btype2\b/i.test(liAttrs) || (Number.isFinite(numVal) && numVal > 8);
+    ports.push({
+      value: cbValue,
+      label: labelText || `Port ${cbValue}`,
+      isType2,
+    });
+  }
+
+  return ports.length > 0 ? ports : makeDefaultOltPorts();
+}
+
+/**
+ * Lay thong bao alert(...) tu HTML cua trang Classic ASP (ClearSerial.asp...).
+ */
+export function extractJsAlertMessages(htmlText) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+  const messages = [];
+  const seen = new Set();
+  const alertRe = /\balert\s*\(\s*(['"])((?:\\.|(?!\1)[\s\S])*?)\1\s*\)/gi;
+  let am;
+  while ((am = alertRe.exec(htmlText)) !== null && messages.length < 10) {
+    const raw = am[2]
+      .replace(/\\n/g, ' ')
+      .replace(/\\r/g, ' ')
+      .replace(/\\t/g, ' ')
+      .replace(/\\(['"\\])/g, '$1');
+    const clean = stripHtmlTags(raw);
+    if (clean && !seen.has(clean)) {
+      seen.add(clean);
+      messages.push(clean);
+    }
+  }
+  return messages;
+}
+
+const CLEAR_OSP_ERROR_RE =
+  /(?:lỗi(?!.*không có lỗi)|thất\s*bại|fail|không\s*thành\s*công|bạn chưa chọn|ban chua chon|không tìm thấy|khong tim thay|không có quyền|khong co quyen|\berror\b)/i;
+
+/**
+ * Chuan hoa ket qua tra ve tu ClearSerial.asp / AjaxConfigDeviceType.asp.
+ */
+export function parseClearSerialResponse({
+  mode = 'clear_serial',
+  contractId = '',
+  oltId = '',
+  oltName = '',
+  portsCsv = '',
+  httpStatus = 0,
+  responseText = '',
+  sourceUrl = '',
+} = {}) {
+  const actionLabel = mode === 'config_device' ? 'Config Device' : 'Clear Serial';
+  const summaryFields = [];
+  if (contractId) summaryFields.push({ label: 'Mã hợp đồng', value: contractId });
+  summaryFields.push(
+    { label: 'POP OLT', value: oltName ? `${oltName} (ID: ${oltId})` : String(oltId) },
+    { label: 'Port đã chọn', value: portsCsv },
+    { label: 'Lệnh thực hiện', value: actionLabel }
+  );
+
+  const alerts = extractJsAlertMessages(responseText);
+  const json = safeJsonParse(responseText);
+  const jsonMsg = json !== null ? extractServerResponseMessage(responseText, json) : '';
+  const tablePairs = extractHtmlTablePairs(responseText);
+  const extraSections = [];
+  if (tablePairs.length > 0) {
+    extraSections.push({
+      title: 'Chi tiết kết quả từ OLT',
+      fields: tablePairs,
+    });
+  }
+
+  const cleanedBody = stripHtmlTags(
+    String(responseText || '')
+      .replace(new RegExp('<script\\b[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+      .replace(new RegExp('<style\\b[\\s\\S]*?</' + 'style>', 'gi'), ' ')
+  );
+
+  const rawMsg = alerts.join(' | ') || jsonMsg || cleanedBody.slice(0, 220);
+
+  if (httpStatus < 200 || httpStatus >= 400) {
+    if (rawMsg) {
+      summaryFields.push({ label: 'Phản hồi hệ thống', value: rawMsg });
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} thất bại (HTTP ${httpStatus})`,
+      message: rawMsg || `Máy chủ Inside trả về mã lỗi ${httpStatus}.`,
+      summaryFields,
+      extraSections,
+      sourceUrl,
+    };
+  }
+
+  const isJsonFailure =
+    json === false ||
+    (json &&
+      typeof json === 'object' &&
+      (json.status === false ||
+        json.success === false ||
+        json.result === 0 ||
+        json.result === -1));
+  const isTextFailure = Boolean(rawMsg && CLEAR_OSP_ERROR_RE.test(rawMsg));
+
+  const targetDisplay = oltName || `OLT ${oltId}`;
+  const finalMsg =
+    rawMsg || `Đã gửi lệnh ${actionLabel} trên Port ${portsCsv} của ${targetDisplay}.`;
+  summaryFields.push({ label: 'Phản hồi hệ thống', value: finalMsg });
+
+  if (isJsonFailure || isTextFailure) {
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} chưa thành công`,
+      message: finalMsg,
+      summaryFields,
+      extraSections,
+      sourceUrl,
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    title: `Đã ${actionLabel} cho ${targetDisplay}`,
+    message: finalMsg,
+    summaryFields,
+    extraSections,
+    sourceUrl,
+  };
+}
+
+/**
+ * Tai danh sach POP OLT theo Vung mien (fLocationID) tu MonitorOLT/GetOLTList.asp.
+ */
+export async function fetchInsideOltListByLocation(
+  locationId,
+  { forceRefresh = false, forceDemo = false } = {}
+) {
+  const locId = String(locationId || '').trim();
+  if (!locId) {
+    return {
+      status: 'validation_error',
+      message: 'Chưa chọn vùng miền để tải danh sách POP OLT.',
+      olts: [],
+    };
+  }
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      olts: [
+        { id: '101', name: 'BRUP00101GC16' },
+        { id: '102', name: 'BRUP00201GC14' },
+        { id: '103', name: 'BRUP00301GP08' },
+      ],
+    };
+  }
+
+  if (!forceRefresh) {
+    const cached = INSIDE_OLT_CACHE.oltsByLocation.get(locId);
+    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+      return {
+        status: 'ok',
+        mode: 'live',
+        olts: cached.olts,
+      };
+    }
+  }
+
+  const url = `${INSIDE_ENDPOINTS.clear_osp.oltList}?fLocationID=${encodeURIComponent(
+    locId
+  )}&fRing=0&fSwitchID=0`;
+  const res = await requestPortal({
+    url,
+    method: 'POST',
+    headers: { Accept: 'text/plain, */*' },
+    data: '',
+    timeout: 15000,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'error',
+      message: 'Không kết nối được tới inside.fpt.net để tải danh sách POP OLT. Hãy kiểm tra VPN.',
+      loginUrl: PORTALS.inside.url,
+      olts: [],
+    };
+  }
+
+  const iam = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: url,
+  });
+  if (iam.expired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: res.finalUrl || PORTALS.inside.url,
+      olts: [],
+    };
+  }
+
+  if (!res.ok) {
+    return {
+      status: 'error',
+      message: `Không tải được danh sách POP OLT (HTTP ${res.status}).`,
+      loginUrl: PORTALS.inside.url,
+      olts: [],
+    };
+  }
+
+  const olts = parseOltListResponse(res.responseText);
+  INSIDE_OLT_CACHE.oltsByLocation.set(locId, {
+    olts,
+    fetchedAt: Date.now(),
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    olts,
+  };
+}
+
+/**
+ * Tai thong tin khoi tao cho Clear OSP: Vung mien + danh sach Port + danh sach POP OLT.
+ */
+export async function fetchInsideOltInit({ forceRefresh = false, forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const demoOltsRes = await fetchInsideOltListByLocation('64', { forceDemo: true });
+    return {
+      status: 'ok',
+      mode: 'demo',
+      locations: [
+        {
+          id: '64',
+          name: 'VTU - Hồ Chí Minh - Bà Rịa - Vũng Tàu (Mô phỏng)',
+          selected: true,
+        },
+      ],
+      defaultLocationId: '64',
+      olts: demoOltsRes.olts,
+      ports: makeDefaultOltPorts(),
+    };
+  }
+
+  if (
+    !forceRefresh &&
+    INSIDE_OLT_CACHE.locations.length > 0 &&
+    INSIDE_OLT_CACHE.ports.length > 0 &&
+    INSIDE_OLT_CACHE.defaultLocationId &&
+    Date.now() - INSIDE_OLT_CACHE.fetchedAt < CACHE_TTL_MS
+  ) {
+    const oltsRes = await fetchInsideOltListByLocation(INSIDE_OLT_CACHE.defaultLocationId, {
+      forceRefresh: false,
+    });
+    if (oltsRes.status === 'ok') {
+      return {
+        status: 'ok',
+        mode: 'live',
+        locations: INSIDE_OLT_CACHE.locations,
+        defaultLocationId: INSIDE_OLT_CACHE.defaultLocationId,
+        olts: oltsRes.olts,
+        ports: INSIDE_OLT_CACHE.ports,
+      };
+    }
+  }
+
+  const [monitorRes, viewportRes] = await Promise.all([
+    fetchInsideEndpoint(INSIDE_ENDPOINTS.clear_osp.monitor, true),
+    fetchInsideEndpoint(INSIDE_ENDPOINTS.clear_osp.viewport, true),
+  ]);
+
+  for (const part of [monitorRes, viewportRes]) {
+    if (part.iamExpired) {
+      return {
+        status: 'iam_expired',
+        message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+        loginUrl: part.loginUrl || PORTALS.inside.url,
+      };
+    }
+    if (part.networkError) {
+      return {
+        status: 'error',
+        message: 'Không kết nối được tới inside.fpt.net (MonitorOLT). Hãy kiểm tra VPN.',
+        loginUrl: PORTALS.inside.url,
+      };
+    }
+  }
+
+  const parsedLocs = parseLocationsFromMonitorHtml(monitorRes.text || '');
+  let { locations, defaultLocationId } = parsedLocs;
+
+  if (!defaultLocationId && viewportRes.text) {
+    const vpLocMatch = viewportRes.text.match(/\bfLocationID\s*=\s*(\d+)/);
+    if (vpLocMatch) {
+      defaultLocationId = vpLocMatch[1];
+      locations = [{ id: defaultLocationId, name: `Vùng ${defaultLocationId}`, selected: true }];
+    }
+  }
+
+  if (!defaultLocationId) {
+    return {
+      status: 'error',
+      message: 'Không đọc được mã vùng miền (fLocationID) từ trang Tình trạng OLT.',
+      loginUrl: INSIDE_ENDPOINTS.clear_osp.viewport,
+    };
+  }
+
+  const ports = parseOltPortsFromHtml(viewportRes.text || '');
+  const oltsRes = await fetchInsideOltListByLocation(defaultLocationId, { forceRefresh });
+  if (oltsRes.status !== 'ok') {
+    return oltsRes;
+  }
+
+  INSIDE_OLT_CACHE.locations = locations;
+  INSIDE_OLT_CACHE.defaultLocationId = defaultLocationId;
+  INSIDE_OLT_CACHE.ports = ports;
+  INSIDE_OLT_CACHE.fetchedAt = Date.now();
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    locations,
+    defaultLocationId,
+    olts: oltsRes.olts,
+    ports,
+  };
+}
+
+async function clearOspLive(contractId, ctx = {}) {
+  const oltId = String(ctx.oltId || '').trim();
+  const oltName = String(ctx.oltName || '').trim();
+  const locationId = String(ctx.locationId || '').trim();
+  const clearMode = ctx.clearMode === 'config_device' ? 'config_device' : 'clear_serial';
+  const ports = Array.isArray(ctx.ports)
+    ? ctx.ports.map((p) => String(p).trim()).filter(Boolean)
+    : [];
+
+  if (!oltId || oltId === '0') {
+    return {
+      status: 'validation_error',
+      title: 'Chưa chọn POP OLT',
+      message: 'Vui lòng chọn một POP OLT trước khi thực hiện.',
+    };
+  }
+  if (ports.length === 0) {
+    return {
+      status: 'validation_error',
+      title: 'Chưa chọn Port',
+      message: 'Vui lòng chọn ít nhất một Port cần xử lý.',
+    };
+  }
+
+  const portsCsv = ports.join(',');
+  const vpQp = new URLSearchParams();
+  if (locationId) vpQp.set('fLocationID', locationId);
+  vpQp.set('fOLT', oltId);
+  const sourceUrl = `${INSIDE_ENDPOINTS.clear_osp.viewport}?${vpQp.toString()}`;
+
+  const targetUrl =
+    clearMode === 'config_device'
+      ? INSIDE_ENDPOINTS.clear_osp.configDevice
+      : `${INSIDE_ENDPOINTS.clear_osp.clearSerial}?OLTID=${encodeURIComponent(
+          oltId
+        )}&fPort=${encodeURIComponent(portsCsv)}`;
+
+  const res = await requestPortal({
+    url: targetUrl,
+    method: clearMode === 'config_device' ? 'POST' : 'GET',
+    headers:
+      clearMode === 'config_device'
+        ? {
+            ...AJAX_HEADERS,
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          }
+        : { Accept: 'text/html, application/xhtml+xml, */*' },
+    data:
+      clearMode === 'config_device'
+        ? new URLSearchParams({ olt: oltId, portID: portsCsv }).toString()
+        : undefined,
+    timeout: 25000,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'error',
+      message:
+        'Không kết nối được tới inside.fpt.net để chạy lệnh OLT. Hãy kiểm tra VPN công ty đã bật chưa.',
+      loginUrl: sourceUrl,
+    };
+  }
+
+  const iam = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: targetUrl,
+  });
+  if (iam.expired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: res.finalUrl || PORTALS.inside.url,
+    };
+  }
+
+  return parseClearSerialResponse({
+    mode: clearMode,
+    contractId,
+    oltId,
+    oltName,
+    portsCsv,
+    httpStatus: res.status,
+    responseText: res.responseText,
+    sourceUrl,
+  });
+}
+
 /**
  * Thuc thi mot lenh tren inside.fpt.net.
  */
 export async function runInsideAction(actionId, rawContractId, ctx = {}) {
+  const portal = PORTALS.inside;
+
+  if (actionId === 'clear_osp') {
+    const contractId = normalizeContractId(rawContractId || '');
+    if (!isUserscriptEnv() || ctx.forceDemo) {
+      await sleep(350);
+      return buildInsideMockResult('clear_osp', contractId, ctx);
+    }
+    return clearOspLive(contractId, ctx);
+  }
+
   const check = validateContractId(rawContractId);
   if (!check.valid) {
     return {
@@ -825,11 +1743,10 @@ export async function runInsideAction(actionId, rawContractId, ctx = {}) {
   }
 
   const contractId = check.value;
-  const portal = PORTALS.inside;
 
   if (!isUserscriptEnv() || ctx.forceDemo) {
     await sleep(350);
-    return buildInsideMockResult(actionId, contractId);
+    return buildInsideMockResult(actionId, contractId, ctx);
   }
 
   if (actionId === 'lookup' && INSIDE_ENDPOINTS.lookup) {
@@ -840,6 +1757,9 @@ export async function runInsideAction(actionId, rawContractId, ctx = {}) {
   }
   if (actionId === 'reset_mac' && INSIDE_ENDPOINTS.reset_mac) {
     return resetMacModemLive(contractId, ctx.newMac || '');
+  }
+  if (actionId === 'reset_mac_box' && INSIDE_ENDPOINTS.reset_mac_box) {
+    return resetMacBoxLive(contractId, ctx);
   }
 
   const endpoint = INSIDE_ENDPOINTS[actionId];

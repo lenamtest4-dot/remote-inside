@@ -12,7 +12,7 @@ export const PORTALS = {
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net'],
     status: 'priority',
-    statusLabel: 'Ưu tiên v0.1',
+    statusLabel: 'Đủ 5 lệnh',
     description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP.',
     actions: [
       {
@@ -33,10 +33,10 @@ export const PORTALS = {
       {
         id: 'reset_mac_box',
         label: 'Reset MAC Box',
-        description: 'Xóa/đổi địa chỉ MAC đầu thu FPT Box (IPTV) của hợp đồng.',
+        description: 'Xem danh sách MAC Box của hợp đồng và thay thế sang MAC mới (12 hoặc 16 ký tự).',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Hành động này sẽ reset/thay đổi MAC đầu thu Box gắn với hợp đồng.',
+        confirmNote: 'Chọn đúng MAC Box cần thay thế trên hợp đồng và nhập MAC Box mới.',
       },
       {
         id: 'kill_session',
@@ -49,10 +49,11 @@ export const PORTALS = {
       {
         id: 'clear_osp',
         label: 'Clear OSP',
-        description: 'Làm sạch thông tin kết nối hạ tầng OSP gắn với hợp đồng.',
+        description: 'Chọn POP OLT và Port để chạy Clear Serial (hoặc Config Device) trên MonitorOLT.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Chỉ thực hiện Clear OSP khi đang xử lý sự cố đồng bộ port/hạ tầng.',
+        requiresContract: false,
+        confirmNote: 'Chọn đúng POP OLT và Port cần xử lý trước khi xác nhận.',
       },
     ],
   },

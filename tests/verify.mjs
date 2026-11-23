@@ -37,8 +37,18 @@ import {
 import {
   INSIDE_ENDPOINTS,
   extractHtmlTablePairs,
+  extractJsAlertMessages,
+  isExtendedPortOlt,
+  normalizeBoxMac,
+  parseClearSerialResponse,
   parseInsideLookupPayload,
   parseInsideMutationResponse,
+  parseLocationsFromMonitorHtml,
+  parseOltListResponse,
+  parseOltPortsFromHtml,
+  parseReplaceMacBoxResponse,
+  runInsideAction,
+  validateBoxNewMac,
 } from '../src/adapters/inside.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,7 +56,7 @@ const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 
-function runTests() {
+async function runTests() {
   console.log('1. Checking built artifacts in dist/...');
   const userscriptPath = path.join(DIST_DIR, 'remote-inside.user.js');
   const previewPath = path.join(DIST_DIR, 'preview.html');
@@ -94,8 +104,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.4.1'),
-    'Userscript must bump @version to 0.4.1'
+    userscriptContent.includes('@version      0.5.0'),
+    'Userscript must bump @version to 0.5.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -121,7 +131,19 @@ function runTests() {
   const insideActions = Object.fromEntries(PORTALS.inside.actions.map((a) => [a.id, a.label]));
   assert.equal(insideActions.reset_mac, 'Reset MAC Modem');
   assert.equal(insideActions.reset_mac_box, 'Reset MAC Box');
-  assert.equal(INSIDE_ENDPOINTS.reset_mac_box, null);
+  assert.ok(
+    INSIDE_ENDPOINTS.reset_mac_box &&
+      INSIDE_ENDPOINTS.reset_mac_box.list.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/GetMacContract') &&
+      INSIDE_ENDPOINTS.reset_mac_box.update.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC'),
+    'INSIDE_ENDPOINTS.reset_mac_box must wire live list and update endpoints'
+  );
+  assert.ok(
+    INSIDE_ENDPOINTS.clear_osp &&
+      INSIDE_ENDPOINTS.clear_osp.oltList.includes('/MonitorOLT/GetOLTList.asp') &&
+      INSIDE_ENDPOINTS.clear_osp.clearSerial.includes('/MonitorOLT/ClearSerial.asp') &&
+      INSIDE_ENDPOINTS.clear_osp.configDevice.includes('/MonitorOLT/AjaxConfigDeviceType.asp'),
+    'INSIDE_ENDPOINTS.clear_osp must wire live MonitorOLT endpoints'
+  );
   assert.equal(normalizeContractId('  sgn 123456\n '), 'SGN123456');
   assert.equal(normalizeContractId('hn-9988_1'), 'HN-9988_1');
   assert.equal(validateContractId('').valid, false);
@@ -400,8 +422,11 @@ function runTests() {
   assert.ok(INSIDE_ENDPOINTS.lookup && INSIDE_ENDPOINTS.lookup.detail.includes('/Contract/StatusNew/ViewReportDetail'));
   assert.ok(INSIDE_ENDPOINTS.reset_mac && INSIDE_ENDPOINTS.reset_mac.includes('/DSLLLine/ResetMAC/ChangeMAC'));
   assert.ok(INSIDE_ENDPOINTS.kill_session && INSIDE_ENDPOINTS.kill_session.includes('/KillSession/KillSession/DeleteSession'));
-  assert.equal(INSIDE_ENDPOINTS.reset_mac_box, null);
-  assert.equal(INSIDE_ENDPOINTS.clear_osp, null);
+  assert.ok(INSIDE_ENDPOINTS.reset_mac_box.list.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/GetMacContract'));
+  assert.ok(INSIDE_ENDPOINTS.reset_mac_box.update.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC'));
+  assert.ok(INSIDE_ENDPOINTS.clear_osp.oltList.includes('/MonitorOLT/GetOLTList.asp'));
+  assert.ok(INSIDE_ENDPOINTS.clear_osp.clearSerial.includes('/MonitorOLT/ClearSerial.asp'));
+  assert.ok(INSIDE_ENDPOINTS.clear_osp.configDevice.includes('/MonitorOLT/AjaxConfigDeviceType.asp'));
 
   const partialHtml =
     '<table><tr><th>IP WAN</th><td>118.70.1.2</td></tr><tr><th>IPNAT</th><td>Có</td></tr></table><script>alert(1)</script>';
@@ -740,7 +765,139 @@ function runTests() {
   );
   console.log('   OK: Sanitized inline scripts, form controls meta, and JS function extractors passed.');
 
+  console.log('11. Testing Reset MAC Box & Clear OSP / MonitorOLT parsers and demo execution...');
+  assert.equal(normalizeBoxMac(' aa:bb-cc 11:22:33 '), 'AABBCC112233');
+  assert.equal(validateBoxNewMac('').valid, false);
+  assert.equal(validateBoxNewMac('AABBCCDDEEFF').valid, true);
+  assert.equal(validateBoxNewMac('FBOX12345678').valid, false, '12 chars starting with FBOX must fail');
+  assert.equal(validateBoxNewMac('FBOX001122334455').valid, true);
+  assert.equal(validateBoxNewMac('ABCD001122334455').valid, false, '16 chars without FBOX must fail');
+  assert.equal(validateBoxNewMac('12345').valid, false);
+
+  const boxOkRes = parseReplaceMacBoxResponse({
+    contractId: 'VTAAR2393',
+    oldMac: 'FBOXOLD123456789',
+    newMac: 'AABBCCDDEEFF',
+    idContract: '1162622263',
+    httpStatus: 200,
+    responseText: JSON.stringify({ status: 9, msg: 'Thay thế MAC thành công!' }),
+  });
+  assert.equal(boxOkRes.status, 'ok');
+  assert.equal(boxOkRes.message, 'Thay thế MAC thành công!');
+
+  const boxFailZero = parseReplaceMacBoxResponse({
+    contractId: 'VTAAR2393',
+    oldMac: 'FBOXOLD123456789',
+    newMac: 'AABBCCDDEEFF',
+    httpStatus: 200,
+    responseText: JSON.stringify({ status: 0, msg: 'Số hợp đồng chưa đúng...' }),
+  });
+  assert.equal(boxFailZero.status, 'error');
+
+  const boxFailFive = parseReplaceMacBoxResponse({
+    contractId: 'VTAAR2393',
+    oldMac: 'FBOXOLD123456789',
+    newMac: 'AABBCCDDEEFF',
+    httpStatus: 200,
+    responseText: JSON.stringify({
+      status: 5,
+      msg: 'Lỗi MAC cũ không thuộc HĐ hoặc HĐ đang bị khóa cước - ISC.',
+    }),
+  });
+  assert.equal(boxFailFive.status, 'error');
+
+  const parsedOlts = parseOltListResponse('0@Tat ca$101@BRUP00101GC16$102@BRUP00201GC14$103@BRUP00301GP08\n');
+  assert.deepEqual(parsedOlts, [
+    { id: '101', name: 'BRUP00101GC16' },
+    { id: '102', name: 'BRUP00201GC14' },
+    { id: '103', name: 'BRUP00301GP08' },
+  ]);
+  assert.equal(isExtendedPortOlt('BRUP00101GC16'), true);
+  assert.equal(isExtendedPortOlt('BRUP00201GC14'), true);
+  assert.equal(isExtendedPortOlt('BRUP00301GP08'), false);
+
+  const monitorHtmlSample = `
+    <select id="fLocationID" name="fLocationID" onchange="ChangeLocationID()">
+      <option value="0">Tat ca</option>
+      <option value="64">VTU - Ho Chi Minh - Ba Ria - Vung Tau
+      <option value="4">HCM - Ho Chi Minh</option>
+    </select>
+    <script>SetCurrentOption(document.forms[0].fLocationID, '64');</script>
+  `;
+  const parsedLocs = parseLocationsFromMonitorHtml(monitorHtmlSample);
+  assert.equal(parsedLocs.defaultLocationId, '64');
+  assert.equal(parsedLocs.locations.length, 2);
+  assert.equal(parsedLocs.locations[0].selected, true);
+  assert.equal(parsedLocs.locations[1].name, 'HCM - Ho Chi Minh');
+
+  const viewportHtmlSample = `
+    <ul>
+      <li><input type="checkbox" class="checkbox" value="1" /><span>Port 1</span></li>
+      <li class="type2"><input type="checkbox" class="checkbox" value="9" /><span>Port 9</span></li>
+    </ul>
+  `;
+  const parsedPorts = parseOltPortsFromHtml(viewportHtmlSample);
+  assert.deepEqual(parsedPorts, [
+    { value: '1', label: 'Port 1', isType2: false },
+    { value: '9', label: 'Port 9', isType2: true },
+  ]);
+
+  const fallbackPorts = parseOltPortsFromHtml('<div>no checkboxes</div>');
+  assert.equal(fallbackPorts.length, 16);
+  assert.equal(fallbackPorts[0].isType2, false);
+  assert.equal(fallbackPorts[8].isType2, true);
+
+  const alertHtml = `<script>alert('Clear serial port 1,2 thanh cong!');</script><table><tr><th>OLT</th><td>BRUP00101GC16</td></tr></table>`;
+  assert.deepEqual(extractJsAlertMessages(alertHtml), ['Clear serial port 1,2 thanh cong!']);
+
+  const clearOk = parseClearSerialResponse({
+    mode: 'clear_serial',
+    contractId: '',
+    oltId: '101',
+    oltName: 'BRUP00101GC16',
+    portsCsv: '1,2',
+    httpStatus: 200,
+    responseText: alertHtml,
+    sourceUrl: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp?fLocationID=64&fOLT=101',
+  });
+  assert.equal(clearOk.status, 'ok');
+  assert.equal(clearOk.message, 'Clear serial port 1,2 thanh cong!');
+  assert.equal(clearOk.extraSections.length, 1);
+
+  const clearErr = parseClearSerialResponse({
+    mode: 'clear_serial',
+    oltId: '101',
+    oltName: 'BRUP00101GC16',
+    portsCsv: '1',
+    httpStatus: 200,
+    responseText: `<script>alert('Ban chua chon Port hoac loi ket noi OLT');</script>`,
+  });
+  assert.equal(clearErr.status, 'error');
+
+  const configOk = parseClearSerialResponse({
+    mode: 'config_device',
+    oltId: '101',
+    oltName: 'BRUP00101GC16',
+    portsCsv: '5',
+    httpStatus: 200,
+    responseText: 'Config Device thanh cong',
+  });
+  assert.equal(configOk.status, 'ok');
+  assert.ok(configOk.title.includes('Config Device'));
+
+  const demoClearNoContract = await runInsideAction('clear_osp', '', {
+    forceDemo: true,
+    oltId: '101',
+    oltName: 'BRUP00101GC16',
+    ports: ['1', '2'],
+    clearMode: 'clear_serial',
+  });
+  assert.equal(demoClearNoContract.status, 'ok', 'Clear OSP must work without Contract ID');
+  assert.equal(demoClearNoContract.mode, 'demo');
+  assert.ok(demoClearNoContract.title.includes('BRUP00101GC16'));
+  console.log('   OK: Reset MAC Box & Clear OSP parsers and demo execution passed.');
+
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }
 
-runTests();
+await runTests();

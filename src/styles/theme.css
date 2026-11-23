@@ -32,13 +32,15 @@
 }
 
 .ri-root button,
-.ri-root input {
+.ri-root input,
+.ri-root select {
   font-family: inherit;
   font-size: inherit;
 }
 
 .ri-root button:focus-visible,
 .ri-root input:focus-visible,
+.ri-root select:focus-visible,
 .ri-root a:focus-visible {
   outline: 2px solid var(--accent-signal);
   outline-offset: 2px;
@@ -968,6 +970,198 @@
   background: var(--bg-surface);
 }
 
+.ri-inline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.ri-inline-head .ri-confirm-label {
+  margin-bottom: 0;
+}
+
+.ri-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1.5px solid var(--border-crisp);
+  border-radius: 9px;
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ri-select:focus {
+  outline: none;
+  border-color: var(--accent-signal);
+  background: var(--bg-surface);
+}
+
+.ri-field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ri-field-hint[data-state="ok"] {
+  color: var(--state-ok);
+}
+
+.ri-field-hint[data-state="error"] {
+  color: var(--state-danger);
+}
+
+.ri-sheet-status {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-sheet-status.is-loading {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.ri-sheet-status[data-tone="error"] {
+  border-color: var(--state-danger-border);
+  background: var(--state-danger-soft);
+  color: var(--state-danger);
+}
+
+.ri-sheet-status[data-tone="warn"] {
+  border-color: #F3D19E;
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+
+.ri-box-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-box-item {
+  width: 100%;
+  min-height: 52px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ri-box-item:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-box-item.is-selected {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+}
+
+.ri-box-item-main {
+  min-width: 0;
+}
+
+.ri-box-mac {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.ri-box-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.ri-box-item.is-selected .ri-tab-badge {
+  background: var(--accent-signal);
+  color: #FFFFFF;
+}
+
+.ri-mode-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ri-mode-btn {
+  min-height: 44px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ri-mode-btn:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-mode-btn.is-active {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+  font-weight: 700;
+}
+
+.ri-port-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ri-port-chip {
+  min-height: 44px;
+  padding: 6px 4px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  text-align: center;
+}
+
+.ri-port-chip:hover {
+  background: var(--bg-subtle);
+}
+
+.ri-port-chip.is-selected {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal);
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
 .ri-sheet-buttons {
   margin-top: 14px;
   display: flex;
@@ -987,8 +1181,13 @@
   cursor: pointer;
 }
 
-.ri-danger-btn:hover {
+.ri-danger-btn:hover:not(:disabled) {
   background: #A81818;
+}
+
+.ri-danger-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 .ri-privacy-note {

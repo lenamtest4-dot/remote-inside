@@ -56,18 +56,12 @@ export function findEquipmentDebtGrid(doc) {
   const grids = Array.from(doc.querySelectorAll('.rz-data-grid'));
   for (const grid of grids) {
     if (typeof grid.querySelectorAll !== 'function') continue;
-    const headText = Array.from(grid.querySelectorAll('thead th, thead td'))
-      .map((cell) => getEquipmentElText(cell))
-      .join(' ');
-    if (/nhân viên/i.test(headText)) {
+    const cells = Array.from(grid.querySelectorAll('thead th, thead td'));
+    if (cells.some((cell) => /^nhân viên$/i.test(getEquipmentElText(cell)))) {
       return grid;
     }
   }
-  return (
-    grids.find(
-      (g) => typeof g.querySelector === 'function' && Boolean(g.querySelector('table.rz-grid-table'))
-    ) || null
-  );
+  return null;
 }
 
 function findEquipmentTableInGrid(grid) {
@@ -676,6 +670,17 @@ export async function triggerEquipmentOpenDebtReportMenu(doc) {
   return { ok: true };
 }
 
+export async function waitForEquipmentDebtTabOpen(doc, { timeoutMs = 4500 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(200);
+    if (findEquipmentDebtPageControls(doc).hasDebtTab) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export async function waitForEquipmentReportLoad(doc, { timeoutMs = 15000, onTick = null } = {}) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -770,16 +775,23 @@ export async function loadEquipmentDebtContext(ctx = {}) {
   const realRows = getEquipmentRealBodyRows(table);
   const columns = table ? parseEquipmentDebtColumns(table) : { materials: [] };
 
-  if (!ctrls.grid || !table || realRows.length === 0 || columns.materials.length === 0) {
+  if (
+    !ctrls.hasDebtTab ||
+    !ctrls.isDebtTabActive ||
+    !ctrls.grid ||
+    !table ||
+    realRows.length === 0 ||
+    columns.materials.length === 0
+  ) {
     const hasReportMenuBtn = Boolean(findEquipmentReportMenuBtn(doc));
     const filterState = readEquipmentFilterState(doc);
     let message =
-      'Trên trang Quản lý vật tư, mở Báo cáo → Báo cáo nợ → chọn Vùng/Tỉnh thành/Đối tác → bấm Xem danh sách rồi bấm Đọc lại dữ liệu.';
+      'Bạn đang ở màn hình khác trên Quản lý vật tư (chưa mở Báo cáo → Báo cáo nợ). Bấm nút bên dưới để mở đúng trang Báo cáo nợ.';
     if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
       message = 'Đang ở Báo cáo nợ nhưng chưa chọn tab "Tồn công nợ theo NV". Bấm chuyển tab bên dưới.';
     } else if (ctrls.hasDebtTab && filterState.missingRequired) {
       message =
-        'Chưa chọn Vùng / Tỉnh thành / Đối tác trên trang Báo cáo nợ. Bấm "Thu gọn để chọn" rồi chọn điều kiện và bấm Xem danh sách.';
+        'Chưa chọn Vùng / Tỉnh thành / Đối tác trên trang Báo cáo nợ. Bấm "Thu gọn để chọn bộ lọc", chọn xong rồi bấm Xem danh sách.';
     } else if (ctrls.hasDebtTab && ctrls.viewListBtn) {
       message =
         'Bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để chạy "Xem danh sách" và gom KTV.';

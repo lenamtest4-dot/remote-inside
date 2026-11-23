@@ -121,6 +121,7 @@ import {
   triggerEquipmentDebtTab,
   triggerEquipmentDebtViewList,
   triggerEquipmentOpenDebtReportMenu,
+  waitForEquipmentDebtTabOpen,
   waitForEquipmentReportLoad,
 } from '../adapters/equipment.js';
 import { executePortalAction } from '../adapters/portals.js';
@@ -6977,11 +6978,9 @@ export function mountRemoteInside({
                   renderConfirm();
                   return;
                 }
-                setTimeout(() => {
-                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
-                    loadEquipmentDebtModal();
-                  }
-                }, 900);
+                await waitForEquipmentDebtTabOpen(pageDocument, { timeoutMs: 4500 });
+                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                loadEquipmentDebtModal();
               },
             })
           );

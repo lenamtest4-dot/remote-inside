@@ -3231,12 +3231,75 @@ async function runTests() {
     'Collector must wait for delayed tbody content change even after pager summary updates early'
   );
 
+  // Regression: Danh muc vat tu landing grid (STT / Ma hang / Ten vat tu) must NEVER be mistaken for Bao cao no
+  const catalogTable = {
+    className: 'rz-grid-table',
+    querySelectorAll: (sel) => {
+      if (sel === 'thead tr') {
+        return [
+          {
+            querySelectorAll: () => [
+              makeEquipCell('STT filter_alt'),
+              makeEquipCell('Mã hàng filter_alt'),
+              makeEquipCell('Tên vật tư filter_alt'),
+            ],
+          },
+        ];
+      }
+      if (sel === 'tbody tr') {
+        return [
+          makeEquipBodyTr(['2001', '20052487', 'Vat tu mau A']),
+          makeEquipBodyTr(['2002', '20035677', 'Vat tu mau B']),
+        ];
+      }
+      return [];
+    },
+  };
+  const catalogGrid = {
+    querySelectorAll: (sel) =>
+      sel === 'thead th, thead td'
+        ? [makeEquipCell('STT filter_alt'), makeEquipCell('Mã hàng filter_alt'), makeEquipCell('Tên vật tư filter_alt')]
+        : [],
+    querySelector: (sel) => {
+      if (sel === 'table.rz-grid-table') return catalogTable;
+      if (sel === '.rz-pager-summary') return { innerText: 'Page 5 of 5 (2289 items)' };
+      return null;
+    },
+  };
+  const catalogDoc = {
+    querySelectorAll: (sel) => {
+      if (sel === '.rz-data-grid') return [catalogGrid];
+      if (sel === 'button') return [{ innerText: 'Báo cáo' }];
+      return [];
+    },
+  };
+  assert.equal(findEquipmentDebtGrid(catalogDoc), null, 'Must never match Danh muc vat tu grid');
+  const hadGm20b = Object.prototype.hasOwnProperty.call(globalThis, 'GM_xmlhttpRequest');
+  const prevGm20b = globalThis.GM_xmlhttpRequest;
+  try {
+    globalThis.GM_xmlhttpRequest = () => {};
+    const catalogCtxRes = await loadEquipmentDebtContext({
+      pageLocation: { hostname: 'nextgen.fpt.net', pathname: '/resource/equipment/' },
+      pageDocument: catalogDoc,
+    });
+    assert.equal(catalogCtxRes.status, 'needs_report_loaded');
+    assert.equal(catalogCtxRes.hasDebtTab, false);
+    assert.equal(catalogCtxRes.hasReportMenuBtn, true);
+  } finally {
+    if (hadGm20b) {
+      globalThis.GM_xmlhttpRequest = prevGm20b;
+    } else {
+      delete globalThis.GM_xmlhttpRequest;
+    }
+  }
+
   for (const token of [
     'equipment_debt',
     'collectEquipmentDebtFromDocument',
     'queryEquipmentDebtHolders',
     'formatEquipmentDebtClipboardText',
     'getEquipmentRealBodyRows',
+    'waitForEquipmentDebtTabOpen',
     EQUIPMENT_ENDPOINTS.base,
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);

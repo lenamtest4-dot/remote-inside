@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.7.1
+// @version      0.7.2
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @match        https://inside.fpt.net/*
 // @match        http://inside.fpt.net/*
@@ -6140,6 +6140,57 @@ function mountRemoteInside({
       const STATIC_ASSET_RE =
         /\.(?:css|png|jpe?g|gif|svg|ico|woff2?|ttf|eot|pdf|xlsx?|docx?|zip|rar|mp4|webm)$/i;
 
+      const PORT_SKIP_SCRIPT_RE =
+        /\/(?:js\/(?:xlsx|console|JScript)\.js|Scripts\/Services\/(?:Ring\/ring|Tacit\/tacit)\.js)$/i;
+
+      function readMvcPortTokenFromCookie(doc, win) {
+        try {
+          const host =
+            win && win.location && win.location.hostname
+              ? String(win.location.hostname).toLowerCase()
+              : '';
+          if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
+            return '';
+          }
+          const rawCookies = doc && typeof doc.cookie === 'string' ? doc.cookie : '';
+          if (!rawCookies) return '';
+          let baseMatch = '';
+          let suffixedMatch = '';
+          for (const part of rawCookies.split(';')) {
+            const trimmed = part.trim();
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx <= 0) continue;
+            const name = trimmed.slice(0, eqIdx).trim();
+            const val = trimmed.slice(eqIdx + 1).trim();
+            if (!val) continue;
+            if (name === 'MVCPORT_TOKEN') {
+              baseMatch = decodeURIComponent(val);
+            } else if (name.indexOf('MVCPORT_TOKEN_') === 0) {
+              suffixedMatch = decodeURIComponent(val);
+            }
+          }
+          return suffixedMatch || baseMatch || '';
+        } catch {
+          return '';
+        }
+      }
+
+      function withPortToken(rawUrl, token) {
+        if (!token) return rawUrl;
+        try {
+          const u = new URL(rawUrl);
+          if (!/mvcport\.fpt\.net$/i.test(u.hostname) || u.searchParams.has('Token')) {
+            return rawUrl;
+          }
+          u.searchParams.set('Token', token);
+          return u.toString();
+        } catch {
+          return rawUrl;
+        }
+      }
+
+      const mvcToken = readMvcPortTokenFromCookie(pageDocument, pageWindow);
+
       function parseOriginPath(rawUrl) {
         try {
           const u = new URL(rawUrl);
@@ -6154,10 +6205,54 @@ function mountRemoteInside({
 
       const fetchedPageKeys = new Set();
 
+      function buildAnalyzedPageSummary(key, reqParts, finalParts, status, iamExpired, htmlText) {
+        const safeBaseUrl =
+          finalParts.origin && finalParts.pathname
+            ? `${finalParts.origin}${finalParts.pathname}`
+            : 'http://mvcport.fpt.net/';
+        const hints = extractApiHintsFromHtml(htmlText, safeBaseUrl, contractId);
+        const navMeta = extractFramesAndLinksFromHtml(htmlText, safeBaseUrl, contractId);
+        const sigs = extractAjaxSignaturesFromHtml(htmlText, safeBaseUrl, contractId);
+        const controlsMeta = extractFormControlsMeta(htmlText, contractId);
+        const inlineScripts = extractInlineScriptsSanitized(htmlText, contractId, {
+          maxPerScript: 28000,
+          maxTotal: 44000,
+        }).slice(0, 12);
+        const nextChunkUrls = extractNextAppChunkUrls(htmlText, safeBaseUrl);
+
+        return {
+          summary: {
+            key,
+            requestedOrigin: reqParts.origin,
+            requestedPath: reqParts.pathname,
+            finalOrigin: finalParts.origin,
+            finalPath: finalParts.pathname,
+            title: navMeta.title,
+            status,
+            iamExpired,
+            frames: navMeta.frames,
+            links: navMeta.links,
+            ajaxCalls: sigs.ajaxCalls,
+            controlsMeta,
+            forms: hints.forms,
+            fields: hints.fields,
+            buttons: hints.buttons,
+            scriptUrls: hints.scriptUrls,
+            nextChunkUrls,
+            apiHints: hints.apiHints,
+            inlineScripts,
+          },
+          scriptUrls: hints.scriptUrls,
+          nextChunkUrls,
+          frames: navMeta.frames,
+          links: navMeta.links,
+        };
+      }
+
       async function fetchAndAnalyzePortPage(key, rawUrl) {
         const reqParts = parseOriginPath(rawUrl);
         if (reqParts.origin && reqParts.pathname) {
-          fetchedPageKeys.add(`${reqParts.origin.toLowerCase()}${reqParts.pathname}`);
+          fetchedPageKeys.add(`${reqParts.origin.toLowerCase()}${reqParts.pathname.toLowerCase()}`);
         }
 
         const res = await requestPortal({
@@ -6169,7 +6264,9 @@ function mountRemoteInside({
 
         const finalParts = parseOriginPath((res && res.finalUrl) || rawUrl);
         if (finalParts.origin && finalParts.pathname) {
-          fetchedPageKeys.add(`${finalParts.origin.toLowerCase()}${finalParts.pathname}`);
+          fetchedPageKeys.add(
+            `${finalParts.origin.toLowerCase()}${finalParts.pathname.toLowerCase()}`
+          );
         }
 
         const iam = detectIamRedirect({
@@ -6199,57 +6296,63 @@ function mountRemoteInside({
           };
         }
 
-        const safeBaseUrl =
-          finalParts.origin && finalParts.pathname
-            ? `${finalParts.origin}${finalParts.pathname}`
-            : rawUrl;
-        const hints = extractApiHintsFromHtml(res.responseText, safeBaseUrl, contractId);
-        const navMeta = extractFramesAndLinksFromHtml(res.responseText, safeBaseUrl, contractId);
-        const sigs = extractAjaxSignaturesFromHtml(res.responseText, safeBaseUrl, contractId);
-        const controlsMeta = extractFormControlsMeta(res.responseText, contractId);
-        const inlineScripts = extractInlineScriptsSanitized(res.responseText, contractId, {
-          maxPerScript: 8000,
-          maxTotal: 20000,
-        }).slice(0, 5);
-        const nextChunkUrls = extractNextAppChunkUrls(res.responseText, safeBaseUrl);
-
-        return {
-          summary: {
-            key,
-            requestedOrigin: reqParts.origin,
-            requestedPath: reqParts.pathname,
-            finalOrigin: finalParts.origin,
-            finalPath: finalParts.pathname,
-            title: navMeta.title,
-            status: res.status,
-            iamExpired: iam.expired,
-            frames: navMeta.frames,
-            links: navMeta.links,
-            ajaxCalls: sigs.ajaxCalls,
-            controlsMeta,
-            forms: hints.forms,
-            fields: hints.fields,
-            buttons: hints.buttons,
-            scriptUrls: hints.scriptUrls,
-            nextChunkUrls,
-            apiHints: hints.apiHints,
-            inlineScripts,
-          },
-          scriptUrls: hints.scriptUrls,
-          nextChunkUrls,
-          frames: navMeta.frames,
-          links: navMeta.links,
-        };
+        return buildAnalyzedPageSummary(
+          key,
+          reqParts,
+          finalParts,
+          res.status,
+          iam.expired,
+          res.responseText
+        );
       }
 
       const pages = [];
-      const phase1Results = await Promise.all([
-        fetchAndAnalyzePortPage('entry_port', 'http://port.fpt.net/'),
-        fetchAndAnalyzePortPage('entry_mvcport', 'http://mvcport.fpt.net/'),
-      ]);
-
       const discoveredFrames = [];
       const discoveredLinks = [];
+
+      if (
+        pageDocument &&
+        pageDocument.documentElement &&
+        pageWindow &&
+        pageWindow.location &&
+        isPortHost(pageWindow.location.origin)
+      ) {
+        const liveParts = parseOriginPath(pageWindow.location.href || '');
+        if (liveParts.origin && liveParts.pathname) {
+          fetchedPageKeys.add(`${liveParts.origin.toLowerCase()}${liveParts.pathname.toLowerCase()}`);
+          const liveHtml = pageDocument.documentElement.outerHTML || '';
+          const liveItem = buildAnalyzedPageSummary(
+            'current_live_page',
+            liveParts,
+            liveParts,
+            200,
+            false,
+            liveHtml
+          );
+          pages.push(liveItem.summary);
+          discoveredFrames.push(...liveItem.frames);
+          discoveredLinks.push(...liveItem.links);
+        }
+      }
+
+      const phase1Targets = [
+        {
+          key: 'ftth_contract_index',
+          url: withPortToken('http://mvcport.fpt.net/ftth_newport/contract/index', mvcToken),
+        },
+        {
+          key: 'ftth_contract_insert',
+          url: withPortToken('http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert', mvcToken),
+        },
+      ].filter((t) => {
+        const p = parseOriginPath(t.url);
+        return !fetchedPageKeys.has(`${p.origin.toLowerCase()}${p.pathname.toLowerCase()}`);
+      });
+
+      const phase1Results = await Promise.all(
+        phase1Targets.map((t) => fetchAndAnalyzePortPage(t.key, t.url))
+      );
+
       for (const item of phase1Results) {
         pages.push(item.summary);
         discoveredFrames.push(...item.frames);
@@ -6259,13 +6362,13 @@ function mountRemoteInside({
       const frameTargets = [];
       for (const f of discoveredFrames) {
         if (!isPortHost(f.origin) || !f.pathname) continue;
-        const key = `${f.origin.toLowerCase()}${f.pathname}`;
+        const key = `${f.origin.toLowerCase()}${f.pathname.toLowerCase()}`;
         if (fetchedPageKeys.has(key) || frameTargets.some((t) => t.canonKey === key)) {
           continue;
         }
         frameTargets.push({
           canonKey: key,
-          url: `${f.origin}${f.pathname}`,
+          url: withPortToken(`${f.origin}${f.pathname}`, mvcToken),
         });
         if (frameTargets.length >= 6) break;
       }
@@ -6286,10 +6389,10 @@ function mountRemoteInside({
       for (const link of discoveredLinks) {
         if (!link || !isPortHost(link.origin) || !link.pathname) continue;
         if (STATIC_ASSET_RE.test(link.pathname)) continue;
-        const canonKey = `${link.origin.toLowerCase()}${link.pathname}`;
+        const canonKey = `${link.origin.toLowerCase()}${link.pathname.toLowerCase()}`;
         if (fetchedPageKeys.has(canonKey) || seenCandidateLinks.has(canonKey)) continue;
         seenCandidateLinks.add(canonKey);
-        const url = `${link.origin}${link.pathname}`;
+        const url = withPortToken(`${link.origin}${link.pathname}`, mvcToken);
         const entry = { url, canonKey };
         if (PORT_LINK_PRIORITY_RE.test(`${link.text || ''} ${link.pathname}`)) {
           priorityLinks.push(entry);
@@ -6298,9 +6401,9 @@ function mountRemoteInside({
         }
       }
 
-      const pageTargets = [...priorityLinks, ...normalLinks].slice(0, 12);
-      for (let i = 0; i < pageTargets.length; i += 6) {
-        const chunk = pageTargets.slice(i, i + 6);
+      const pageTargets = [...priorityLinks, ...normalLinks].slice(0, 8);
+      for (let i = 0; i < pageTargets.length; i += 4) {
+        const chunk = pageTargets.slice(i, i + 4);
         const chunkResults = await Promise.all(
           chunk.map((pt, offset) => fetchAndAnalyzePortPage(`page_${i + offset}`, pt.url))
         );
@@ -6316,13 +6419,14 @@ function mountRemoteInside({
         for (const sUrl of urls) {
           const sp = parseOriginPath(sUrl);
           if (!isPortHost(sp.origin) || !sp.pathname) continue;
-          const sKey = `${sp.origin.toLowerCase()}${sp.pathname}`;
+          if (PORT_SKIP_SCRIPT_RE.test(sp.pathname)) continue;
+          const sKey = `${sp.origin.toLowerCase()}${sp.pathname.toLowerCase()}`;
           if (seenScripts.has(sKey)) continue;
           seenScripts.add(sKey);
           scriptCandidates.push(`${sp.origin}${sp.pathname}`);
-          if (scriptCandidates.length >= 12) break;
+          if (scriptCandidates.length >= 10) break;
         }
-        if (scriptCandidates.length >= 12) break;
+        if (scriptCandidates.length >= 10) break;
       }
 
       const jsSnippets = [];
@@ -6356,7 +6460,7 @@ function mountRemoteInside({
       }
 
       state.deepScan = {
-        scanKind: 'port_deep_v1',
+        scanKind: 'port_ftth_new_v2',
         scannedAt: new Date().toISOString(),
         hasContractContext: Boolean(contractId),
         pages,
@@ -8132,8 +8236,8 @@ function mountRemoteInside({
           className: 'ri-primary-btn',
           disabled: state.isDeepScanning,
           text: state.isDeepScanning
-            ? 'Đang quét cấu trúc cổng Port…'
-            : '3. Quét tự động cấu trúc cổng Port (chạy ngay từ Inside, không cần F5)',
+            ? 'Đang quét chi tiết mã FTTH NEW…'
+            : '3. Quét chi tiết mã FTTH NEW (Tìm kiếm / Cấp port / Thu hồi port)',
           onClick: handlePortDeepScan,
         })
       );
@@ -8141,7 +8245,7 @@ function mountRemoteInside({
 
     const scannerSubText =
       state.activePortalId === 'port'
-        ? 'Nếu trang port.fpt.net bị lỗi khi F5, bạn chỉ cần đăng nhập port.fpt.net ở 1 tab riêng (không bấm F5), rồi mở Remote Inside ngay trên tab Inside -> chọn tab Port -> bấm nút 3 bên dưới để quét tự động.'
+        ? 'Bấm nút 3 bên dưới ngay trên tab port.fpt.net đang mở (hoặc tab Inside khi đã đăng nhập Port) — không cần F5 — để lấy đủ mã lệnh Tìm kiếm, Cấp port, Thu hồi port và Lịch sử port.'
         : 'Dùng công cụ này khi bạn đang mở trang gốc (ví dụ inside.fpt.net) để lấy đúng các nút và lệnh bên dưới về ghép chạy thật.';
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [

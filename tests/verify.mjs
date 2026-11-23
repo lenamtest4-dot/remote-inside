@@ -125,8 +125,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.7.1'),
-    'Userscript must bump @version to 0.7.1'
+    userscriptContent.includes('@version      0.7.2'),
+    'Userscript must bump @version to 0.7.2'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1170,7 +1170,10 @@ async function runTests() {
   assert.ok(userscriptContent.includes('mvcport.fpt.net'), 'Userscript bundle must include mvcport.fpt.net');
   assert.ok(userscriptContent.includes('matchedPortalId'), 'Userscript bundle must include host auto-detection');
   assert.ok(userscriptContent.includes('handlePortDeepScan'), 'Userscript bundle must include handlePortDeepScan');
-  assert.ok(userscriptContent.includes('port_deep_v1'), 'Userscript bundle must include port_deep_v1');
+  assert.ok(userscriptContent.includes('port_ftth_new_v2'), 'Userscript bundle must include port_ftth_new_v2');
+  assert.ok(userscriptContent.includes('/ftth_newport/contract/index'), 'Userscript bundle must target /ftth_newport/contract/index');
+  assert.ok(userscriptContent.includes('/FTTH_NewPort/Contract/Insert'), 'Userscript bundle must target /FTTH_NewPort/Contract/Insert');
+  assert.ok(userscriptContent.includes('readMvcPortTokenFromCookie'), 'Userscript bundle must include readMvcPortTokenFromCookie');
 
   const portHtmlSample = `
     <html>

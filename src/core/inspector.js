@@ -954,6 +954,12 @@ export function extractApiHintsFromJs(jsText, contractId = '') {
     }
   }
 
+  const fptUrlRe =
+    /https?:\/\/[a-zA-Z0-9.-]*(?:\.fpt\.net|\.fcam\.vn)\/[a-zA-Z0-9_\/\-${}.?=&]*/gi;
+  while ((m = fptUrlRe.exec(jsText)) !== null) {
+    addJsHint(m[0]);
+  }
+
   return hints;
 }
 
@@ -1444,6 +1450,83 @@ export function extractMatchingFunctionsFromJs(
   }
 
   return functions;
+}
+
+const DEFAULT_JS_CONTEXT_RE =
+  /(?:fetch\s*\(|axios\.|\/api\/|connection-parameters|online-session|OLT|oltName|slot|port|ObjID|ipnat|ipv6)/gi;
+
+/**
+ * Trich xuat URL Next.js App Router chunk (app/public/partial/.../page-*.js) tu HTML/RSC payload.
+ */
+export function extractNextAppChunkUrls(
+  htmlText,
+  baseUrl = 'http://radius-portal.fpt.net/'
+) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+  let origin = 'http://radius-portal.fpt.net';
+  try {
+    origin = new URL(baseUrl || 'http://radius-portal.fpt.net/').origin;
+  } catch {
+    origin = 'http://radius-portal.fpt.net';
+  }
+
+  const normalized = htmlText.replace(/\\\//g, '/');
+  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/public\/partial\/[a-zA-Z0-9_\/-]+\.js/g;
+  const urls = [];
+  const seen = new Set();
+  let m;
+
+  while ((m = chunkRe.exec(normalized)) !== null && urls.length < 6) {
+    const cleanRel = m[0].replace(/^\/?_next\//, '').replace(/^\//, '');
+    const fullUrl = `${origin}/_next/${cleanRel}`;
+    if (!seen.has(fullUrl)) {
+      seen.add(fullUrl);
+      urls.push(fullUrl);
+    }
+  }
+
+  return urls;
+}
+
+/**
+ * Trich xuat doan code ngu canh quanh tu khoa API / OLT trong bundle JS (da an du lieu nhay cam).
+ */
+export function extractCodeContextsFromJs(
+  jsText,
+  keywordRe = DEFAULT_JS_CONTEXT_RE,
+  contractId = '',
+  maxTotal = 10000
+) {
+  if (!jsText || typeof jsText !== 'string') {
+    return [];
+  }
+  const baseRe = keywordRe instanceof RegExp ? keywordRe : DEFAULT_JS_CONTEXT_RE;
+  const flags = baseRe.flags.includes('g') ? baseRe.flags : `${baseRe.flags}g`;
+  const re = new RegExp(baseRe.source, flags);
+
+  const contexts = [];
+  let remaining = maxTotal;
+  let lastCenter = -1000;
+  let m;
+
+  while ((m = re.exec(jsText)) !== null && remaining > 0 && contexts.length < 30) {
+    if (m.index - lastCenter < 240) {
+      continue;
+    }
+    lastCenter = m.index;
+    const start = Math.max(0, m.index - 140);
+    const end = Math.min(jsText.length, m.index + 240);
+    const slice = jsText.slice(start, end);
+    const cleaned = sanitizeCodeSnippet(slice, contractId, Math.min(420, remaining));
+    if (cleaned) {
+      contexts.push(cleaned);
+      remaining -= cleaned.length;
+    }
+  }
+
+  return contexts;
 }
 
 /**

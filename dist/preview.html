@@ -18,7 +18,7 @@
   <script>
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -46,15 +46,15 @@ const PORTALS = {
       {
         id: 'reset_mac',
         label: 'Reset MAC Modem',
-        description: 'Xóa địa chỉ MAC đang giữ để thiết bị nhận lại kết nối mới.',
+        description: 'Xem MAC Modem đang chạy của hợp đồng, xóa trắng hoặc đổi MAC mới.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Hành động này sẽ xóa MAC Modem đang gắn với hợp đồng trên hệ thống Inside.',
+        confirmNote: 'Kiểm tra MAC Modem đang chạy trước khi xóa trắng hoặc cập nhật MAC mới.',
       },
       {
         id: 'reset_mac_box',
         label: 'Reset MAC Box',
-        description: 'Xem danh sách MAC Box của hợp đồng và thay thế sang MAC mới (12 hoặc 16 ký tự).',
+        description: 'Xem danh sách MAC Box, thay thế MAC mới (12/16 ký tự) và xem lịch sử Reset MAC.',
         kind: 'danger',
         requiresConfirm: true,
         confirmNote: 'Chọn đúng MAC Box cần thay thế trên hợp đồng và nhập MAC Box mới.',
@@ -70,11 +70,11 @@ const PORTALS = {
       {
         id: 'clear_osp',
         label: 'Clear OSP',
-        description: 'Chọn POP OLT và Port để chạy Clear Serial (hoặc Config Device) trên MonitorOLT.',
+        description: 'Xem Thông số kết nối (OLT/Port của HĐ) và chạy Clear Serial trên MonitorOLT.',
         kind: 'danger',
         requiresConfirm: true,
         requiresContract: false,
-        confirmNote: 'Chọn đúng POP OLT và Port cần xử lý trước khi xác nhận.',
+        confirmNote: 'Chọn đúng POP OLT và Port cần Clear Serial trước khi xác nhận.',
       },
     ],
   },
@@ -1525,6 +1525,12 @@ function extractApiHintsFromJs(jsText, contractId = '') {
     }
   }
 
+  const fptUrlRe =
+    /https?:\/\/[a-zA-Z0-9.-]*(?:\.fpt\.net|\.fcam\.vn)\/[a-zA-Z0-9_\/\-${}.?=&]*/gi;
+  while ((m = fptUrlRe.exec(jsText)) !== null) {
+    addJsHint(m[0]);
+  }
+
   return hints;
 }
 
@@ -2017,6 +2023,83 @@ function extractMatchingFunctionsFromJs(
   return functions;
 }
 
+const DEFAULT_JS_CONTEXT_RE =
+  /(?:fetch\s*\(|axios\.|\/api\/|connection-parameters|online-session|OLT|oltName|slot|port|ObjID|ipnat|ipv6)/gi;
+
+/**
+ * Trich xuat URL Next.js App Router chunk (app/public/partial/.../page-*.js) tu HTML/RSC payload.
+ */
+function extractNextAppChunkUrls(
+  htmlText,
+  baseUrl = 'http://radius-portal.fpt.net/'
+) {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return [];
+  }
+  let origin = 'http://radius-portal.fpt.net';
+  try {
+    origin = new URL(baseUrl || 'http://radius-portal.fpt.net/').origin;
+  } catch {
+    origin = 'http://radius-portal.fpt.net';
+  }
+
+  const normalized = htmlText.replace(/\\\//g, '/');
+  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/public\/partial\/[a-zA-Z0-9_\/-]+\.js/g;
+  const urls = [];
+  const seen = new Set();
+  let m;
+
+  while ((m = chunkRe.exec(normalized)) !== null && urls.length < 6) {
+    const cleanRel = m[0].replace(/^\/?_next\//, '').replace(/^\//, '');
+    const fullUrl = `${origin}/_next/${cleanRel}`;
+    if (!seen.has(fullUrl)) {
+      seen.add(fullUrl);
+      urls.push(fullUrl);
+    }
+  }
+
+  return urls;
+}
+
+/**
+ * Trich xuat doan code ngu canh quanh tu khoa API / OLT trong bundle JS (da an du lieu nhay cam).
+ */
+function extractCodeContextsFromJs(
+  jsText,
+  keywordRe = DEFAULT_JS_CONTEXT_RE,
+  contractId = '',
+  maxTotal = 10000
+) {
+  if (!jsText || typeof jsText !== 'string') {
+    return [];
+  }
+  const baseRe = keywordRe instanceof RegExp ? keywordRe : DEFAULT_JS_CONTEXT_RE;
+  const flags = baseRe.flags.includes('g') ? baseRe.flags : `${baseRe.flags}g`;
+  const re = new RegExp(baseRe.source, flags);
+
+  const contexts = [];
+  let remaining = maxTotal;
+  let lastCenter = -1000;
+  let m;
+
+  while ((m = re.exec(jsText)) !== null && remaining > 0 && contexts.length < 30) {
+    if (m.index - lastCenter < 240) {
+      continue;
+    }
+    lastCenter = m.index;
+    const start = Math.max(0, m.index - 140);
+    const end = Math.min(jsText.length, m.index + 240);
+    const slice = jsText.slice(start, end);
+    const cleaned = sanitizeCodeSnippet(slice, contractId, Math.min(420, remaining));
+    if (cleaned) {
+      contexts.push(cleaned);
+      remaining -= cleaned.length;
+    }
+  }
+
+  return contexts;
+}
+
 /**
  * Dong goi bao cao JSON sach se de nguoi dung copy hoac tai ve gui AI ghep API.
  */
@@ -2073,7 +2156,6 @@ const INSIDE_ENDPOINTS = {
     viewport: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
     oltList: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/GetOLTList.asp',
     clearSerial: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ClearSerial.asp',
-    configDevice: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxConfigDeviceType.asp',
   },
 };
 const INSIDE_CONTRACT_CACHE = new Map();
@@ -2731,7 +2813,99 @@ async function killSessionLive(contractId) {
   });
 }
 
-async function resetMacModemLive(contractId, rawNewMac = '') {
+/**
+ * Tai thong tin nhanh (ObjID, Account, MAC Modem dang chay) cua hop dong tu ViewReportDetail.
+ */
+async function fetchInsideModemInfo(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+    };
+  }
+
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      contractId,
+      objID: '1162622263',
+      accountName: 'vtfdl-demo-2393',
+      macAddress: 'd4:61:95:a0:6e:41',
+      customerName: 'Khách hàng mẫu',
+    };
+  }
+
+  const locationCandidates = getLocationCandidates();
+  let matchedRow = null;
+
+  for (const loc of locationCandidates) {
+    const detailUrl = `${INSIDE_ENDPOINTS.lookup.detail}?location=${encodeURIComponent(
+      loc
+    )}&contract=${encodeURIComponent(contractId)}`;
+    const outcome = await fetchInsideEndpoint(detailUrl, false);
+    if (outcome.iamExpired) {
+      return {
+        status: 'iam_expired',
+        message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+        loginUrl: outcome.loginUrl || PORTALS.inside.url,
+      };
+    }
+    if (outcome.networkError) {
+      return {
+        status: 'error',
+        message: 'Không kết nối được tới mvc.inside.fpt.net. Hãy kiểm tra VPN công ty đã bật chưa.',
+        loginUrl: PORTALS.inside.url,
+      };
+    }
+
+    const row = pickFirstRow(outcome.json);
+    if (row) {
+      matchedRow = row;
+      break;
+    }
+  }
+
+  if (!matchedRow) {
+    return {
+      status: 'warn',
+      message: `Không tìm thấy hợp đồng ${contractId} trên hệ thống Inside.`,
+      loginUrl: PORTALS.inside.url,
+    };
+  }
+
+  const objID =
+    matchedRow.ID !== null && matchedRow.ID !== undefined ? String(matchedRow.ID).trim() : '';
+  const accountName =
+    nonEmptyStr(matchedRow.Name) ||
+    nonEmptyStr(matchedRow.Account) ||
+    nonEmptyStr(matchedRow.UserName) ||
+    nonEmptyStr(matchedRow.Name1);
+  const macAddress = nonEmptyStr(matchedRow.MACAddress);
+  const customerName = nonEmptyStr(matchedRow.FullName);
+
+  INSIDE_CONTRACT_CACHE.set(contractId, {
+    contractId,
+    objID: objID || null,
+    accountName,
+    macAddress,
+    fetchedAt: Date.now(),
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    contractId,
+    objID,
+    accountName,
+    macAddress,
+    customerName,
+  };
+}
+
+async function resetMacModemLive(contractId, rawNewMac = '', ctx = {}) {
   const resolved = await resolveInsideObjId(contractId);
   if (resolved.errorResult) {
     return resolved.errorResult;
@@ -2742,18 +2916,36 @@ async function resetMacModemLive(contractId, rawNewMac = '') {
   const url = `${INSIDE_ENDPOINTS.reset_mac}?ObjID=${encodeURIComponent(
     objID
   )}&NewMAC=${encodeURIComponent(newMac)}`;
-  return executeInsideGetMutation({
+
+  const extraFields = [];
+  if (ctx.previousMac && String(ctx.previousMac).trim()) {
+    extraFields.push({
+      label: 'MAC trước khi đổi',
+      value: String(ctx.previousMac).trim(),
+    });
+  }
+  extraFields.push({
+    label: 'Chế độ Reset MAC',
+    value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
+  });
+
+  const res = await executeInsideGetMutation({
     actionLabel: 'Reset MAC Modem',
     contractId,
     objID,
     url,
-    extraFields: [
-      {
-        label: 'Chế độ Reset MAC',
-        value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
-      },
-    ],
+    extraFields,
   });
+
+  if (res && res.status === 'ok') {
+    const existing = INSIDE_CONTRACT_CACHE.get(contractId);
+    if (existing) {
+      existing.macAddress = newMac;
+      existing.fetchedAt = Date.now();
+    }
+  }
+
+  return res;
 }
 
 function buildInsideMockResult(actionId, contractId, ctx = {}) {
@@ -2826,13 +3018,25 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
           },
         ],
       };
-    case 'reset_mac':
+    case 'reset_mac': {
+      const newMac = String(ctx.newMac || '').replace(/\s+/g, '').trim();
+      const prevMac = String(ctx.previousMac || '').trim();
+      const fields = [{ label: 'Mã hợp đồng', value: contractId }];
+      if (prevMac) fields.push({ label: 'MAC trước khi đổi', value: prevMac });
+      fields.push({
+        label: 'Chế độ Reset MAC',
+        value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
+      });
       return {
         status: 'ok',
         mode: 'demo',
         title: `Đã Reset MAC Modem cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: MAC Modem cũ đã được xóa trên bản xem thử.',
+        message: newMac
+          ? `Lệnh mô phỏng thành công: Đã cập nhật MAC Modem sang ${newMac}.`
+          : 'Lệnh mô phỏng thành công: MAC Modem đã được xóa trắng để thiết bị nhận kết nối mới.',
+        summaryFields: fields,
       };
+    }
     case 'reset_mac_box': {
       const oldMac = String(ctx.oldMac || `FBOX${contractId}`).trim();
       const newMac = normalizeBoxMac(ctx.newMac || '') || 'FBOX001122334455';
@@ -2857,8 +3061,6 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
         message: 'Lệnh mô phỏng thành công: Phiên PPPoE giả lập đã được ngắt để quay lại phiên mới.',
       };
     case 'clear_osp': {
-      const isConfig = ctx.clearMode === 'config_device';
-      const actionLabel = isConfig ? 'Config Device' : 'Clear Serial';
       const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
       const portsCsv =
         Array.isArray(ctx.ports) && ctx.ports.length > 0 ? ctx.ports.join(',') : '1';
@@ -2867,13 +3069,13 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
       fields.push(
         { label: 'POP OLT', value: oltLabel },
         { label: 'Port đã chọn', value: portsCsv },
-        { label: 'Lệnh thực hiện', value: actionLabel }
+        { label: 'Lệnh thực hiện', value: 'Clear Serial' }
       );
       return {
         status: 'ok',
         mode: 'demo',
-        title: `Đã ${actionLabel} cho ${oltLabel} (Dữ liệu mô phỏng)`,
-        message: `Lệnh mô phỏng ${actionLabel} trên Port ${portsCsv} của ${oltLabel} thành công.`,
+        title: `Đã Clear Serial cho ${oltLabel} (Dữ liệu mô phỏng)`,
+        message: `Lệnh mô phỏng Clear Serial trên Port ${portsCsv} của ${oltLabel} thành công.`,
         summaryFields: fields,
       };
     }
@@ -3032,6 +3234,229 @@ async function fetchInsideBoxMacs(rawContractId, ctx = {}) {
     status: 'ok',
     mode: 'live',
     items,
+  };
+}
+
+/**
+ * Chuyen dinh dang ngay ASP.NET /Date(ms)/ sang DD/MM/YYYY HH:mm:ss.
+ */
+function formatInsideTimestamp(raw) {
+  if (raw === null || raw === undefined) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+  const aspMatch = s.match(/^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/i);
+  if (aspMatch) {
+    const ms = Number(aspMatch[1]);
+    if (Number.isFinite(ms)) {
+      const d = new Date(ms);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(
+        d.getHours()
+      )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+  }
+  return s;
+}
+
+const LOG_PII_KEY_RE =
+  /(pass|pwd|secret|token|cookie|auth|otp|phone|mobile|sdt|tel|cmnd|cccd|email|address|fullname|tenkh)/i;
+
+/**
+ * Chuan hoa danh sach lich su thay the MAC Box tu ReplaceMAC/GetLogByContract.
+ */
+function parseBoxMacLogItems(json) {
+  const rows = Array.isArray(json)
+    ? json
+    : json && typeof json === 'object'
+    ? Array.isArray(json.data)
+      ? json.data
+      : Array.isArray(json.Data)
+      ? json.Data
+      : Array.isArray(json.logs)
+      ? json.logs
+      : []
+    : [];
+
+  function pickField(lowerMap, candidates, formatTimeVal = false) {
+    for (const c of candidates) {
+      if (lowerMap.has(c)) {
+        const entry = lowerMap.get(c);
+        const text = formatTimeVal
+          ? formatInsideTimestamp(entry.val)
+          : nonEmptyStr(entry.val);
+        if (text) {
+          return { key: c, value: text };
+        }
+      }
+    }
+    return { key: '', value: '' };
+  }
+
+  return rows
+    .filter((row) => row && typeof row === 'object')
+    .slice(0, 40)
+    .map((row) => {
+      const lowerMap = new Map();
+      for (const [k, v] of Object.entries(row)) {
+        lowerMap.set(k.toLowerCase(), { origKey: k, val: v });
+      }
+
+      const oldHit = pickField(lowerMap, ['oldmac', 'macold', 'mac_old', 'old_mac', 'mac']);
+      const newHit = pickField(lowerMap, [
+        'newmac',
+        'macnew',
+        'mac_new',
+        'new_mac',
+        'macreplace',
+        'replacemac',
+      ]);
+      const timeHit = pickField(
+        lowerMap,
+        [
+          'createdate',
+          'createddate',
+          'createdat',
+          'date',
+          'logdate',
+          'updatedate',
+          'updateddate',
+          'time',
+          'thoigian',
+          'ngaythuchien',
+          'actiondate',
+        ],
+        true
+      );
+      const actorHit = pickField(lowerMap, [
+        'createby',
+        'createdby',
+        'user',
+        'username',
+        'actor',
+        'nguoithuchien',
+        'staff',
+        'employee',
+        'updateby',
+        'updatedby',
+      ]);
+      const noteHit = pickField(lowerMap, [
+        'note',
+        'description',
+        'des',
+        'statusname',
+        'status',
+        'msg',
+        'message',
+        'reason',
+        'ghichu',
+        'action',
+        'type',
+      ]);
+
+      const usedKeys = new Set(
+        [oldHit.key, newHit.key, timeHit.key, actorHit.key, noteHit.key].filter(Boolean)
+      );
+
+      const extraFields = [];
+      for (const [lk, { origKey, val }] of lowerMap.entries()) {
+        if (
+          usedKeys.has(lk) ||
+          lk === 'contract' ||
+          lk === 'idcontract' ||
+          lk === 'id' ||
+          LOG_PII_KEY_RE.test(origKey)
+        ) {
+          continue;
+        }
+        const formatted = formatInsideTimestamp(val);
+        if (formatted) {
+          extraFields.push({ label: origKey, value: formatted });
+        }
+      }
+
+      return {
+        oldMac: oldHit.value,
+        newMac: newHit.value,
+        time: timeHit.value,
+        actor: actorHit.value,
+        note: noteHit.value,
+        extraFields,
+      };
+    });
+}
+
+/**
+ * Lay lich su hoan doi / Reset MAC Box theo hop dong tu GetLogByContract.
+ */
+async function fetchInsideBoxMacLogs(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+      logs: [],
+    };
+  }
+
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      logs: [
+        {
+          oldMac: 'FBOXOLD001122334',
+          newMac: `FBOX${contractId}`,
+          time: '20/11/2026 10:46:16',
+          actor: 'ktv.demo',
+          note: 'Đổi Box tại nhà khách hàng (Mô phỏng)',
+          extraFields: [],
+        },
+        {
+          oldMac: 'A42B8C109E00',
+          newMac: 'A42B8C109E4F',
+          time: '12/09/2026 15:18:02',
+          actor: 'ktv.demo2',
+          note: 'Thay thế thành công',
+          extraFields: [],
+        },
+      ],
+    };
+  }
+
+  const url = `${INSIDE_ENDPOINTS.reset_mac_box.log}?contract=${encodeURIComponent(
+    contractId
+  )}&_=${Date.now()}`;
+  const outcome = await fetchInsideEndpoint(url, false);
+  if (outcome.iamExpired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: outcome.loginUrl || PORTALS.inside.url,
+      logs: [],
+    };
+  }
+  if (outcome.networkError) {
+    return {
+      status: 'error',
+      message: 'Không kết nối được tới mvc.inside.fpt.net để xem lịch sử MAC Box. Hãy kiểm tra VPN.',
+      loginUrl: PORTALS.inside.url,
+      logs: [],
+    };
+  }
+  if (!outcome.ok) {
+    return {
+      status: 'error',
+      message: 'Không tải được lịch sử Reset MAC Box từ máy chủ Inside.',
+      loginUrl: PORTALS.inside.url,
+      logs: [],
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    logs: parseBoxMacLogItems(outcome.json),
   };
 }
 
@@ -3368,10 +3793,9 @@ const CLEAR_OSP_ERROR_RE =
   /(?:lỗi(?!.*không có lỗi)|thất\s*bại|fail|không\s*thành\s*công|bạn chưa chọn|ban chua chon|không tìm thấy|khong tim thay|không có quyền|khong co quyen|\berror\b)/i;
 
 /**
- * Chuan hoa ket qua tra ve tu ClearSerial.asp / AjaxConfigDeviceType.asp.
+ * Chuan hoa ket qua tra ve tu ClearSerial.asp.
  */
 function parseClearSerialResponse({
-  mode = 'clear_serial',
   contractId = '',
   oltId = '',
   oltName = '',
@@ -3380,7 +3804,7 @@ function parseClearSerialResponse({
   responseText = '',
   sourceUrl = '',
 } = {}) {
-  const actionLabel = mode === 'config_device' ? 'Config Device' : 'Clear Serial';
+  const actionLabel = 'Clear Serial';
   const summaryFields = [];
   if (contractId) summaryFields.push({ label: 'Mã hợp đồng', value: contractId });
   summaryFields.push(
@@ -3668,7 +4092,6 @@ async function clearOspLive(contractId, ctx = {}) {
   const oltId = String(ctx.oltId || '').trim();
   const oltName = String(ctx.oltName || '').trim();
   const locationId = String(ctx.locationId || '').trim();
-  const clearMode = ctx.clearMode === 'config_device' ? 'config_device' : 'clear_serial';
   const ports = Array.isArray(ctx.ports)
     ? ctx.ports.map((p) => String(p).trim()).filter(Boolean)
     : [];
@@ -3694,27 +4117,14 @@ async function clearOspLive(contractId, ctx = {}) {
   vpQp.set('fOLT', oltId);
   const sourceUrl = `${INSIDE_ENDPOINTS.clear_osp.viewport}?${vpQp.toString()}`;
 
-  const targetUrl =
-    clearMode === 'config_device'
-      ? INSIDE_ENDPOINTS.clear_osp.configDevice
-      : `${INSIDE_ENDPOINTS.clear_osp.clearSerial}?OLTID=${encodeURIComponent(
-          oltId
-        )}&fPort=${encodeURIComponent(portsCsv)}`;
+  const targetUrl = `${INSIDE_ENDPOINTS.clear_osp.clearSerial}?OLTID=${encodeURIComponent(
+    oltId
+  )}&fPort=${encodeURIComponent(portsCsv)}`;
 
   const res = await requestPortal({
     url: targetUrl,
-    method: clearMode === 'config_device' ? 'POST' : 'GET',
-    headers:
-      clearMode === 'config_device'
-        ? {
-            ...AJAX_HEADERS,
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          }
-        : { Accept: 'text/html, application/xhtml+xml, */*' },
-    data:
-      clearMode === 'config_device'
-        ? new URLSearchParams({ olt: oltId, portID: portsCsv }).toString()
-        : undefined,
+    method: 'GET',
+    headers: { Accept: 'text/html, application/xhtml+xml, */*' },
     timeout: 25000,
   });
 
@@ -3722,7 +4132,7 @@ async function clearOspLive(contractId, ctx = {}) {
     return {
       status: 'error',
       message:
-        'Không kết nối được tới inside.fpt.net để chạy lệnh OLT. Hãy kiểm tra VPN công ty đã bật chưa.',
+        'Không kết nối được tới inside.fpt.net để chạy Clear Serial. Hãy kiểm tra VPN công ty đã bật chưa.',
       loginUrl: sourceUrl,
     };
   }
@@ -3742,7 +4152,6 @@ async function clearOspLive(contractId, ctx = {}) {
   }
 
   return parseClearSerialResponse({
-    mode: clearMode,
     contractId,
     oltId,
     oltName,
@@ -3790,7 +4199,7 @@ async function runInsideAction(actionId, rawContractId, ctx = {}) {
     return killSessionLive(contractId);
   }
   if (actionId === 'reset_mac' && INSIDE_ENDPOINTS.reset_mac) {
-    return resetMacModemLive(contractId, ctx.newMac || '');
+    return resetMacModemLive(contractId, ctx.newMac || '', ctx);
   }
   if (actionId === 'reset_mac_box' && INSIDE_ENDPOINTS.reset_mac_box) {
     return resetMacBoxLive(contractId, ctx);
@@ -4047,12 +4456,20 @@ function mountRemoteInside({
     viewReloadKeys: {},
     confirmAction: null,
     confirmNewMac: '',
+    modemLoading: false,
+    modemError: '',
+    modemLoginUrl: '',
+    modemInfo: null,
+    boxTab: 'replace',
     boxLoading: false,
     boxError: '',
     boxLoginUrl: '',
     boxItems: [],
     boxSelectedMac: '',
     boxNewMac: '',
+    boxLogLoading: false,
+    boxLogError: '',
+    boxLogs: [],
     oltLoading: false,
     oltError: '',
     oltLoginUrl: '',
@@ -4064,7 +4481,10 @@ function mountRemoteInside({
     oltPorts: [],
     oltSelectedPorts: [],
     oltShowAllPorts: false,
-    oltClearMode: 'clear_serial',
+    oltContractLoading: false,
+    oltContractObjId: '',
+    oltContractError: '',
+    oltConnOpen: true,
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -4164,12 +4584,20 @@ function mountRemoteInside({
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
+    state.modemLoading = false;
+    state.modemError = '';
+    state.modemLoginUrl = '';
+    state.modemInfo = null;
+    state.boxTab = 'replace';
     state.boxLoading = false;
     state.boxError = '';
     state.boxLoginUrl = '';
     state.boxItems = [];
     state.boxSelectedMac = '';
     state.boxNewMac = '';
+    state.boxLogLoading = false;
+    state.boxLogError = '';
+    state.boxLogs = [];
     state.oltLoading = false;
     state.oltError = '';
     state.oltLoginUrl = '';
@@ -4181,38 +4609,153 @@ function mountRemoteInside({
     state.oltPorts = [];
     state.oltSelectedPorts = [];
     state.oltShowAllPorts = false;
-    state.oltClearMode = 'clear_serial';
+    state.oltContractLoading = false;
+    state.oltContractObjId = '';
+    state.oltContractError = '';
+    state.oltConnOpen = true;
+  }
+
+  async function loadModemInfoForModal(contractId) {
+    state.modemLoading = true;
+    state.modemError = '';
+    state.modemLoginUrl = '';
+    state.modemInfo = null;
+    render();
+
+    try {
+      const res = await fetchInsideModemInfo(contractId);
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac') {
+        return;
+      }
+      state.modemLoading = false;
+      if (res.status === 'ok') {
+        state.modemInfo = res;
+        state.confirmNewMac = res.macAddress || '';
+      } else {
+        state.modemError = res.message || 'Không tải được MAC Modem đang chạy.';
+        state.modemLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac') {
+        return;
+      }
+      state.modemLoading = false;
+      state.modemError = err && err.message ? err.message : 'Lỗi tải MAC Modem hiện tại.';
+    }
+    render();
   }
 
   async function loadBoxMacsForModal(contractId) {
     state.boxLoading = true;
+    state.boxLogLoading = true;
     state.boxError = '';
+    state.boxLogError = '';
     state.boxLoginUrl = '';
     state.boxItems = [];
     state.boxSelectedMac = '';
+    state.boxLogs = [];
     render();
 
     try {
-      const res = await fetchInsideBoxMacs(contractId);
+      const [macsRes, logsRes] = await Promise.all([
+        fetchInsideBoxMacs(contractId),
+        fetchInsideBoxMacLogs(contractId),
+      ]);
       if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
         return;
       }
       state.boxLoading = false;
-      if (res.status === 'ok') {
-        state.boxItems = Array.isArray(res.items) ? res.items : [];
+      state.boxLogLoading = false;
+
+      if (macsRes.status === 'ok') {
+        state.boxItems = Array.isArray(macsRes.items) ? macsRes.items : [];
         if (state.boxItems.length === 1) {
           state.boxSelectedMac = state.boxItems[0].MAC;
         }
       } else {
-        state.boxError = res.message || 'Không tải được danh sách MAC Box.';
-        state.boxLoginUrl = res.loginUrl || '';
+        state.boxError = macsRes.message || 'Không tải được danh sách MAC Box.';
+        state.boxLoginUrl = macsRes.loginUrl || '';
+      }
+
+      if (logsRes.status === 'ok') {
+        state.boxLogs = Array.isArray(logsRes.logs) ? logsRes.logs : [];
+      } else {
+        state.boxLogError = logsRes.message || 'Không tải được lịch sử Reset MAC.';
+        if (!state.boxLoginUrl && logsRes.loginUrl) {
+          state.boxLoginUrl = logsRes.loginUrl;
+        }
       }
     } catch (err) {
       if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
         return;
       }
       state.boxLoading = false;
-      state.boxError = err && err.message ? err.message : 'Lỗi tải danh sách MAC Box.';
+      state.boxLogLoading = false;
+      state.boxError = err && err.message ? err.message : 'Lỗi tải dữ liệu MAC Box.';
+    }
+    render();
+  }
+
+  async function reloadBoxLogsForModal(contractId) {
+    state.boxLogLoading = true;
+    state.boxLogError = '';
+    render();
+
+    try {
+      const logsRes = await fetchInsideBoxMacLogs(contractId);
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
+        return;
+      }
+      state.boxLogLoading = false;
+      if (logsRes.status === 'ok') {
+        state.boxLogs = Array.isArray(logsRes.logs) ? logsRes.logs : [];
+      } else {
+        state.boxLogError = logsRes.message || 'Không tải được lịch sử Reset MAC.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'reset_mac_box') {
+        return;
+      }
+      state.boxLogLoading = false;
+      state.boxLogError = err && err.message ? err.message : 'Lỗi tải lịch sử Reset MAC.';
+    }
+    render();
+  }
+
+  async function loadContractOltContextForModal(contractId) {
+    if (!contractId) return;
+    const cached = getCachedInsideContract(contractId);
+    if (cached && cached.objID) {
+      state.oltContractObjId = String(cached.objID);
+      state.oltContractError = '';
+      render();
+      return;
+    }
+
+    state.oltContractLoading = true;
+    state.oltContractObjId = '';
+    state.oltContractError = '';
+    render();
+
+    try {
+      const res = await fetchInsideModemInfo(contractId);
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltContractLoading = false;
+      if (res.status === 'ok' && res.objID) {
+        state.oltContractObjId = String(res.objID);
+      } else {
+        state.oltContractError =
+          res.message || `Không lấy được ObjID cho ${contractId} để mở Thông số kết nối.`;
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'clear_osp') {
+        return;
+      }
+      state.oltContractLoading = false;
+      state.oltContractError =
+        err && err.message ? err.message : 'Lỗi tải thông tin hợp đồng để mở Thông số kết nối.';
     }
     render();
   }
@@ -4308,10 +4851,15 @@ function mountRemoteInside({
       resetConfirmState();
       state.confirmAction = action;
       render();
-      if (state.activePortalId === 'inside' && action.id === 'reset_mac_box') {
+      if (state.activePortalId === 'inside' && action.id === 'reset_mac') {
+        loadModemInfoForModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'reset_mac_box') {
         loadBoxMacsForModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'clear_osp') {
         loadOltDataForModal(false);
+        if (state.contractInput) {
+          loadContractOltContextForModal(state.contractInput);
+        }
       }
       return;
     }
@@ -4334,10 +4882,7 @@ function mountRemoteInside({
 
     const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
     const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
-    const logActionLabel =
-      isClearOsp && actionCtx.clearMode === 'config_device'
-        ? 'Clear OSP (Config Device)'
-        : action.label;
+    const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
       const baseOlt = portSummary ? `${actionCtx.oltName} (P:${portSummary})` : actionCtx.oltName;
@@ -4664,92 +5209,52 @@ function mountRemoteInside({
 
     state.isDeepScanning = true;
     state.copyNotice =
-      'Đang đọc mã lệnh Replace MAC Box và Clear Serial / MonitorOLT (chỉ đọc, không chạy lệnh)…';
+      'Đang đọc mã Kill Session (IP), Reset MAC & chunk Thông số kết nối (chỉ đọc, không tác động dữ liệu)…';
     render();
 
     try {
       const contractId = normalizeContractId(state.contractInput);
+      let cached = contractId ? getCachedInsideContract(contractId) : null;
+      if (contractId && (!cached || !cached.objID)) {
+        const info = await fetchInsideModemInfo(contractId);
+        if (info && info.status === 'ok') {
+          cached = getCachedInsideContract(contractId);
+        }
+      }
+      const objID = cached && cached.objID ? String(cached.objID) : '';
+      const accountQuery = (cached && cached.accountName) || contractId || '';
+
       const targets = [
+        {
+          key: 'kill_session',
+          url: 'http://mvc.inside.fpt.net/KillSession/KillSession/',
+          scriptOpts: { maxPerScript: 24000, maxTotal: 32000 },
+        },
+        {
+          key: 'reset_mac_modem',
+          url: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/',
+          scriptOpts: { maxPerScript: 24000, maxTotal: 32000 },
+        },
         {
           key: 'replace_mac_box',
           url: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC',
+          scriptOpts: { maxPerScript: 28000, maxTotal: 36000 },
         },
         {
-          key: 'monitor_olt',
-          url: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/',
+          key: 'radius_params',
+          url: `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
+            objID
+          )}`,
+          isRadius: true,
         },
         {
-          key: 'clear_serial',
-          url: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
+          key: 'radius_online',
+          url: `http://radius-portal.fpt.net/public/partial/online-session?query=${encodeURIComponent(
+            accountQuery
+          )}`,
+          isRadius: true,
         },
       ];
-
-      function analyzeHtmlPage(key, url, res) {
-        let pathname = '';
-        try {
-          pathname = new URL(url).pathname;
-        } catch {
-          pathname = '';
-        }
-
-        if (!res || !res.ok || !res.responseText) {
-          return {
-            key,
-            pathname,
-            status: (res && res.status) || 0,
-            error: (res && res.error) || 'REQUEST_FAILED',
-          };
-        }
-
-        const iam = detectIamRedirect({
-          status: res.status,
-          finalUrl: res.finalUrl,
-          responseText: res.responseText,
-          requestedUrl: url,
-        });
-        const hints = extractApiHintsFromHtml(res.responseText, url, contractId);
-        const sigs = extractAjaxSignaturesFromHtml(res.responseText, url, contractId);
-        const controlsMeta = extractFormControlsMeta(res.responseText, contractId);
-        const inlineScripts = extractInlineScriptsSanitized(res.responseText, contractId);
-
-        return {
-          key,
-          pathname,
-          status: res.status,
-          iamExpired: iam.expired,
-          ajaxCalls: sigs.ajaxCalls,
-          controlsMeta,
-          forms: hints.forms,
-          fields: hints.fields,
-          buttons: hints.buttons,
-          scriptUrls: hints.scriptUrls,
-          apiHints: hints.apiHints,
-          inlineScripts,
-        };
-      }
-
-      function pickSampleSelectValue(selects, nameRe, skipAllText = false) {
-        for (const sel of selects || []) {
-          if (!nameRe.test(`${sel.id || ''} ${sel.name || ''}`)) continue;
-          const isValidOpt = (val, text = '') => {
-            const v = String(val || '').trim();
-            if (!v || v === '0' || v === '-1') return false;
-            if (skipAllText && /^(?:tat\s*ca|tất\s*cả|all)$/i.test(String(text || '').trim())) {
-              return false;
-            }
-            return true;
-          };
-          if (isValidOpt(sel.selectedValue)) {
-            return sel.selectedValue;
-          }
-          for (const opt of sel.sampleOptions || []) {
-            if (isValidOpt(opt.value, opt.text)) {
-              return opt.value;
-            }
-          }
-        }
-        return '';
-      }
 
       const settled = await Promise.allSettled(
         targets.map((t) =>
@@ -4763,117 +5268,128 @@ function mountRemoteInside({
       );
 
       const pages = [];
+      const nextChunkUrls = [];
+      const seenChunks = new Set();
+
       for (let i = 0; i < targets.length; i += 1) {
         const t = targets[i];
         const item = settled[i];
         const res = item && item.status === 'fulfilled' ? item.value : null;
-        pages.push(analyzeHtmlPage(t.key, t.url, res));
-      }
-
-      // Stage 2: thu doc 1 lan ViewPortPON.Asp voi tham so Location/OLT mau (neu tim thay) de thay danh sach Port/checkbox
-      const oltPage = pages.find((p) => p.key === 'monitor_olt');
-      const clearPage = pages.find((p) => p.key === 'clear_serial');
-      const candidateSelects = [
-        ...((clearPage && clearPage.controlsMeta && clearPage.controlsMeta.selects) || []),
-        ...((oltPage && oltPage.controlsMeta && oltPage.controlsMeta.selects) || []),
-      ];
-      const sampleLocation = pickSampleSelectValue(candidateSelects, /location/i, false);
-      const sampleOlt = pickSampleSelectValue(candidateSelects, /olt/i, true);
-
-      if (sampleLocation || sampleOlt) {
-        const qp = new URLSearchParams();
-        if (sampleLocation) qp.set('fLocationID', sampleLocation);
-        if (sampleOlt) qp.set('fOLT', sampleOlt);
-        const popUrl = `http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp?${qp.toString()}`;
+        let pathname = '';
         try {
-          const popRes = await requestPortal({
-            url: popUrl,
-            method: 'GET',
-            headers: { Accept: 'text/html, */*' },
-            timeout: 12000,
-          });
-          const popAnalyzed = analyzeHtmlPage('clear_serial_populated', popUrl, popRes);
-          popAnalyzed.queryParamNames = Array.from(qp.keys());
-          pages.push(popAnalyzed);
+          pathname = new URL(t.url).pathname;
         } catch {
-          // Bo qua neu khong tai duoc trang populated
+          pathname = '';
         }
-      }
 
-      // Stage 3: doc toi da 3 file JS ngoai (Library.js, jquery.isc.js, custom scripts) neu can ham ClearSerial/ReplaceMAC
-      const clearPopPage = pages.find((p) => p.key === 'clear_serial_populated');
-      const hasClearSerialInline = [clearPage, clearPopPage].some(
-        (p) =>
-          p &&
-          Array.isArray(p.inlineScripts) &&
-          p.inlineScripts.some((sc) => /ClearSerial/i.test(sc.code || ''))
-      );
-
-      const scriptPriority = (url) => {
-        if (!hasClearSerialInline && /(?:MonitorOLT|Library\.js|jquery\.isc\.js)/i.test(url)) {
-          return 2;
+        if (!res || !res.ok || !res.responseText) {
+          pages.push({
+            key: t.key,
+            pathname,
+            status: (res && res.status) || 0,
+            error: (res && res.error) || 'REQUEST_FAILED',
+          });
+          continue;
         }
-        if (/(?:IPTV|ReplaceMAC|Swap|MonitorOLT|PowerDSL|Library\.js|jquery\.isc\.js)/i.test(url)) {
-          return 1;
-        }
-        return 0;
-      };
 
-      const uniqueScriptUrls = [];
-      const seenScripts = new Set();
-      for (const p of [clearPopPage, clearPage, oltPage, pages.find((x) => x.key === 'replace_mac_box')]) {
-        if (!p || !Array.isArray(p.scriptUrls)) continue;
-        for (const sUrl of p.scriptUrls) {
-          if (!seenScripts.has(sUrl)) {
-            seenScripts.add(sUrl);
-            uniqueScriptUrls.push(sUrl);
+        const iam = detectIamRedirect({
+          status: res.status,
+          finalUrl: res.finalUrl,
+          responseText: res.responseText,
+          requestedUrl: t.url,
+        });
+        const hints = extractApiHintsFromHtml(res.responseText, t.url, contractId);
+
+        if (t.isRadius) {
+          const chunkUrls = extractNextAppChunkUrls(res.responseText, t.url);
+          for (const cu of chunkUrls) {
+            if (!seenChunks.has(cu)) {
+              seenChunks.add(cu);
+              nextChunkUrls.push(cu);
+            }
           }
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            scriptUrls: hints.scriptUrls,
+            nextChunkUrls: chunkUrls,
+            apiHints: hints.apiHints,
+          });
+        } else {
+          const sigs = extractAjaxSignaturesFromHtml(res.responseText, t.url, contractId);
+          const controlsMeta = extractFormControlsMeta(res.responseText, contractId);
+          const inlineScripts = extractInlineScriptsSanitized(
+            res.responseText,
+            contractId,
+            t.scriptOpts
+          );
+          pages.push({
+            key: t.key,
+            pathname,
+            status: res.status,
+            iamExpired: iam.expired,
+            ajaxCalls: sigs.ajaxCalls,
+            controlsMeta,
+            forms: hints.forms,
+            fields: hints.fields,
+            buttons: hints.buttons,
+            scriptUrls: hints.scriptUrls,
+            apiHints: hints.apiHints,
+            inlineScripts,
+          });
         }
       }
-      uniqueScriptUrls.sort((a, b) => scriptPriority(b) - scriptPriority(a));
-      const candidateScripts = uniqueScriptUrls.slice(0, 3);
 
-      const externalScriptSnippets = [];
-      if (candidateScripts.length > 0) {
-        const jsSettled = await Promise.allSettled(
-          candidateScripts.map((url) =>
+      const candidateChunks = nextChunkUrls.slice(0, 4);
+      const radiusChunkSnippets = [];
+      if (candidateChunks.length > 0) {
+        const chunkSettled = await Promise.allSettled(
+          candidateChunks.map((url) =>
             requestPortal({ url, method: 'GET', timeout: 12000 })
           )
         );
-        for (let i = 0; i < candidateScripts.length; i += 1) {
-          const sUrl = candidateScripts[i];
-          const item = jsSettled[i];
+        for (let i = 0; i < candidateChunks.length; i += 1) {
+          const cUrl = candidateChunks[i];
+          const item = chunkSettled[i];
           const res = item && item.status === 'fulfilled' ? item.value : null;
-          if (!res || !res.ok || !res.responseText || res.responseText.length > 1024 * 1024) {
+          if (
+            !res ||
+            !res.ok ||
+            !res.responseText ||
+            res.responseText.length > 1.5 * 1024 * 1024
+          ) {
             continue;
           }
-          let sOrigin = '';
-          let sPath = sUrl;
+          let cOrigin = '';
+          let cPath = cUrl;
           try {
-            const parsed = new URL(sUrl);
-            sOrigin = parsed.origin;
-            sPath = parsed.pathname;
+            const parsed = new URL(cUrl);
+            cOrigin = parsed.origin;
+            cPath = parsed.pathname;
           } catch {
-            // keep raw string
+            // keep string
           }
-          externalScriptSnippets.push({
-            origin: sOrigin,
-            pathname: sPath,
-            functions: extractMatchingFunctionsFromJs(res.responseText, undefined, contractId),
+          radiusChunkSnippets.push({
+            origin: cOrigin,
+            pathname: cPath,
             apiHints: extractApiHintsFromJs(res.responseText, contractId),
+            codeContexts: extractCodeContextsFromJs(res.responseText, undefined, contractId),
           });
         }
       }
 
       state.deepScan = {
-        scanKind: 'ops_box_osp_v2',
+        scanKind: 'ops_kill_radius_v3',
         scannedAt: new Date().toISOString(),
+        hasContractContext: Boolean(objID),
         pages,
-        externalScriptSnippets,
+        radiusChunkSnippets,
       };
 
       state.copyNotice =
-        'Đã quét xong chi tiết Reset MAC Box & Clear Serial! Bấm "Tải file JSON" lưu vào thư mục Remote inside/scans rồi nhắn mình "đã lưu file" nhé.';
+        'Đã quét xong mã Kill Session (IP) & Thông số kết nối! Hãy bấm "Tải file JSON" lưu vào thư mục Remote inside/scans rồi nhắn mình "đã lưu file" nhé.';
     } catch (err) {
       state.copyNotice = `Có lỗi khi quét tham số: ${
         err && err.message ? err.message : 'Không rõ nguyên nhân'
@@ -5476,6 +5992,7 @@ function mountRemoteInside({
     const cached =
       portal.id === 'inside' && contractId ? getCachedInsideContract(contractId) : null;
 
+    const isInsideModem = portal.id === 'inside' && act.id === 'reset_mac';
     const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
 
@@ -5500,18 +6017,24 @@ function mountRemoteInside({
       sheetParts.push(
         el('div', {
           className: 'ri-confirm-meta',
-          text: 'Thao tác chọn trực tiếp POP OLT & Port (không bắt buộc nhập Mã hợp đồng).',
+          text: 'Chưa nhập Mã hợp đồng — chọn trực tiếp POP OLT & Port bên dưới (nếu nhập Mã HĐ sẽ hiện thêm Thông số kết nối tại đây).',
         })
       );
     }
 
-    if (cached && cached.objID && !isInsideOlt) {
-      const metaText =
-        act.id === 'reset_mac' && cached.macAddress
-          ? `ObjID: ${cached.objID} • MAC hiện tại: ${cached.macAddress}`
-          : `ObjID: ${cached.objID}`;
-      sheetParts.push(el('div', { className: 'ri-confirm-meta', text: metaText }));
+    if (cached && cached.objID && !isInsideOlt && !isInsideModem) {
+      sheetParts.push(el('div', { className: 'ri-confirm-meta', text: `ObjID: ${cached.objID}` }));
     }
+
+    const cancelBtn = el('button', {
+      type: 'button',
+      className: 'ri-secondary-btn',
+      text: isInsideBox && state.boxTab === 'history' ? 'Đóng' : 'Hủy',
+      onClick: () => {
+        resetConfirmState();
+        render();
+      },
+    });
 
     const confirmBtn = el('button', {
       type: 'button',
@@ -5519,54 +6042,27 @@ function mountRemoteInside({
       text: 'Xác nhận thực hiện',
     });
 
-    if (portal.id === 'inside' && act.id === 'reset_mac') {
-      const macInput = el('input', {
-        type: 'text',
-        className: 'ri-confirm-input',
-        id: 'ri-confirm-new-mac',
-        placeholder: 'Ví dụ: aa:bb:cc:dd:ee:ff (để trống = xóa MAC)',
-        autocomplete: 'off',
-        spellcheck: 'false',
-        value: state.confirmNewMac,
-      });
-      macInput.value = state.confirmNewMac;
-      macInput.addEventListener('input', (e) => {
-        state.confirmNewMac = e.target.value;
-      });
-      sheetParts.push(
-        el('div', { className: 'ri-confirm-input-wrap' }, [
-          el('label', {
-            className: 'ri-confirm-label',
-            for: 'ri-confirm-new-mac',
-            text: 'Địa chỉ MAC mới — để trống để Reset trắng MAC',
-          }),
-          macInput,
-        ])
-      );
-      confirmBtn.addEventListener('click', () =>
-        runConfirmedAction(act, { newMac: state.confirmNewMac })
-      );
-    } else if (isInsideBox) {
-      confirmBtn.textContent = 'Xác nhận đổi MAC Box';
+    let showConfirmBtn = true;
 
-      if (state.boxLoading) {
+    if (isInsideModem) {
+      if (state.modemLoading) {
         sheetParts.push(
           el('div', { className: 'ri-sheet-status is-loading' }, [
             el('span', { className: 'ri-spinner' }),
-            el('span', { text: `Đang tải danh sách MAC Box của hợp đồng ${contractId}…` }),
+            el('span', { text: `Đang đọc MAC Modem đang chạy của ${contractId}…` }),
           ])
         );
         confirmBtn.disabled = true;
-      } else if (state.boxError) {
+      } else if (state.modemError) {
         const errActions = [
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
             text: 'Thử tải lại',
-            onClick: () => loadBoxMacsForModal(contractId),
+            onClick: () => loadModemInfoForModal(contractId),
           }),
         ];
-        if (state.boxLoginUrl && /iam|hết hạn/i.test(state.boxError)) {
+        if (state.modemLoginUrl && /iam|hết hạn/i.test(state.modemError)) {
           errActions.push(
             el('button', {
               type: 'button',
@@ -5574,7 +6070,7 @@ function mountRemoteInside({
               text: 'Đăng nhập IAM',
               onClick: () => {
                 if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.boxLoginUrl, '_blank', 'noopener');
+                  pageWindow.open(state.modemLoginUrl, '_blank', 'noopener');
                 }
               },
             })
@@ -5582,174 +6078,492 @@ function mountRemoteInside({
         }
         sheetParts.push(
           el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
-            el('div', { text: state.boxError }),
+            el('div', { text: state.modemError }),
             el('div', { className: 'ri-result-actions' }, errActions),
           ])
         );
         confirmBtn.disabled = true;
-      } else if (state.boxItems.length === 0) {
-        sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
-            el('div', {
-              text: `Hợp đồng ${contractId} hiện chưa có MAC Box nào trên Replace MAC.`,
-            }),
-            el('div', { className: 'ri-result-actions' }, [
-              el('button', {
-                type: 'button',
-                className: 'ri-secondary-btn',
-                text: 'Tải lại danh sách',
-                onClick: () => loadBoxMacsForModal(contractId),
-              }),
-            ]),
-          ])
-        );
-        confirmBtn.disabled = true;
       } else {
-        const listLabel =
-          state.boxItems.length > 1
-            ? `Hợp đồng có ${state.boxItems.length} Box — hãy chạm chọn MAC Box cần thay thế:`
-            : 'MAC Box hiện tại trên hợp đồng:';
-
-        const boxListEl = el(
-          'div',
-          { className: 'ri-box-list' },
-          state.boxItems.map((item) => {
-            const isSelected = state.boxSelectedMac === item.MAC;
-            const subParts = [];
-            if (item.IdContract) subParts.push(`IdContract: ${item.IdContract}`);
-            if (item.Contract) subParts.push(`HĐ: ${item.Contract}`);
-            return el(
-              'button',
-              {
-                type: 'button',
-                className: `ri-box-item${isSelected ? ' is-selected' : ''}`,
-                'aria-pressed': isSelected ? 'true' : 'false',
-                onClick: () => {
-                  state.boxSelectedMac = item.MAC;
-                  render();
-                },
-              },
-              [
-                el('div', { className: 'ri-box-item-main' }, [
-                  el('div', { className: 'ri-box-mac', text: item.MAC }),
-                  subParts.length > 0
-                    ? el('div', { className: 'ri-box-sub', text: subParts.join(' • ') })
-                    : null,
-                ]),
-                el('span', {
-                  className: 'ri-tab-badge',
-                  text: isSelected ? 'Đang chọn' : 'Chọn',
-                }),
-              ]
-            );
-          })
-        );
+        const info = state.modemInfo || {};
+        const currentRunning = info.macAddress ? String(info.macAddress).trim() : '';
+        const metaPieces = [];
+        if (info.objID) metaPieces.push(`ObjID: ${info.objID}`);
+        if (info.accountName) metaPieces.push(`Tên truy nhập: ${info.accountName}`);
 
         sheetParts.push(
-          el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-modem-info' }, [
             el('div', { className: 'ri-inline-head' }, [
-              el('span', { className: 'ri-confirm-label', text: listLabel }),
+              el('span', { className: 'ri-confirm-label', text: 'MAC Modem đang chạy trên Inside' }),
               el('button', {
                 type: 'button',
                 className: 'ri-text-btn',
                 text: 'Tải lại',
-                onClick: () => loadBoxMacsForModal(contractId),
+                onClick: () => loadModemInfoForModal(contractId),
               }),
             ]),
-            boxListEl,
+            el('div', {
+              className: 'ri-modem-mac',
+              text: currentRunning || '(Đang trống — chưa giữ MAC)',
+            }),
+            metaPieces.length > 0
+              ? el('div', { className: 'ri-box-sub', text: metaPieces.join(' • ') })
+              : null,
           ])
         );
 
         const macInput = el('input', {
           type: 'text',
           className: 'ri-confirm-input',
-          id: 'ri-box-new-mac',
-          placeholder: 'Ví dụ: AABBCCDDEEFF hoặc FBOX001122334455',
+          id: 'ri-confirm-new-mac',
+          placeholder: 'Xóa hết để Reset trắng MAC, hoặc nhập MAC mới',
           autocomplete: 'off',
           spellcheck: 'false',
-          value: state.boxNewMac,
+          value: state.confirmNewMac,
         });
-        macInput.value = state.boxNewMac;
+        macInput.value = state.confirmNewMac;
+
+        const clearMacBtn = el('button', {
+          type: 'button',
+          className: 'ri-input-tool',
+          text: 'Xóa trắng',
+        });
 
         const hintEl = el('div', { className: 'ri-field-hint' });
 
-        function syncBoxUi() {
-          const trimmed = String(state.boxNewMac || '').trim();
-          const macCheck = trimmed ? validateBoxNewMac(trimmed) : null;
-          if (!trimmed) {
-            hintEl.textContent =
-              'Nhập 12 ký tự (không gồm FBOX) hoặc 16 ký tự (bắt đầu bằng FBOX).';
-            hintEl.dataset.state = 'neutral';
-          } else if (macCheck.valid) {
-            hintEl.textContent = `Hợp lệ: ${macCheck.value} (${macCheck.value.length} ký tự)`;
+        function syncModemUi() {
+          const curNorm = currentRunning.replace(/[\s:-]+/g, '').toUpperCase();
+          const entered = String(state.confirmNewMac || '').trim();
+          const enteredNorm = entered.replace(/[\s:-]+/g, '').toUpperCase();
+
+          if (!entered) {
+            hintEl.textContent = currentRunning
+              ? 'Đã xóa hết ký tự — bấm "Xác nhận Reset trắng MAC" để modem nhận lại MAC mới.'
+              : 'Ô nhập đang trống — bấm "Xác nhận Reset trắng MAC" để gửi lệnh reset.';
             hintEl.dataset.state = 'ok';
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Xác nhận Reset trắng MAC';
+          } else if (currentRunning && enteredNorm === curNorm) {
+            hintEl.textContent =
+              'MAC trong ô đang trùng với MAC đang chạy. Hãy bấm "Xóa trắng" hoặc xóa hết ký tự để Reset.';
+            hintEl.dataset.state = 'warn';
+            confirmBtn.disabled = true;
+            confirmBtn.textContent = 'Hãy xóa trắng để Reset MAC';
           } else {
-            hintEl.textContent = macCheck.error;
-            hintEl.dataset.state = 'error';
+            hintEl.textContent = `Sẽ đổi MAC Modem sang: ${entered}`;
+            hintEl.dataset.state = 'ok';
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Xác nhận đổi MAC Modem';
           }
-          confirmBtn.disabled =
-            !state.boxSelectedMac || !macCheck || !macCheck.valid;
         }
 
         macInput.addEventListener('input', (e) => {
-          state.boxNewMac = e.target.value;
-          syncBoxUi();
+          state.confirmNewMac = e.target.value;
+          syncModemUi();
+        });
+
+        clearMacBtn.addEventListener('click', () => {
+          state.confirmNewMac = '';
+          macInput.value = '';
+          macInput.focus();
+          syncModemUi();
         });
 
         sheetParts.push(
           el('div', { className: 'ri-confirm-input-wrap' }, [
             el('label', {
               className: 'ri-confirm-label',
-              for: 'ri-box-new-mac',
-              text: 'MAC Box mới (bắt buộc 12 hoặc 16 ký tự)',
+              for: 'ri-confirm-new-mac',
+              text: 'MAC Modem gửi lên (xóa hết ký tự để Reset trắng)',
             }),
-            macInput,
+            el('div', { className: 'ri-contract-row' }, [macInput, clearMacBtn]),
             hintEl,
           ])
         );
 
-        syncBoxUi();
+        syncModemUi();
 
-        confirmBtn.addEventListener('click', () => {
-          const selectedItem =
-            state.boxItems.find((x) => x.MAC === state.boxSelectedMac) || {};
+        confirmBtn.addEventListener('click', () =>
           runConfirmedAction(act, {
-            oldMac: state.boxSelectedMac,
-            idContract:
-              selectedItem.IdContract || (cached && cached.objID ? String(cached.objID) : ''),
-            newMac: state.boxNewMac,
-          });
-        });
+            newMac: state.confirmNewMac,
+            previousMac: currentRunning,
+          })
+        );
       }
-    } else if (isInsideOlt) {
-      const isConfig = state.oltClearMode === 'config_device';
-      confirmBtn.textContent = isConfig ? 'Xác nhận Config Device' : 'Xác nhận Clear Serial';
-
+    } else if (isInsideBox) {
+      const logCountLabel = state.boxLogLoading ? '…' : String(state.boxLogs.length);
       sheetParts.push(
         el('div', { className: 'ri-confirm-input-wrap' }, [
-          el('div', { className: 'ri-confirm-label', text: 'Chế độ thao tác trên OLT' }),
           el('div', { className: 'ri-mode-row' }, [
             el('button', {
               type: 'button',
-              className: `ri-mode-btn${!isConfig ? ' is-active' : ''}`,
-              text: 'Clear Serial',
+              className: `ri-mode-btn${state.boxTab === 'replace' ? ' is-active' : ''}`,
+              text: 'Đổi MAC Box',
               onClick: () => {
-                state.oltClearMode = 'clear_serial';
+                state.boxTab = 'replace';
                 render();
               },
             }),
             el('button', {
               type: 'button',
-              className: `ri-mode-btn${isConfig ? ' is-active' : ''}`,
-              text: 'Config Device',
+              className: `ri-mode-btn${state.boxTab === 'history' ? ' is-active' : ''}`,
+              text: `Lịch sử Reset MAC (${logCountLabel})`,
               onClick: () => {
-                state.oltClearMode = 'config_device';
+                state.boxTab = 'history';
                 render();
               },
             }),
           ]),
         ])
       );
+
+      if (state.boxTab === 'history') {
+        showConfirmBtn = false;
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Lịch sử hoán đổi / Reset MAC Box' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại lịch sử',
+                onClick: () => reloadBoxLogsForModal(contractId),
+              }),
+            ]),
+          ])
+        );
+
+        if (state.boxLogLoading) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status is-loading' }, [
+              el('span', { className: 'ri-spinner' }),
+              el('span', { text: `Đang tải lịch sử Reset MAC Box của ${contractId}…` }),
+            ])
+          );
+        } else if (state.boxLogError) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+              el('div', { text: state.boxLogError }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: 'Thử tải lại',
+                  onClick: () => reloadBoxLogsForModal(contractId),
+                }),
+              ]),
+            ])
+          );
+        } else if (state.boxLogs.length === 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status' }, [
+              el('div', { text: `Chưa có lịch sử Reset MAC Box nào cho hợp đồng ${contractId}.` }),
+            ])
+          );
+        } else {
+          sheetParts.push(
+            el(
+              'div',
+              { className: 'ri-history-list' },
+              state.boxLogs.map((log) => {
+                const macLine =
+                  log.oldMac && log.newMac
+                    ? `${log.oldMac} → ${log.newMac}`
+                    : log.oldMac || log.newMac || 'Thao tác MAC Box';
+                const metaParts = [];
+                if (log.time) metaParts.push(log.time);
+                if (log.actor) metaParts.push(`Thực hiện: ${log.actor}`);
+                const cardParts = [
+                  el('div', { className: 'ri-history-macs', text: macLine }),
+                ];
+                if (metaParts.length > 0) {
+                  cardParts.push(
+                    el('div', { className: 'ri-history-meta', text: metaParts.join(' • ') })
+                  );
+                }
+                if (log.note) {
+                  cardParts.push(el('div', { className: 'ri-history-meta', text: log.note }));
+                }
+                if (Array.isArray(log.extraFields) && log.extraFields.length > 0) {
+                  cardParts.push(
+                    el('div', {
+                      className: 'ri-history-meta',
+                      text: log.extraFields.map((f) => `${f.label}: ${f.value}`).join(' • '),
+                    })
+                  );
+                }
+                return el('div', { className: 'ri-history-card' }, cardParts);
+              })
+            )
+          );
+        }
+      } else {
+        confirmBtn.textContent = 'Xác nhận đổi MAC Box';
+
+        if (state.boxLoading) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status is-loading' }, [
+              el('span', { className: 'ri-spinner' }),
+              el('span', { text: `Đang tải danh sách MAC Box của hợp đồng ${contractId}…` }),
+            ])
+          );
+          confirmBtn.disabled = true;
+        } else if (state.boxError) {
+          const errActions = [
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Thử tải lại',
+              onClick: () => loadBoxMacsForModal(contractId),
+            }),
+          ];
+          if (state.boxLoginUrl && /iam|hết hạn/i.test(state.boxError)) {
+            errActions.push(
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Đăng nhập IAM',
+                onClick: () => {
+                  if (pageWindow && pageWindow.open) {
+                    pageWindow.open(state.boxLoginUrl, '_blank', 'noopener');
+                  }
+                },
+              })
+            );
+          }
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+              el('div', { text: state.boxError }),
+              el('div', { className: 'ri-result-actions' }, errActions),
+            ])
+          );
+          confirmBtn.disabled = true;
+        } else if (state.boxItems.length === 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+              el('div', {
+                text: `Hợp đồng ${contractId} hiện chưa có MAC Box nào trên Replace MAC.`,
+              }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: 'Tải lại danh sách',
+                  onClick: () => loadBoxMacsForModal(contractId),
+                }),
+              ]),
+            ])
+          );
+          confirmBtn.disabled = true;
+        } else {
+          const listLabel =
+            state.boxItems.length > 1
+              ? `Hợp đồng có ${state.boxItems.length} Box — hãy chạm chọn MAC Box cần thay thế:`
+              : 'MAC Box hiện tại trên hợp đồng:';
+
+          const boxListEl = el(
+            'div',
+            { className: 'ri-box-list' },
+            state.boxItems.map((item) => {
+              const isSelected = state.boxSelectedMac === item.MAC;
+              const subParts = [];
+              if (item.IdContract) subParts.push(`IdContract: ${item.IdContract}`);
+              if (item.Contract) subParts.push(`HĐ: ${item.Contract}`);
+              return el(
+                'button',
+                {
+                  type: 'button',
+                  className: `ri-box-item${isSelected ? ' is-selected' : ''}`,
+                  'aria-pressed': isSelected ? 'true' : 'false',
+                  onClick: () => {
+                    state.boxSelectedMac = item.MAC;
+                    render();
+                  },
+                },
+                [
+                  el('div', { className: 'ri-box-item-main' }, [
+                    el('div', { className: 'ri-box-mac', text: item.MAC }),
+                    subParts.length > 0
+                      ? el('div', { className: 'ri-box-sub', text: subParts.join(' • ') })
+                      : null,
+                  ]),
+                  el('span', {
+                    className: 'ri-tab-badge',
+                    text: isSelected ? 'Đang chọn' : 'Chọn',
+                  }),
+                ]
+              );
+            })
+          );
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', { className: 'ri-confirm-label', text: listLabel }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  text: 'Tải lại',
+                  onClick: () => loadBoxMacsForModal(contractId),
+                }),
+              ]),
+              boxListEl,
+            ])
+          );
+
+          const macInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-box-new-mac',
+            placeholder: 'Ví dụ: AABBCCDDEEFF hoặc FBOX001122334455',
+            autocomplete: 'off',
+            spellcheck: 'false',
+            value: state.boxNewMac,
+          });
+          macInput.value = state.boxNewMac;
+
+          const hintEl = el('div', { className: 'ri-field-hint' });
+
+          function syncBoxUi() {
+            const trimmed = String(state.boxNewMac || '').trim();
+            const macCheck = trimmed ? validateBoxNewMac(trimmed) : null;
+            if (!trimmed) {
+              hintEl.textContent =
+                'Nhập 12 ký tự (không gồm FBOX) hoặc 16 ký tự (bắt đầu bằng FBOX).';
+              hintEl.dataset.state = 'neutral';
+            } else if (macCheck.valid) {
+              hintEl.textContent = `Hợp lệ: ${macCheck.value} (${macCheck.value.length} ký tự)`;
+              hintEl.dataset.state = 'ok';
+            } else {
+              hintEl.textContent = macCheck.error;
+              hintEl.dataset.state = 'error';
+            }
+            confirmBtn.disabled =
+              !state.boxSelectedMac || !macCheck || !macCheck.valid;
+          }
+
+          macInput.addEventListener('input', (e) => {
+            state.boxNewMac = e.target.value;
+            syncBoxUi();
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-box-new-mac',
+                text: 'MAC Box mới (bắt buộc 12 hoặc 16 ký tự)',
+              }),
+              macInput,
+              hintEl,
+            ])
+          );
+
+          syncBoxUi();
+
+          confirmBtn.addEventListener('click', () => {
+            const selectedItem =
+              state.boxItems.find((x) => x.MAC === state.boxSelectedMac) || {};
+            runConfirmedAction(act, {
+              oldMac: state.boxSelectedMac,
+              idContract:
+                selectedItem.IdContract || (cached && cached.objID ? String(cached.objID) : ''),
+              newMac: state.boxNewMac,
+            });
+          });
+        }
+      }
+    } else if (isInsideOlt) {
+      confirmBtn.textContent = 'Xác nhận Clear Serial';
+
+      if (contractId) {
+        const connUrl = state.oltContractObjId
+          ? `http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=${encodeURIComponent(
+              state.oltContractObjId
+            )}`
+          : '';
+        const connHeadButtons = [];
+        if (isUserscriptEnv() && connUrl) {
+          connHeadButtons.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-embed-open-link',
+              text: 'Mở riêng',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(connUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        if (state.oltContractError) {
+          connHeadButtons.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-embed-open-link',
+              text: 'Thử lại',
+              onClick: () => loadContractOltContextForModal(contractId),
+            })
+          );
+        }
+        connHeadButtons.push(
+          el('button', {
+            type: 'button',
+            className: `ri-embed-toggle${state.oltConnOpen ? ' is-open' : ''}`,
+            text: state.oltConnOpen ? 'Thu gọn' : 'Mở xem',
+            onClick: () => {
+              state.oltConnOpen = !state.oltConnOpen;
+              render();
+            },
+          })
+        );
+
+        const connCardParts = [
+          el('div', { className: 'ri-embed-head' }, [
+            el('div', { className: 'ri-embed-title-wrap' }, [
+              el('span', { className: 'ri-embed-title', text: 'Thông số kết nối (xem OLT / Port)' }),
+              el('span', { className: 'ri-embed-badge', text: contractId }),
+            ]),
+            el('div', { className: 'ri-embed-actions' }, connHeadButtons),
+          ]),
+        ];
+
+        if (state.oltConnOpen) {
+          if (state.oltContractLoading) {
+            connCardParts.push(
+              el('div', { className: 'ri-embed-body' }, [
+                el('div', { className: 'ri-embed-demo', text: `Đang lấy ObjID của ${contractId} để mở Thông số kết nối…` }),
+              ])
+            );
+          } else if (state.oltContractError) {
+            connCardParts.push(
+              el('div', { className: 'ri-embed-body' }, [
+                el('div', { className: 'ri-embed-demo', text: state.oltContractError }),
+              ])
+            );
+          } else if (!isUserscriptEnv()) {
+            connCardParts.push(
+              el('div', { className: 'ri-embed-body' }, [
+                el('div', {
+                  className: 'ri-embed-demo',
+                  text: 'Chế độ mô phỏng — Thông số kết nối mẫu: OLT BRUP00101GC16 [S:0 / P:5 / O:79]. Khi chạy thật qua Tampermonkey, khung này sẽ hiện OLT / Port trực tiếp từ Radius.',
+                }),
+              ])
+            );
+          } else if (connUrl) {
+            const connIframe = el('iframe', {
+              className: 'ri-embed-frame',
+              src: connUrl,
+              loading: 'lazy',
+              title: `Thông số kết nối ${contractId}`,
+            });
+            connIframe.style.height = '300px';
+            connCardParts.push(el('div', { className: 'ri-embed-body' }, [connIframe]));
+          }
+        }
+
+        sheetParts.push(el('div', { className: 'ri-embed-card ri-conn-box' }, connCardParts));
+      }
 
       if (state.oltLoading) {
         sheetParts.push(
@@ -6009,7 +6823,6 @@ function mountRemoteInside({
             oltId: activeOltId,
             oltName: activeOlt.name || '',
             ports: state.oltSelectedPorts.slice(),
-            clearMode: state.oltClearMode,
           });
         });
       }
@@ -6019,20 +6832,11 @@ function mountRemoteInside({
       );
     }
 
-    sheetParts.push(
-      el('div', { className: 'ri-sheet-buttons' }, [
-        el('button', {
-          type: 'button',
-          className: 'ri-secondary-btn',
-          text: 'Hủy',
-          onClick: () => {
-            resetConfirmState();
-            render();
-          },
-        }),
-        confirmBtn,
-      ])
-    );
+    const sheetButtons = [cancelBtn];
+    if (showConfirmBtn) {
+      sheetButtons.push(confirmBtn);
+    }
+    sheetParts.push(el('div', { className: 'ri-sheet-buttons' }, sheetButtons));
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
       el('div', { className: 'ri-sheet' }, sheetParts),
@@ -6099,8 +6903,8 @@ function mountRemoteInside({
             className: 'ri-primary-btn',
             disabled: state.isDeepScanning,
             text: state.isDeepScanning
-              ? 'Đang đọc mã lệnh Box & OLT…'
-              : '4. Quét chi tiết mã lệnh Reset MAC Box & Clear Serial (1 chạm)',
+              ? 'Đang đọc mã Kill Session & Radius…'
+              : '4. Quét mã Kill Session (IP) & Thông số kết nối (OLT tự động)',
             onClick: handleOpsSignatureScan,
           }),
         ]),

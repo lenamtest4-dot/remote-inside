@@ -25,9 +25,11 @@ import {
   extractAjaxSignaturesFromHtml,
   extractApiHintsFromHtml,
   extractApiHintsFromJs,
+  extractCodeContextsFromJs,
   extractFormControlsMeta,
   extractInlineScriptsSanitized,
   extractMatchingFunctionsFromJs,
+  extractNextAppChunkUrls,
   extractOpsMenuFromLeftAsp,
   redactHeaders,
   redactPayload,
@@ -38,8 +40,12 @@ import {
   INSIDE_ENDPOINTS,
   extractHtmlTablePairs,
   extractJsAlertMessages,
+  fetchInsideBoxMacLogs,
+  fetchInsideModemInfo,
+  formatInsideTimestamp,
   isExtendedPortOlt,
   normalizeBoxMac,
+  parseBoxMacLogItems,
   parseClearSerialResponse,
   parseInsideLookupPayload,
   parseInsideMutationResponse,
@@ -104,8 +110,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.5.0'),
-    'Userscript must bump @version to 0.5.0'
+    userscriptContent.includes('@version      0.5.1'),
+    'Userscript must bump @version to 0.5.1'
   );
 
   // Parse JS syntax inside VM without executing
@@ -141,8 +147,8 @@ async function runTests() {
     INSIDE_ENDPOINTS.clear_osp &&
       INSIDE_ENDPOINTS.clear_osp.oltList.includes('/MonitorOLT/GetOLTList.asp') &&
       INSIDE_ENDPOINTS.clear_osp.clearSerial.includes('/MonitorOLT/ClearSerial.asp') &&
-      INSIDE_ENDPOINTS.clear_osp.configDevice.includes('/MonitorOLT/AjaxConfigDeviceType.asp'),
-    'INSIDE_ENDPOINTS.clear_osp must wire live MonitorOLT endpoints'
+      !INSIDE_ENDPOINTS.clear_osp.configDevice,
+    'INSIDE_ENDPOINTS.clear_osp must wire Clear Serial without Config Device'
   );
   assert.equal(normalizeContractId('  sgn 123456\n '), 'SGN123456');
   assert.equal(normalizeContractId('hn-9988_1'), 'HN-9988_1');
@@ -426,7 +432,7 @@ async function runTests() {
   assert.ok(INSIDE_ENDPOINTS.reset_mac_box.update.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC'));
   assert.ok(INSIDE_ENDPOINTS.clear_osp.oltList.includes('/MonitorOLT/GetOLTList.asp'));
   assert.ok(INSIDE_ENDPOINTS.clear_osp.clearSerial.includes('/MonitorOLT/ClearSerial.asp'));
-  assert.ok(INSIDE_ENDPOINTS.clear_osp.configDevice.includes('/MonitorOLT/AjaxConfigDeviceType.asp'));
+  assert.equal(INSIDE_ENDPOINTS.clear_osp.configDevice, undefined);
 
   const partialHtml =
     '<table><tr><th>IP WAN</th><td>118.70.1.2</td></tr><tr><th>IPNAT</th><td>Có</td></tr></table><script>alert(1)</script>';
@@ -874,28 +880,86 @@ async function runTests() {
   });
   assert.equal(clearErr.status, 'error');
 
-  const configOk = parseClearSerialResponse({
-    mode: 'config_device',
-    oltId: '101',
-    oltName: 'BRUP00101GC16',
-    portsCsv: '5',
-    httpStatus: 200,
-    responseText: 'Config Device thanh cong',
-  });
-  assert.equal(configOk.status, 'ok');
-  assert.ok(configOk.title.includes('Config Device'));
-
   const demoClearNoContract = await runInsideAction('clear_osp', '', {
     forceDemo: true,
     oltId: '101',
     oltName: 'BRUP00101GC16',
     ports: ['1', '2'],
-    clearMode: 'clear_serial',
   });
   assert.equal(demoClearNoContract.status, 'ok', 'Clear OSP must work without Contract ID');
   assert.equal(demoClearNoContract.mode, 'demo');
+  assert.ok(demoClearNoContract.title.includes('Clear Serial'));
   assert.ok(demoClearNoContract.title.includes('BRUP00101GC16'));
   console.log('   OK: Reset MAC Box & Clear OSP parsers and demo execution passed.');
+
+  console.log('12. Testing Reset MAC Modem prefill, Box history logs, and Next.js chunk scan helpers...');
+  assert.match(formatInsideTimestamp('/Date(1732345678000+0700)/'), /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/);
+  assert.equal(formatInsideTimestamp('23/11/2026 09:00'), '23/11/2026 09:00');
+
+  const logItemsBare = parseBoxMacLogItems([
+    {
+      OldMAC: 'FBOXOLD123456789',
+      NewMAC: 'AABBCCDDEEFF',
+      CreateDate: '/Date(1732345678000)/',
+      CreateBy: 'ktv.test',
+      Note: 'Đổi Box hỏng',
+      Contract: 'VTAAR2393',
+      FullName: 'Nguyen Van A',
+      Phone: '0901234567',
+      BranchCode: 'VTU',
+    },
+  ]);
+  assert.equal(logItemsBare.length, 1);
+  assert.equal(logItemsBare[0].oldMac, 'FBOXOLD123456789');
+  assert.equal(logItemsBare[0].newMac, 'AABBCCDDEEFF');
+  assert.match(logItemsBare[0].time, /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}$/);
+  assert.equal(logItemsBare[0].actor, 'ktv.test');
+  assert.equal(logItemsBare[0].note, 'Đổi Box hỏng');
+  assert.equal(logItemsBare[0].extraFields.some((f) => f.label === 'BranchCode'), true);
+  assert.equal(JSON.stringify(logItemsBare).includes('Nguyen Van A'), false, 'Must skip FullName PII');
+  assert.equal(JSON.stringify(logItemsBare).includes('0901234567'), false, 'Must skip Phone PII');
+
+  const logItemsWrapped = parseBoxMacLogItems({
+    data: [{ old_mac: 'AA11', macNew: 'BB22', CreatedDate: '20/11/2026', User: 'admin' }],
+  });
+  assert.equal(logItemsWrapped.length, 1);
+  assert.equal(logItemsWrapped[0].oldMac, 'AA11');
+  assert.equal(logItemsWrapped[0].newMac, 'BB22');
+
+  const demoModemInfo = await fetchInsideModemInfo('VTAAR2393', { forceDemo: true });
+  assert.equal(demoModemInfo.status, 'ok');
+  assert.equal(demoModemInfo.macAddress, 'd4:61:95:a0:6e:41');
+  assert.ok(demoModemInfo.objID);
+
+  const demoBoxLogs = await fetchInsideBoxMacLogs('VTAAR2393', { forceDemo: true });
+  assert.equal(demoBoxLogs.status, 'ok');
+  assert.ok(demoBoxLogs.logs.length >= 2);
+
+  const nextHtmlSample = `
+    <script>self.__next_f.push([1,"I[123,[\\"static\\/chunks\\/app\\/public\\/partial\\/connection-parameters\\/page-71e93fd835ecb778.js\\"]]"])</script>
+    <script src="/_next/static/chunks/app/public/partial/online-session/page-abc12345.js"></script>
+  `;
+  const chunkUrls = extractNextAppChunkUrls(
+    nextHtmlSample,
+    'http://radius-portal.fpt.net/public/partial/connection-parameters?ObjID=123'
+  );
+  assert.deepEqual(chunkUrls, [
+    'http://radius-portal.fpt.net/_next/static/chunks/app/public/partial/connection-parameters/page-71e93fd835ecb778.js',
+    'http://radius-portal.fpt.net/_next/static/chunks/app/public/partial/online-session/page-abc12345.js',
+  ]);
+
+  const radiusChunkJs = `
+    const s = () => fetch("https://radius-api.fpt.net/api/v1/connection-parameters?ObjID=" + e + "&token=topSecretVal", { headers: { Authorization: "Bearer secretJwt" } });
+    function parseOlt() { return { oltName: "BRUP00101GC16", slot: 0, port: 5, contract: "VTAAR2393" }; }
+  `;
+  const jsContexts = extractCodeContextsFromJs(radiusChunkJs, undefined, 'VTAAR2393');
+  assert.ok(jsContexts.length >= 1);
+  const ctxJoined = jsContexts.join('\n');
+  assert.ok(ctxJoined.includes('connection-parameters'));
+  assert.equal(ctxJoined.includes('topSecretVal'), false, 'Must redact query token');
+  assert.equal(ctxJoined.includes('secretJwt'), false, 'Must redact Bearer token');
+  assert.equal(ctxJoined.includes('VTAAR2393'), false, 'Must redact contract ID');
+  console.log('   OK: Modem prefill, Box history logs, and Next.js chunk helpers passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

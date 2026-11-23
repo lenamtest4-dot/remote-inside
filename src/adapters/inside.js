@@ -37,7 +37,6 @@ export const INSIDE_ENDPOINTS = {
     viewport: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
     oltList: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/GetOLTList.asp',
     clearSerial: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ClearSerial.asp',
-    configDevice: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/AjaxConfigDeviceType.asp',
   },
 };
 
@@ -697,7 +696,99 @@ async function killSessionLive(contractId) {
   });
 }
 
-async function resetMacModemLive(contractId, rawNewMac = '') {
+/**
+ * Tai thong tin nhanh (ObjID, Account, MAC Modem dang chay) cua hop dong tu ViewReportDetail.
+ */
+export async function fetchInsideModemInfo(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+    };
+  }
+
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      contractId,
+      objID: '1162622263',
+      accountName: 'vtfdl-demo-2393',
+      macAddress: 'd4:61:95:a0:6e:41',
+      customerName: 'Khách hàng mẫu',
+    };
+  }
+
+  const locationCandidates = getLocationCandidates();
+  let matchedRow = null;
+
+  for (const loc of locationCandidates) {
+    const detailUrl = `${INSIDE_ENDPOINTS.lookup.detail}?location=${encodeURIComponent(
+      loc
+    )}&contract=${encodeURIComponent(contractId)}`;
+    const outcome = await fetchInsideEndpoint(detailUrl, false);
+    if (outcome.iamExpired) {
+      return {
+        status: 'iam_expired',
+        message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+        loginUrl: outcome.loginUrl || PORTALS.inside.url,
+      };
+    }
+    if (outcome.networkError) {
+      return {
+        status: 'error',
+        message: 'Không kết nối được tới mvc.inside.fpt.net. Hãy kiểm tra VPN công ty đã bật chưa.',
+        loginUrl: PORTALS.inside.url,
+      };
+    }
+
+    const row = pickFirstRow(outcome.json);
+    if (row) {
+      matchedRow = row;
+      break;
+    }
+  }
+
+  if (!matchedRow) {
+    return {
+      status: 'warn',
+      message: `Không tìm thấy hợp đồng ${contractId} trên hệ thống Inside.`,
+      loginUrl: PORTALS.inside.url,
+    };
+  }
+
+  const objID =
+    matchedRow.ID !== null && matchedRow.ID !== undefined ? String(matchedRow.ID).trim() : '';
+  const accountName =
+    nonEmptyStr(matchedRow.Name) ||
+    nonEmptyStr(matchedRow.Account) ||
+    nonEmptyStr(matchedRow.UserName) ||
+    nonEmptyStr(matchedRow.Name1);
+  const macAddress = nonEmptyStr(matchedRow.MACAddress);
+  const customerName = nonEmptyStr(matchedRow.FullName);
+
+  INSIDE_CONTRACT_CACHE.set(contractId, {
+    contractId,
+    objID: objID || null,
+    accountName,
+    macAddress,
+    fetchedAt: Date.now(),
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    contractId,
+    objID,
+    accountName,
+    macAddress,
+    customerName,
+  };
+}
+
+async function resetMacModemLive(contractId, rawNewMac = '', ctx = {}) {
   const resolved = await resolveInsideObjId(contractId);
   if (resolved.errorResult) {
     return resolved.errorResult;
@@ -708,18 +799,36 @@ async function resetMacModemLive(contractId, rawNewMac = '') {
   const url = `${INSIDE_ENDPOINTS.reset_mac}?ObjID=${encodeURIComponent(
     objID
   )}&NewMAC=${encodeURIComponent(newMac)}`;
-  return executeInsideGetMutation({
+
+  const extraFields = [];
+  if (ctx.previousMac && String(ctx.previousMac).trim()) {
+    extraFields.push({
+      label: 'MAC trước khi đổi',
+      value: String(ctx.previousMac).trim(),
+    });
+  }
+  extraFields.push({
+    label: 'Chế độ Reset MAC',
+    value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
+  });
+
+  const res = await executeInsideGetMutation({
     actionLabel: 'Reset MAC Modem',
     contractId,
     objID,
     url,
-    extraFields: [
-      {
-        label: 'Chế độ Reset MAC',
-        value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
-      },
-    ],
+    extraFields,
   });
+
+  if (res && res.status === 'ok') {
+    const existing = INSIDE_CONTRACT_CACHE.get(contractId);
+    if (existing) {
+      existing.macAddress = newMac;
+      existing.fetchedAt = Date.now();
+    }
+  }
+
+  return res;
 }
 
 function buildInsideMockResult(actionId, contractId, ctx = {}) {
@@ -792,13 +901,25 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
           },
         ],
       };
-    case 'reset_mac':
+    case 'reset_mac': {
+      const newMac = String(ctx.newMac || '').replace(/\s+/g, '').trim();
+      const prevMac = String(ctx.previousMac || '').trim();
+      const fields = [{ label: 'Mã hợp đồng', value: contractId }];
+      if (prevMac) fields.push({ label: 'MAC trước khi đổi', value: prevMac });
+      fields.push({
+        label: 'Chế độ Reset MAC',
+        value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
+      });
       return {
         status: 'ok',
         mode: 'demo',
         title: `Đã Reset MAC Modem cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: MAC Modem cũ đã được xóa trên bản xem thử.',
+        message: newMac
+          ? `Lệnh mô phỏng thành công: Đã cập nhật MAC Modem sang ${newMac}.`
+          : 'Lệnh mô phỏng thành công: MAC Modem đã được xóa trắng để thiết bị nhận kết nối mới.',
+        summaryFields: fields,
       };
+    }
     case 'reset_mac_box': {
       const oldMac = String(ctx.oldMac || `FBOX${contractId}`).trim();
       const newMac = normalizeBoxMac(ctx.newMac || '') || 'FBOX001122334455';
@@ -823,8 +944,6 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
         message: 'Lệnh mô phỏng thành công: Phiên PPPoE giả lập đã được ngắt để quay lại phiên mới.',
       };
     case 'clear_osp': {
-      const isConfig = ctx.clearMode === 'config_device';
-      const actionLabel = isConfig ? 'Config Device' : 'Clear Serial';
       const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
       const portsCsv =
         Array.isArray(ctx.ports) && ctx.ports.length > 0 ? ctx.ports.join(',') : '1';
@@ -833,13 +952,13 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
       fields.push(
         { label: 'POP OLT', value: oltLabel },
         { label: 'Port đã chọn', value: portsCsv },
-        { label: 'Lệnh thực hiện', value: actionLabel }
+        { label: 'Lệnh thực hiện', value: 'Clear Serial' }
       );
       return {
         status: 'ok',
         mode: 'demo',
-        title: `Đã ${actionLabel} cho ${oltLabel} (Dữ liệu mô phỏng)`,
-        message: `Lệnh mô phỏng ${actionLabel} trên Port ${portsCsv} của ${oltLabel} thành công.`,
+        title: `Đã Clear Serial cho ${oltLabel} (Dữ liệu mô phỏng)`,
+        message: `Lệnh mô phỏng Clear Serial trên Port ${portsCsv} của ${oltLabel} thành công.`,
         summaryFields: fields,
       };
     }
@@ -998,6 +1117,229 @@ export async function fetchInsideBoxMacs(rawContractId, ctx = {}) {
     status: 'ok',
     mode: 'live',
     items,
+  };
+}
+
+/**
+ * Chuyen dinh dang ngay ASP.NET /Date(ms)/ sang DD/MM/YYYY HH:mm:ss.
+ */
+export function formatInsideTimestamp(raw) {
+  if (raw === null || raw === undefined) return '';
+  const s = String(raw).trim();
+  if (!s) return '';
+  const aspMatch = s.match(/^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/i);
+  if (aspMatch) {
+    const ms = Number(aspMatch[1]);
+    if (Number.isFinite(ms)) {
+      const d = new Date(ms);
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(
+        d.getHours()
+      )}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+  }
+  return s;
+}
+
+const LOG_PII_KEY_RE =
+  /(pass|pwd|secret|token|cookie|auth|otp|phone|mobile|sdt|tel|cmnd|cccd|email|address|fullname|tenkh)/i;
+
+/**
+ * Chuan hoa danh sach lich su thay the MAC Box tu ReplaceMAC/GetLogByContract.
+ */
+export function parseBoxMacLogItems(json) {
+  const rows = Array.isArray(json)
+    ? json
+    : json && typeof json === 'object'
+    ? Array.isArray(json.data)
+      ? json.data
+      : Array.isArray(json.Data)
+      ? json.Data
+      : Array.isArray(json.logs)
+      ? json.logs
+      : []
+    : [];
+
+  function pickField(lowerMap, candidates, formatTimeVal = false) {
+    for (const c of candidates) {
+      if (lowerMap.has(c)) {
+        const entry = lowerMap.get(c);
+        const text = formatTimeVal
+          ? formatInsideTimestamp(entry.val)
+          : nonEmptyStr(entry.val);
+        if (text) {
+          return { key: c, value: text };
+        }
+      }
+    }
+    return { key: '', value: '' };
+  }
+
+  return rows
+    .filter((row) => row && typeof row === 'object')
+    .slice(0, 40)
+    .map((row) => {
+      const lowerMap = new Map();
+      for (const [k, v] of Object.entries(row)) {
+        lowerMap.set(k.toLowerCase(), { origKey: k, val: v });
+      }
+
+      const oldHit = pickField(lowerMap, ['oldmac', 'macold', 'mac_old', 'old_mac', 'mac']);
+      const newHit = pickField(lowerMap, [
+        'newmac',
+        'macnew',
+        'mac_new',
+        'new_mac',
+        'macreplace',
+        'replacemac',
+      ]);
+      const timeHit = pickField(
+        lowerMap,
+        [
+          'createdate',
+          'createddate',
+          'createdat',
+          'date',
+          'logdate',
+          'updatedate',
+          'updateddate',
+          'time',
+          'thoigian',
+          'ngaythuchien',
+          'actiondate',
+        ],
+        true
+      );
+      const actorHit = pickField(lowerMap, [
+        'createby',
+        'createdby',
+        'user',
+        'username',
+        'actor',
+        'nguoithuchien',
+        'staff',
+        'employee',
+        'updateby',
+        'updatedby',
+      ]);
+      const noteHit = pickField(lowerMap, [
+        'note',
+        'description',
+        'des',
+        'statusname',
+        'status',
+        'msg',
+        'message',
+        'reason',
+        'ghichu',
+        'action',
+        'type',
+      ]);
+
+      const usedKeys = new Set(
+        [oldHit.key, newHit.key, timeHit.key, actorHit.key, noteHit.key].filter(Boolean)
+      );
+
+      const extraFields = [];
+      for (const [lk, { origKey, val }] of lowerMap.entries()) {
+        if (
+          usedKeys.has(lk) ||
+          lk === 'contract' ||
+          lk === 'idcontract' ||
+          lk === 'id' ||
+          LOG_PII_KEY_RE.test(origKey)
+        ) {
+          continue;
+        }
+        const formatted = formatInsideTimestamp(val);
+        if (formatted) {
+          extraFields.push({ label: origKey, value: formatted });
+        }
+      }
+
+      return {
+        oldMac: oldHit.value,
+        newMac: newHit.value,
+        time: timeHit.value,
+        actor: actorHit.value,
+        note: noteHit.value,
+        extraFields,
+      };
+    });
+}
+
+/**
+ * Lay lich su hoan doi / Reset MAC Box theo hop dong tu GetLogByContract.
+ */
+export async function fetchInsideBoxMacLogs(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+      logs: [],
+    };
+  }
+
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      logs: [
+        {
+          oldMac: 'FBOXOLD001122334',
+          newMac: `FBOX${contractId}`,
+          time: '20/11/2026 10:46:16',
+          actor: 'ktv.demo',
+          note: 'Đổi Box tại nhà khách hàng (Mô phỏng)',
+          extraFields: [],
+        },
+        {
+          oldMac: 'A42B8C109E00',
+          newMac: 'A42B8C109E4F',
+          time: '12/09/2026 15:18:02',
+          actor: 'ktv.demo2',
+          note: 'Thay thế thành công',
+          extraFields: [],
+        },
+      ],
+    };
+  }
+
+  const url = `${INSIDE_ENDPOINTS.reset_mac_box.log}?contract=${encodeURIComponent(
+    contractId
+  )}&_=${Date.now()}`;
+  const outcome = await fetchInsideEndpoint(url, false);
+  if (outcome.iamExpired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: outcome.loginUrl || PORTALS.inside.url,
+      logs: [],
+    };
+  }
+  if (outcome.networkError) {
+    return {
+      status: 'error',
+      message: 'Không kết nối được tới mvc.inside.fpt.net để xem lịch sử MAC Box. Hãy kiểm tra VPN.',
+      loginUrl: PORTALS.inside.url,
+      logs: [],
+    };
+  }
+  if (!outcome.ok) {
+    return {
+      status: 'error',
+      message: 'Không tải được lịch sử Reset MAC Box từ máy chủ Inside.',
+      loginUrl: PORTALS.inside.url,
+      logs: [],
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    logs: parseBoxMacLogItems(outcome.json),
   };
 }
 
@@ -1334,10 +1676,9 @@ const CLEAR_OSP_ERROR_RE =
   /(?:lỗi(?!.*không có lỗi)|thất\s*bại|fail|không\s*thành\s*công|bạn chưa chọn|ban chua chon|không tìm thấy|khong tim thay|không có quyền|khong co quyen|\berror\b)/i;
 
 /**
- * Chuan hoa ket qua tra ve tu ClearSerial.asp / AjaxConfigDeviceType.asp.
+ * Chuan hoa ket qua tra ve tu ClearSerial.asp.
  */
 export function parseClearSerialResponse({
-  mode = 'clear_serial',
   contractId = '',
   oltId = '',
   oltName = '',
@@ -1346,7 +1687,7 @@ export function parseClearSerialResponse({
   responseText = '',
   sourceUrl = '',
 } = {}) {
-  const actionLabel = mode === 'config_device' ? 'Config Device' : 'Clear Serial';
+  const actionLabel = 'Clear Serial';
   const summaryFields = [];
   if (contractId) summaryFields.push({ label: 'Mã hợp đồng', value: contractId });
   summaryFields.push(
@@ -1634,7 +1975,6 @@ async function clearOspLive(contractId, ctx = {}) {
   const oltId = String(ctx.oltId || '').trim();
   const oltName = String(ctx.oltName || '').trim();
   const locationId = String(ctx.locationId || '').trim();
-  const clearMode = ctx.clearMode === 'config_device' ? 'config_device' : 'clear_serial';
   const ports = Array.isArray(ctx.ports)
     ? ctx.ports.map((p) => String(p).trim()).filter(Boolean)
     : [];
@@ -1660,27 +2000,14 @@ async function clearOspLive(contractId, ctx = {}) {
   vpQp.set('fOLT', oltId);
   const sourceUrl = `${INSIDE_ENDPOINTS.clear_osp.viewport}?${vpQp.toString()}`;
 
-  const targetUrl =
-    clearMode === 'config_device'
-      ? INSIDE_ENDPOINTS.clear_osp.configDevice
-      : `${INSIDE_ENDPOINTS.clear_osp.clearSerial}?OLTID=${encodeURIComponent(
-          oltId
-        )}&fPort=${encodeURIComponent(portsCsv)}`;
+  const targetUrl = `${INSIDE_ENDPOINTS.clear_osp.clearSerial}?OLTID=${encodeURIComponent(
+    oltId
+  )}&fPort=${encodeURIComponent(portsCsv)}`;
 
   const res = await requestPortal({
     url: targetUrl,
-    method: clearMode === 'config_device' ? 'POST' : 'GET',
-    headers:
-      clearMode === 'config_device'
-        ? {
-            ...AJAX_HEADERS,
-            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-          }
-        : { Accept: 'text/html, application/xhtml+xml, */*' },
-    data:
-      clearMode === 'config_device'
-        ? new URLSearchParams({ olt: oltId, portID: portsCsv }).toString()
-        : undefined,
+    method: 'GET',
+    headers: { Accept: 'text/html, application/xhtml+xml, */*' },
     timeout: 25000,
   });
 
@@ -1688,7 +2015,7 @@ async function clearOspLive(contractId, ctx = {}) {
     return {
       status: 'error',
       message:
-        'Không kết nối được tới inside.fpt.net để chạy lệnh OLT. Hãy kiểm tra VPN công ty đã bật chưa.',
+        'Không kết nối được tới inside.fpt.net để chạy Clear Serial. Hãy kiểm tra VPN công ty đã bật chưa.',
       loginUrl: sourceUrl,
     };
   }
@@ -1708,7 +2035,6 @@ async function clearOspLive(contractId, ctx = {}) {
   }
 
   return parseClearSerialResponse({
-    mode: clearMode,
     contractId,
     oltId,
     oltName,
@@ -1756,7 +2082,7 @@ export async function runInsideAction(actionId, rawContractId, ctx = {}) {
     return killSessionLive(contractId);
   }
   if (actionId === 'reset_mac' && INSIDE_ENDPOINTS.reset_mac) {
-    return resetMacModemLive(contractId, ctx.newMac || '');
+    return resetMacModemLive(contractId, ctx.newMac || '', ctx);
   }
   if (actionId === 'reset_mac_box' && INSIDE_ENDPOINTS.reset_mac_box) {
     return resetMacBoxLive(contractId, ctx);

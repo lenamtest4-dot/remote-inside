@@ -1013,8 +1013,66 @@
   color: var(--state-ok);
 }
 
+.ri-field-hint[data-state="warn"] {
+  color: var(--state-warn);
+}
+
 .ri-field-hint[data-state="error"] {
   color: var(--state-danger);
+}
+
+.ri-modem-info {
+  margin: 10px 0 6px;
+  padding: 11px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+}
+
+.ri-modem-mac {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  word-break: break-all;
+}
+
+.ri-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.ri-history-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ri-history-macs {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-primary);
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.ri-history-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+  word-break: break-word;
+}
+
+.ri-conn-box {
+  margin: 10px 0 4px;
 }
 
 .ri-sheet-status {

@@ -25,9 +25,9 @@ export const INSIDE_ENDPOINTS = {
     radiusParams: 'http://radius-portal.fpt.net/public/partial/connection-parameters',
     radiusOnline: 'http://radius-portal.fpt.net/public/partial/online-session',
   },
-  reset_mac: null,
+  reset_mac: 'http://mvc.inside.fpt.net/DSLLLine/ResetMAC/ChangeMAC',
   reset_mac_box: null,
-  kill_session: null,
+  kill_session: 'http://mvc.inside.fpt.net/KillSession/KillSession/DeleteSession',
   clear_osp: null,
 };
 
@@ -337,9 +337,116 @@ export function parseInsideLookupPayload({
     message: 'Đã lấy dữ liệu trực tiếp từ mvc.inside.fpt.net.',
     objID,
     accountName,
+    macAddress,
     summaryFields,
     extraSections,
     embeddedViews,
+  };
+}
+
+const MUTATION_ERROR_RE =
+  /(?:lỗi(?!.*không có lỗi)|thất\s*bại|fail|error|không\s*thành\s*công|không\s*tồn\s*tại|không\s*có\s*quyền)/i;
+
+function extractServerResponseMessage(responseText, json) {
+  if (typeof json === 'string') {
+    return json.trim();
+  }
+  if (typeof json === 'boolean') {
+    return json ? 'Thành công' : 'Thất bại';
+  }
+  if (typeof json === 'number') {
+    return `Mã phản hồi ${json}`;
+  }
+  if (json && typeof json === 'object') {
+    const candidates = [json.msg, json.message, json.Message, json.Msg, json.error, json.Error];
+    for (const c of candidates) {
+      if (typeof c === 'string' && c.trim()) {
+        return c.trim();
+      }
+    }
+    if (typeof json.data === 'string' && json.data.trim()) {
+      return json.data.trim();
+    }
+  }
+  if (typeof responseText === 'string' && responseText.trim()) {
+    const cleaned = stripHtmlTags(
+      responseText
+        .replace(new RegExp('<script\\b[\\s\\S]*?</' + 'script>', 'gi'), ' ')
+        .replace(new RegExp('<style\\b[\\s\\S]*?</' + 'style>', 'gi'), ' ')
+    );
+    return cleaned.slice(0, 180);
+  }
+  return '';
+}
+
+/**
+ * Chuan hoa ket qua tra ve tu cac lenh tac dong (Kill Session, Reset MAC Modem...).
+ */
+export function parseInsideMutationResponse({
+  actionLabel,
+  contractId,
+  objID = null,
+  httpStatus = 0,
+  responseText = '',
+  extraFields = [],
+} = {}) {
+  const summaryFields = [{ label: 'Mã hợp đồng', value: contractId }];
+  if (objID !== null && objID !== undefined && objID !== '') {
+    summaryFields.push({ label: 'ObjID', value: String(objID) });
+  }
+  for (const field of extraFields) {
+    if (field && field.label && field.value !== undefined && field.value !== '') {
+      summaryFields.push({ label: field.label, value: String(field.value) });
+    }
+  }
+
+  const json = safeJsonParse(responseText);
+  const rawMsg = extractServerResponseMessage(responseText, json);
+
+  if (httpStatus < 200 || httpStatus >= 400) {
+    if (rawMsg) {
+      summaryFields.push({ label: 'Phản hồi hệ thống', value: rawMsg });
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} thất bại (HTTP ${httpStatus})`,
+      message: rawMsg || `Máy chủ Inside trả về mã lỗi ${httpStatus}.`,
+      summaryFields,
+    };
+  }
+
+  const isJsonFailure =
+    json === false ||
+    (json &&
+      typeof json === 'object' &&
+      (json.status === false ||
+        json.success === false ||
+        json.result === 0 ||
+        json.result === -1));
+
+  const isTextFailure = Boolean(rawMsg && MUTATION_ERROR_RE.test(rawMsg));
+
+  if (isJsonFailure || isTextFailure) {
+    const errText = rawMsg || 'Hệ thống Inside từ chối hoặc xử lý không thành công.';
+    summaryFields.push({ label: 'Phản hồi hệ thống', value: errText });
+    return {
+      status: 'error',
+      mode: 'live',
+      title: `${actionLabel} chưa thành công`,
+      message: errText,
+      summaryFields,
+    };
+  }
+
+  const okText = rawMsg || 'Hệ thống Inside đã tiếp nhận lệnh thành công.';
+  summaryFields.push({ label: 'Phản hồi hệ thống', value: okText });
+  return {
+    status: 'ok',
+    mode: 'live',
+    title: `Đã ${actionLabel} cho ${contractId}`,
+    message: okText,
+    summaryFields,
   };
 }
 
@@ -479,10 +586,123 @@ async function lookupInsideLive(contractId) {
     contractId,
     objID: result.objID,
     accountName: result.accountName,
+    macAddress: result.macAddress || '',
     fetchedAt: Date.now(),
   });
 
   return result;
+}
+
+const CACHE_TTL_MS = 15 * 60 * 1000;
+
+async function resolveInsideObjId(contractId) {
+  const cached = INSIDE_CONTRACT_CACHE.get(contractId);
+  if (cached && cached.objID && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    return { objID: cached.objID };
+  }
+
+  const lookupRes = await lookupInsideLive(contractId);
+  if (!lookupRes || lookupRes.status !== 'ok') {
+    return { errorResult: lookupRes };
+  }
+  if (!lookupRes.objID) {
+    return {
+      errorResult: {
+        status: 'error',
+        title: `Không tìm thấy ObjID cho ${contractId}`,
+        message: 'Inside chưa trả về ObjID của hợp đồng này nên chưa thể gửi lệnh.',
+        loginUrl: PORTALS.inside.url,
+      },
+    };
+  }
+  return { objID: lookupRes.objID };
+}
+
+async function executeInsideGetMutation({
+  actionLabel,
+  contractId,
+  objID,
+  url,
+  extraFields = [],
+}) {
+  const res = await requestPortal({
+    url,
+    method: 'GET',
+    headers: AJAX_HEADERS,
+    timeout: 15000,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'error',
+      message: `Không kết nối được tới mvc.inside.fpt.net để chạy ${actionLabel}. Hãy kiểm tra VPN công ty đã bật chưa.`,
+      loginUrl: PORTALS.inside.url,
+    };
+  }
+
+  const iam = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: url,
+  });
+  if (iam.expired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: res.finalUrl || PORTALS.inside.url,
+    };
+  }
+
+  return parseInsideMutationResponse({
+    actionLabel,
+    contractId,
+    objID,
+    httpStatus: res.status,
+    responseText: res.responseText,
+    extraFields,
+  });
+}
+
+async function killSessionLive(contractId) {
+  const resolved = await resolveInsideObjId(contractId);
+  if (resolved.errorResult) {
+    return resolved.errorResult;
+  }
+
+  const objID = resolved.objID;
+  const url = `${INSIDE_ENDPOINTS.kill_session}?objID=${encodeURIComponent(objID)}`;
+  return executeInsideGetMutation({
+    actionLabel: 'Kill Session',
+    contractId,
+    objID,
+    url,
+  });
+}
+
+async function resetMacModemLive(contractId, rawNewMac = '') {
+  const resolved = await resolveInsideObjId(contractId);
+  if (resolved.errorResult) {
+    return resolved.errorResult;
+  }
+
+  const objID = resolved.objID;
+  const newMac = String(rawNewMac || '').replace(/\s+/g, '').trim();
+  const url = `${INSIDE_ENDPOINTS.reset_mac}?ObjID=${encodeURIComponent(
+    objID
+  )}&NewMAC=${encodeURIComponent(newMac)}`;
+  return executeInsideGetMutation({
+    actionLabel: 'Reset MAC Modem',
+    contractId,
+    objID,
+    url,
+    extraFields: [
+      {
+        label: 'Chế độ Reset MAC',
+        value: newMac ? `Đổi sang ${newMac}` : 'Xóa trắng MAC (NewMAC trống)',
+      },
+    ],
+  });
 }
 
 function buildInsideMockResult(actionId, contractId) {
@@ -614,6 +834,12 @@ export async function runInsideAction(actionId, rawContractId, ctx = {}) {
 
   if (actionId === 'lookup' && INSIDE_ENDPOINTS.lookup) {
     return lookupInsideLive(contractId);
+  }
+  if (actionId === 'kill_session' && INSIDE_ENDPOINTS.kill_session) {
+    return killSessionLive(contractId);
+  }
+  if (actionId === 'reset_mac' && INSIDE_ENDPOINTS.reset_mac) {
+    return resetMacModemLive(contractId, ctx.newMac || '');
   }
 
   const endpoint = INSIDE_ENDPOINTS[actionId];

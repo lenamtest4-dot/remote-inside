@@ -509,6 +509,21 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
     }
   }
 
+  const ajaxCollector = createAjaxCallCollector(baseHref, contractId);
+  try {
+    const inlineScripts = doc.querySelectorAll
+      ? Array.from(doc.querySelectorAll('script:not([src])'))
+      : [];
+    for (const sc of inlineScripts.slice(0, 30)) {
+      const code = sc && sc.textContent ? sc.textContent : '';
+      if (code.trim()) {
+        extractAjaxSignaturesFromCode(code, ajaxCollector.addCall);
+      }
+    }
+  } catch {
+    // Bo qua neu khong doc duoc inline script
+  }
+
   return {
     scannedAt: new Date().toISOString(),
     origin: (loc && loc.origin) || '',
@@ -521,6 +536,7 @@ export function scanPageStructure(doc = document, loc = window.location, contrac
     sameOriginFrameSummary,
     forms,
     actionControls,
+    ajaxCalls: ajaxCollector.getCalls(),
     scriptHints: {
       frameworks,
       externalFiles: externalScripts,
@@ -1023,19 +1039,7 @@ function extractConcatenatedUrlExpr(block) {
   return parts.join('');
 }
 
-/**
- * Quet chi tiet chu ky goi AJAX ($.ajax, $.post, $.get) va cac o chon <select> tu HTML (chi doc cau truc).
- */
-export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId = '') {
-  if (!htmlText || typeof htmlText !== 'string') {
-    return { ajaxCalls: [], selects: [] };
-  }
-
-  const withoutStyles = htmlText.replace(
-    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
-    ' '
-  );
-
+function createAjaxCallCollector(baseUrl, contractId) {
   const ajaxCalls = [];
   const seenCalls = new Set();
 
@@ -1061,6 +1065,60 @@ export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId
     });
   }
 
+  return { addCall, getCalls: () => ajaxCalls };
+}
+
+function extractAjaxSignaturesFromCode(code, addCall) {
+  const ajaxRe = /\$\.ajax\s*\(\s*\{/g;
+  let am;
+  while ((am = ajaxRe.exec(code)) !== null) {
+    const braceStart = am.index + am[0].length - 1;
+    const block = extractBalancedBraces(code, braceStart, 1000);
+    const methodMatch = block.match(/\b(?:type|method)\s*:\s*['"]([A-Za-z]+)['"]/i);
+    const ctMatch = block.match(/\bcontentType\s*:\s*['"]([^'"]+)['"]/i);
+    const rawUrl = extractConcatenatedUrlExpr(block);
+    const dataKeys = extractDataKeysFromExpr(block);
+    addCall({
+      fnHint: findEnclosingFnHint(code, am.index),
+      method: methodMatch ? methodMatch[1] : 'GET',
+      rawUrl,
+      contentType: ctMatch ? ctMatch[1] : '',
+      extraDataKeys: dataKeys,
+    });
+  }
+
+  const shortRe = /\$\.(post|get|getJSON)\s*\(\s*['"`]([^'"`\n]+)['"`]([^)]{0,320})\)/gi;
+  let shm;
+  while ((shm = shortRe.exec(code)) !== null) {
+    const fnName = shm[1].toLowerCase();
+    const rawUrl = shm[2];
+    const tail = shm[3] || '';
+    const dataKeys = extractDataKeysFromExpr(tail);
+    addCall({
+      fnHint: findEnclosingFnHint(code, shm.index),
+      method: fnName === 'post' ? 'POST' : 'GET',
+      rawUrl,
+      contentType: fnName === 'post' ? 'application/x-www-form-urlencoded' : '',
+      extraDataKeys: dataKeys,
+    });
+  }
+}
+
+/**
+ * Quet chi tiet chu ky goi AJAX ($.ajax, $.post, $.get) va cac o chon <select> tu HTML (chi doc cau truc).
+ */
+export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId = '') {
+  if (!htmlText || typeof htmlText !== 'string') {
+    return { ajaxCalls: [], selects: [] };
+  }
+
+  const withoutStyles = htmlText.replace(
+    new RegExp('<style\\b[^>]*>[\\s\\S]*?</' + 'style>', 'gi'),
+    ' '
+  );
+
+  const collector = createAjaxCallCollector(baseUrl || 'http://mvc.inside.fpt.net/', contractId);
+
   const scriptRe = new RegExp('<script\\b([^>]*)>([\\s\\S]*?)</' + 'script>', 'gi');
   let sm;
   while ((sm = scriptRe.exec(withoutStyles)) !== null) {
@@ -1068,40 +1126,7 @@ export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId
     if (getAttrValue(attrs, 'src')) continue;
     const code = sm[2] || '';
     if (!code.trim()) continue;
-
-    const ajaxRe = /\$\.ajax\s*\(\s*\{/g;
-    let am;
-    while ((am = ajaxRe.exec(code)) !== null) {
-      const braceStart = am.index + am[0].length - 1;
-      const block = extractBalancedBraces(code, braceStart, 1000);
-      const methodMatch = block.match(/\b(?:type|method)\s*:\s*['"]([A-Za-z]+)['"]/i);
-      const ctMatch = block.match(/\bcontentType\s*:\s*['"]([^'"]+)['"]/i);
-      const rawUrl = extractConcatenatedUrlExpr(block);
-      const dataKeys = extractDataKeysFromExpr(block);
-      addCall({
-        fnHint: findEnclosingFnHint(code, am.index),
-        method: methodMatch ? methodMatch[1] : 'GET',
-        rawUrl,
-        contentType: ctMatch ? ctMatch[1] : '',
-        extraDataKeys: dataKeys,
-      });
-    }
-
-    const shortRe = /\$\.(post|get|getJSON)\s*\(\s*['"`]([^'"`\n]+)['"`]([^)]{0,320})\)/gi;
-    let shm;
-    while ((shm = shortRe.exec(code)) !== null) {
-      const fnName = shm[1].toLowerCase();
-      const rawUrl = shm[2];
-      const tail = shm[3] || '';
-      const dataKeys = extractDataKeysFromExpr(tail);
-      addCall({
-        fnHint: findEnclosingFnHint(code, shm.index),
-        method: fnName === 'post' ? 'POST' : 'GET',
-        rawUrl,
-        contentType: fnName === 'post' ? 'application/x-www-form-urlencoded' : '',
-        extraDataKeys: dataKeys,
-      });
-    }
+    extractAjaxSignaturesFromCode(code, collector.addCall);
   }
 
   const selects = [];
@@ -1127,7 +1152,7 @@ export function extractAjaxSignaturesFromHtml(htmlText, baseUrl = '', contractId
     });
   }
 
-  return { ajaxCalls, selects };
+  return { ajaxCalls: collector.getCalls(), selects };
 }
 
 const LEFT_OPS_MENU_RE =

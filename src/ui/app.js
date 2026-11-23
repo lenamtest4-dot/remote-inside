@@ -147,6 +147,7 @@ export function mountRemoteInside({
     openViews: {},
     viewReloadKeys: {},
     confirmAction: null,
+    confirmNewMac: '',
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -261,6 +262,7 @@ export function mountRemoteInside({
 
     if (action.requiresConfirm) {
       state.confirmAction = action;
+      state.confirmNewMac = '';
       render();
       return;
     }
@@ -268,19 +270,20 @@ export function mountRemoteInside({
     await runConfirmedAction(action);
   }
 
-  async function runConfirmedAction(action) {
+  async function runConfirmedAction(action, actionCtx = {}) {
     if (state.isRunning) return;
     const portal = PORTALS[state.activePortalId];
     const contractId = normalizeContractId(state.contractInput);
 
     state.confirmAction = null;
+    state.confirmNewMac = '';
     state.isRunning = true;
     state.runningActionId = action.id;
     state.recentContracts = addRecentContract(contractId);
     render();
 
     try {
-      const res = await executePortalAction(portal.id, action.id, contractId);
+      const res = await executePortalAction(portal.id, action.id, contractId, actionCtx);
       state.result = res;
       if (Array.isArray(res.embeddedViews)) {
         const nextOpen = {};
@@ -754,6 +757,7 @@ export function mountRemoteInside({
   function closeConsole() {
     state.isOpen = false;
     state.confirmAction = null;
+    state.confirmNewMac = '';
     state.scannerOpen = false;
     render();
   }
@@ -1294,36 +1298,77 @@ export function mountRemoteInside({
     const act = state.confirmAction;
     const portal = PORTALS[state.activePortalId];
     const contractId = normalizeContractId(state.contractInput);
+    const cached = portal.id === 'inside' ? getCachedInsideContract(contractId) : null;
+
+    const sheetParts = [
+      el('h2', { className: 'ri-sheet-title', text: `Xác nhận ${act.label}?` }),
+      el('p', {
+        className: 'ri-sheet-sub',
+        text: act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
+      }),
+      el('div', { className: 'ri-confirm-contract' }, [
+        el('span', { text: `Hợp đồng trên ${portal.label}` }),
+        el('span', { className: 'ri-confirm-code', text: contractId }),
+      ]),
+    ];
+
+    if (cached && cached.objID) {
+      const metaText =
+        act.id === 'reset_mac' && cached.macAddress
+          ? `ObjID: ${cached.objID} • MAC hiện tại: ${cached.macAddress}`
+          : `ObjID: ${cached.objID}`;
+      sheetParts.push(el('div', { className: 'ri-confirm-meta', text: metaText }));
+    }
+
+    if (portal.id === 'inside' && act.id === 'reset_mac') {
+      const macInput = el('input', {
+        type: 'text',
+        className: 'ri-confirm-input',
+        id: 'ri-confirm-new-mac',
+        placeholder: 'Ví dụ: aa:bb:cc:dd:ee:ff (để trống = xóa MAC)',
+        autocomplete: 'off',
+        spellcheck: 'false',
+        value: state.confirmNewMac,
+      });
+      macInput.value = state.confirmNewMac;
+      macInput.addEventListener('input', (e) => {
+        state.confirmNewMac = e.target.value;
+      });
+      sheetParts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('label', {
+            className: 'ri-confirm-label',
+            for: 'ri-confirm-new-mac',
+            text: 'Địa chỉ MAC mới — để trống để Reset trắng MAC',
+          }),
+          macInput,
+        ])
+      );
+    }
+
+    sheetParts.push(
+      el('div', { className: 'ri-sheet-buttons' }, [
+        el('button', {
+          type: 'button',
+          className: 'ri-secondary-btn',
+          text: 'Hủy',
+          onClick: () => {
+            state.confirmAction = null;
+            state.confirmNewMac = '';
+            render();
+          },
+        }),
+        el('button', {
+          type: 'button',
+          className: 'ri-danger-btn',
+          text: 'Xác nhận thực hiện',
+          onClick: () => runConfirmedAction(act, { newMac: state.confirmNewMac }),
+        }),
+      ])
+    );
 
     return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
-      el('div', { className: 'ri-sheet' }, [
-        el('h2', { className: 'ri-sheet-title', text: `Xác nhận ${act.label}?` }),
-        el('p', {
-          className: 'ri-sheet-sub',
-          text: act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
-        }),
-        el('div', { className: 'ri-confirm-contract' }, [
-          el('span', { text: `Hợp đồng trên ${portal.label}` }),
-          el('span', { className: 'ri-confirm-code', text: contractId }),
-        ]),
-        el('div', { className: 'ri-sheet-buttons' }, [
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            text: 'Hủy',
-            onClick: () => {
-              state.confirmAction = null;
-              render();
-            },
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-danger-btn',
-            text: 'Xác nhận thực hiện',
-            onClick: () => runConfirmedAction(act),
-          }),
-        ]),
-      ]),
+      el('div', { className: 'ri-sheet' }, sheetParts),
     ]);
   }
 

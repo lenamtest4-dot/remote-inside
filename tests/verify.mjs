@@ -35,6 +35,7 @@ import {
   INSIDE_ENDPOINTS,
   extractHtmlTablePairs,
   parseInsideLookupPayload,
+  parseInsideMutationResponse,
 } from '../src/adapters/inside.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -90,8 +91,8 @@ function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.3.1'),
-    'Userscript must bump @version to 0.3.1'
+    userscriptContent.includes('@version      0.4.0'),
+    'Userscript must bump @version to 0.4.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -394,8 +395,9 @@ function runTests() {
 
   console.log('6. Testing Inside live lookup parsers & HTML partial extraction...');
   assert.ok(INSIDE_ENDPOINTS.lookup && INSIDE_ENDPOINTS.lookup.detail.includes('/Contract/StatusNew/ViewReportDetail'));
-  assert.equal(INSIDE_ENDPOINTS.reset_mac, null);
-  assert.equal(INSIDE_ENDPOINTS.kill_session, null);
+  assert.ok(INSIDE_ENDPOINTS.reset_mac && INSIDE_ENDPOINTS.reset_mac.includes('/DSLLLine/ResetMAC/ChangeMAC'));
+  assert.ok(INSIDE_ENDPOINTS.kill_session && INSIDE_ENDPOINTS.kill_session.includes('/KillSession/KillSession/DeleteSession'));
+  assert.equal(INSIDE_ENDPOINTS.reset_mac_box, null);
   assert.equal(INSIDE_ENDPOINTS.clear_osp, null);
 
   const partialHtml =
@@ -577,6 +579,59 @@ function runTests() {
   assert.deepEqual(leftOps[0].targetQueryParamNames, ['vUrl']);
   assert.equal(JSON.stringify(leftOps).includes('secretVal'), false, 'Must never leak menu query values');
   console.log('   OK: AJAX signature & Left.Asp ops menu extractors passed.');
+
+  console.log('9. Testing Inside live mutation response parser...');
+  const mutOkJson = parseInsideMutationResponse({
+    actionLabel: 'Kill Session',
+    contractId: 'VTAAR2393',
+    objID: 1162622263,
+    httpStatus: 200,
+    responseText: JSON.stringify({ status: true, msg: 'Kill session thành công' }),
+  });
+  assert.equal(mutOkJson.status, 'ok');
+  assert.equal(mutOkJson.title, 'Đã Kill Session cho VTAAR2393');
+  assert.equal(mutOkJson.message, 'Kill session thành công');
+
+  const mutFailJson = parseInsideMutationResponse({
+    actionLabel: 'Reset MAC Modem',
+    contractId: 'VTAAR2393',
+    objID: 1162622263,
+    httpStatus: 200,
+    responseText: JSON.stringify({ status: false, msg: 'Không tìm thấy phiên hợp lệ' }),
+  });
+  assert.equal(mutFailJson.status, 'error');
+  assert.equal(mutFailJson.message, 'Không tìm thấy phiên hợp lệ');
+
+  const mutFailText = parseInsideMutationResponse({
+    actionLabel: 'Reset MAC Modem',
+    contractId: 'VTAAR2393',
+    objID: 1162622263,
+    httpStatus: 200,
+    responseText: 'Lỗi hệ thống: Không có quyền thực hiện',
+  });
+  assert.equal(mutFailText.status, 'error');
+
+  const mutOkPlain = parseInsideMutationResponse({
+    actionLabel: 'Reset MAC Modem',
+    contractId: 'VTAAR2393',
+    objID: 1162622263,
+    httpStatus: 200,
+    responseText: '"Cập nhật MAC thành công"',
+    extraFields: [{ label: 'Chế độ Reset MAC', value: 'Xóa trắng MAC (NewMAC trống)' }],
+  });
+  assert.equal(mutOkPlain.status, 'ok');
+  assert.equal(mutOkPlain.message, 'Cập nhật MAC thành công');
+
+  const mutHttpErr = parseInsideMutationResponse({
+    actionLabel: 'Kill Session',
+    contractId: 'VTAAR2393',
+    objID: 1162622263,
+    httpStatus: 500,
+    responseText: 'Internal Server Error',
+  });
+  assert.equal(mutHttpErr.status, 'error');
+  assert.ok(mutHttpErr.title.includes('500'));
+  console.log('   OK: Inside live mutation response parser passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

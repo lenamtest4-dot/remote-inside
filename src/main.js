@@ -3,10 +3,93 @@
  * hoac che do xem thu doc lap khi mo preview.html).
  */
 
+import { parseRadiusOltFromText } from './adapters/inside.js';
 import { mountRemoteInside } from './ui/app.js';
+
+function startRadiusParamsBridge() {
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !document.body) {
+    return false;
+  }
+  const loc = window.location;
+  const hostLower = ((loc && loc.hostname) || '').toLowerCase();
+  const pathLower = ((loc && loc.pathname) || '').toLowerCase();
+
+  let inFrame = false;
+  try {
+    inFrame = window.top !== window.self;
+  } catch {
+    inFrame = true;
+  }
+
+  if (
+    !inFrame ||
+    !hostLower.endsWith('radius-portal.fpt.net') ||
+    !pathLower.startsWith('/public/partial/connection-parameters')
+  ) {
+    return false;
+  }
+
+  let objId = '';
+  try {
+    const sp = new URLSearchParams(loc.search || '');
+    objId = sp.get('ObjID') || sp.get('objId') || sp.get('objid') || '';
+  } catch {
+    objId = '';
+  }
+
+  let lastKey = '';
+  function tryPost() {
+    try {
+      const text = document.body.innerText || document.body.textContent || '';
+      const parsed = parseRadiusOltFromText(text);
+      if (!parsed || !parsed.oltPop) return;
+      const nextKey = `${parsed.oltPop}|${parsed.slot}|${parsed.port}|${parsed.onu}|${parsed.ipOlt}`;
+      if (nextKey === lastKey) return;
+      lastKey = nextKey;
+      if (window.parent && typeof window.parent.postMessage === 'function') {
+        window.parent.postMessage(
+          {
+            type: 'RI_RADIUS_OLT_INFO',
+            objId: String(objId || '').trim(),
+            ...parsed,
+          },
+          '*'
+        );
+      }
+    } catch {
+      // Bo qua loi doc/gui thong so tu iframe
+    }
+  }
+
+  tryPost();
+
+  if (typeof MutationObserver === 'function') {
+    const observer = new MutationObserver(() => {
+      tryPost();
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    setTimeout(() => {
+      try {
+        observer.disconnect();
+      } catch {
+        // ignore
+      }
+    }, 20000);
+  }
+
+  return true;
+}
 
 function bootstrapRemoteInside() {
   if (typeof document === 'undefined' || !document.body) {
+    return;
+  }
+
+  if (startRadiusParamsBridge()) {
     return;
   }
 

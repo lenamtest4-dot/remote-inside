@@ -41,9 +41,13 @@ import {
   fetchInsideModemInfo,
   fetchInsideOltInit,
   fetchInsideOltListByLocation,
+  fetchInsideOnlineSessions,
+  findMatchingOltOption,
   getCachedInsideContract,
+  getInsideOltHint,
   isExtendedPortOlt,
   runInsideAction,
+  setInsideOltHint,
   validateBoxNewMac,
 } from '../adapters/inside.js';
 import { executePortalAction } from '../adapters/portals.js';
@@ -190,6 +194,14 @@ export function mountRemoteInside({
     oltContractObjId: '',
     oltContractError: '',
     oltConnOpen: true,
+    oltDetectedInfo: null,
+    oltAutoMatched: false,
+    oltUserTouched: false,
+    killLoading: false,
+    killError: '',
+    killLoginUrl: '',
+    killSessions: [],
+    killArmedObjId: '',
     scannerOpen: false,
     domSnapshot: null,
     recordedEntries: [],
@@ -318,6 +330,119 @@ export function mountRemoteInside({
     state.oltContractObjId = '';
     state.oltContractError = '';
     state.oltConnOpen = true;
+    state.oltDetectedInfo = null;
+    state.oltAutoMatched = false;
+    state.oltUserTouched = false;
+    state.killLoading = false;
+    state.killError = '';
+    state.killLoginUrl = '';
+    state.killSessions = [];
+    state.killArmedObjId = '';
+  }
+
+  function applyDetectedOltToModal() {
+    if (!state.oltDetectedInfo || state.oltUserTouched || state.oltList.length === 0) {
+      return;
+    }
+    const matched = findMatchingOltOption(state.oltList, state.oltDetectedInfo.oltPop);
+    if (!matched) {
+      state.oltAutoMatched = false;
+      return;
+    }
+
+    state.oltSelectedId = matched.id;
+    state.oltSearch = '';
+    state.oltAutoMatched = true;
+    state.oltShowAllPorts = isExtendedPortOlt(matched.name);
+
+    const detectedPort = String(state.oltDetectedInfo.port || '').trim();
+    if (detectedPort) {
+      const portsSrc =
+        state.oltPorts.length > 0
+          ? state.oltPorts
+          : Array.from({ length: 16 }, (_, idx) => ({
+              value: String(idx + 1),
+              label: `Port ${idx + 1}`,
+              isType2: idx + 1 > 8,
+            }));
+      const matchedPort = portsSrc.find(
+        (p) =>
+          String(p.value).trim() === detectedPort ||
+          (Number.isFinite(Number(p.value)) &&
+            Number.isFinite(Number(detectedPort)) &&
+            Number(p.value) === Number(detectedPort))
+      );
+      if (matchedPort) {
+        state.oltSelectedPorts = [matchedPort.value];
+        if (matchedPort.isType2) {
+          state.oltShowAllPorts = true;
+        }
+      }
+    }
+  }
+
+  if (pageWindow && typeof pageWindow.addEventListener === 'function') {
+    pageWindow.addEventListener('message', (event) => {
+      if (
+        event.origin !== 'http://radius-portal.fpt.net' &&
+        event.origin !== 'https://radius-portal.fpt.net'
+      ) {
+        return;
+      }
+      const data = event.data;
+      if (!data || data.type !== 'RI_RADIUS_OLT_INFO' || !data.oltPop) {
+        return;
+      }
+      const saved = setInsideOltHint(data.objId, data);
+      if (
+        state.confirmAction &&
+        state.confirmAction.id === 'clear_osp' &&
+        state.activePortalId === 'inside'
+      ) {
+        if (!data.objId || !state.oltContractObjId || String(data.objId) === String(state.oltContractObjId)) {
+          state.oltDetectedInfo = saved || {
+            objId: String(data.objId || ''),
+            oltPop: String(data.oltPop || ''),
+            slot: String(data.slot || ''),
+            port: String(data.port || ''),
+            onu: String(data.onu || ''),
+            ipOlt: String(data.ipOlt || ''),
+          };
+          applyDetectedOltToModal();
+          render();
+        }
+      }
+    });
+  }
+
+  async function loadKillSessionsForModal(contractId) {
+    state.killLoading = true;
+    state.killError = '';
+    state.killLoginUrl = '';
+    state.killSessions = [];
+    state.killArmedObjId = '';
+    render();
+
+    try {
+      const res = await fetchInsideOnlineSessions(contractId);
+      if (!state.confirmAction || state.confirmAction.id !== 'kill_session') {
+        return;
+      }
+      state.killLoading = false;
+      if (res.status === 'ok') {
+        state.killSessions = Array.isArray(res.sessions) ? res.sessions : [];
+      } else {
+        state.killError = res.message || 'Không tải được danh sách phiên đang chạy.';
+        state.killLoginUrl = res.loginUrl || '';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'kill_session') {
+        return;
+      }
+      state.killLoading = false;
+      state.killError = err && err.message ? err.message : 'Lỗi tải danh sách phiên đang online.';
+    }
+    render();
   }
 
   async function loadModemInfoForModal(contractId) {
@@ -429,10 +554,32 @@ export function mountRemoteInside({
 
   async function loadContractOltContextForModal(contractId) {
     if (!contractId) return;
+
+    function applyCachedHintIfPresent(objId) {
+      if (!isUserscriptEnv()) {
+        state.oltDetectedInfo = {
+          objId: String(objId || '1162622263'),
+          oltPop: 'BRUP00101GC16',
+          slot: '0',
+          port: '5',
+          onu: '79',
+          ipOlt: '11.72.121.17',
+        };
+        applyDetectedOltToModal();
+        return;
+      }
+      const hint = getInsideOltHint(objId);
+      if (hint) {
+        state.oltDetectedInfo = hint;
+        applyDetectedOltToModal();
+      }
+    }
+
     const cached = getCachedInsideContract(contractId);
     if (cached && cached.objID) {
       state.oltContractObjId = String(cached.objID);
       state.oltContractError = '';
+      applyCachedHintIfPresent(state.oltContractObjId);
       render();
       return;
     }
@@ -450,6 +597,7 @@ export function mountRemoteInside({
       state.oltContractLoading = false;
       if (res.status === 'ok' && res.objID) {
         state.oltContractObjId = String(res.objID);
+        applyCachedHintIfPresent(state.oltContractObjId);
       } else {
         state.oltContractError =
           res.message || `Không lấy được ObjID cho ${contractId} để mở Thông số kết nối.`;
@@ -486,6 +634,7 @@ export function mountRemoteInside({
           state.oltSelectedId = '';
           state.oltSelectedPorts = [];
         }
+        applyDetectedOltToModal();
       } else {
         state.oltError = res.message || 'Không tải được dữ liệu POP OLT.';
         state.oltLoginUrl = res.loginUrl || '';
@@ -501,6 +650,8 @@ export function mountRemoteInside({
   }
 
   async function loadOltListForSelectedLocation(locationId) {
+    state.oltUserTouched = true;
+    state.oltAutoMatched = false;
     state.oltLocationId = locationId;
     state.oltSelectedId = '';
     state.oltSelectedPorts = [];
@@ -560,6 +711,8 @@ export function mountRemoteInside({
         loadModemInfoForModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'reset_mac_box') {
         loadBoxMacsForModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'kill_session') {
+        loadKillSessionsForModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'clear_osp') {
         loadOltDataForModal(false);
         if (state.contractInput) {
@@ -587,11 +740,14 @@ export function mountRemoteInside({
 
     const portSummary = Array.isArray(actionCtx.ports) ? actionCtx.ports.join(',') : '';
     const isClearOsp = portal.id === 'inside' && action.id === 'clear_osp';
+    const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
     const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
       const baseOlt = portSummary ? `${actionCtx.oltName} (P:${portSummary})` : actionCtx.oltName;
       logTarget = contractId ? `${contractId} • ${baseOlt}` : baseOlt;
+    } else if (isKillSession && actionCtx.ipAddress) {
+      logTarget = contractId ? `${contractId} • ${actionCtx.ipAddress}` : actionCtx.ipAddress;
     }
 
     try {
@@ -1699,13 +1855,19 @@ export function mountRemoteInside({
 
     const isInsideModem = portal.id === 'inside' && act.id === 'reset_mac';
     const isInsideBox = portal.id === 'inside' && act.id === 'reset_mac_box';
+    const isInsideKill = portal.id === 'inside' && act.id === 'kill_session';
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
 
     const sheetParts = [
-      el('h2', { className: 'ri-sheet-title', text: `Xác nhận ${act.label}?` }),
+      el('h2', {
+        className: 'ri-sheet-title',
+        text: isInsideKill ? 'Kill Session — Phiên đang chạy' : `Xác nhận ${act.label}?`,
+      }),
       el('p', {
         className: 'ri-sheet-sub',
-        text: act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
+        text: isInsideKill
+          ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
+          : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
       }),
     ];
 
@@ -1727,14 +1889,14 @@ export function mountRemoteInside({
       );
     }
 
-    if (cached && cached.objID && !isInsideOlt && !isInsideModem) {
+    if (cached && cached.objID && !isInsideOlt && !isInsideModem && !isInsideKill) {
       sheetParts.push(el('div', { className: 'ri-confirm-meta', text: `ObjID: ${cached.objID}` }));
     }
 
     const cancelBtn = el('button', {
       type: 'button',
       className: 'ri-secondary-btn',
-      text: isInsideBox && state.boxTab === 'history' ? 'Đóng' : 'Hủy',
+      text: (isInsideBox && state.boxTab === 'history') || isInsideKill ? 'Đóng' : 'Hủy',
       onClick: () => {
         resetConfirmState();
         render();
@@ -1980,6 +2142,14 @@ export function mountRemoteInside({
                 const cardParts = [
                   el('div', { className: 'ri-history-macs', text: macLine }),
                 ];
+                if (log.oldBoxType || log.newBoxType) {
+                  cardParts.push(
+                    el('div', {
+                      className: 'ri-history-meta',
+                      text: `Loại Box: ${log.oldBoxType || '—'} → ${log.newBoxType || '—'}`,
+                    })
+                  );
+                }
                 if (metaParts.length > 0) {
                   cardParts.push(
                     el('div', { className: 'ri-history-meta', text: metaParts.join(' • ') })
@@ -2177,6 +2347,142 @@ export function mountRemoteInside({
           });
         }
       }
+    } else if (isInsideKill) {
+      showConfirmBtn = false;
+
+      sheetParts.push(
+        el('div', { className: 'ri-confirm-input-wrap' }, [
+          el('div', { className: 'ri-inline-head' }, [
+            el('span', { className: 'ri-confirm-label', text: 'Danh sách phiên đang online' }),
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Tải lại phiên',
+              onClick: () => loadKillSessionsForModal(contractId),
+            }),
+          ]),
+        ])
+      );
+
+      if (state.killLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tìm phiên đang chạy của hợp đồng ${contractId}…` }),
+          ])
+        );
+      } else if (state.killError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadKillSessionsForModal(contractId),
+          }),
+        ];
+        if (state.killLoginUrl && /iam|hết hạn/i.test(state.killError)) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Đăng nhập IAM',
+              onClick: () => {
+                if (pageWindow && pageWindow.open) {
+                  pageWindow.open(state.killLoginUrl, '_blank', 'noopener');
+                }
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.killError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+      } else if (state.killSessions.length === 0) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status' }, [
+            el('div', {
+              text: `Hợp đồng ${contractId} hiện không có phiên nào đang giữ trên Kill Session.`,
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Kiểm tra lại',
+                onClick: () => loadKillSessionsForModal(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else {
+        sheetParts.push(
+          el(
+            'div',
+            { className: 'ri-session-list' },
+            state.killSessions.map((sess, idx) => {
+              const rowKey = sess.objID || sess.ipAddress || String(idx);
+              const isArmed = state.killArmedObjId === rowKey;
+              const infoLines = [];
+              if (sess.nasName) infoLines.push(`BRAS / NAS: ${sess.nasName}`);
+              const accParts = [];
+              if (sess.name) accParts.push(`Tên truy nhập: ${sess.name}`);
+              if (sess.objID) accParts.push(`ObjID: ${sess.objID}`);
+              if (accParts.length > 0) infoLines.push(accParts.join(' • '));
+              const timeParts = [];
+              if (sess.callerId) timeParts.push(`MAC: ${sess.callerId}`);
+              if (sess.date) timeParts.push(`Bắt đầu: ${sess.date}`);
+              if (timeParts.length > 0) infoLines.push(timeParts.join(' • '));
+
+              const actionRow = isArmed
+                ? el('div', { className: 'ri-session-actions' }, [
+                    el('button', {
+                      type: 'button',
+                      className: 'ri-secondary-btn',
+                      text: 'Hủy',
+                      onClick: () => {
+                        state.killArmedObjId = '';
+                        render();
+                      },
+                    }),
+                    el('button', {
+                      type: 'button',
+                      className: 'ri-danger-btn',
+                      text: `Xác nhận Kill ${sess.ipAddress || 'phiên này'}`,
+                      onClick: () =>
+                        runConfirmedAction(act, {
+                          objID: sess.objID,
+                          ipAddress: sess.ipAddress,
+                          nasName: sess.nasName,
+                          sessionName: sess.name,
+                        }),
+                    }),
+                  ])
+                : el('div', { className: 'ri-session-actions' }, [
+                    el('button', {
+                      type: 'button',
+                      className: 'ri-danger-btn ri-session-kill-btn',
+                      text: 'Kill phiên này',
+                      onClick: () => {
+                        state.killArmedObjId = rowKey;
+                        render();
+                      },
+                    }),
+                  ]);
+
+              return el('div', { className: 'ri-session-card' }, [
+                el('div', {
+                  className: 'ri-session-ip',
+                  text: sess.ipAddress ? `IP đang chạy: ${sess.ipAddress}` : 'Phiên đang giữ (chưa rõ IP)',
+                }),
+                ...infoLines.map((line) => el('div', { className: 'ri-session-meta', text: line })),
+                actionRow,
+              ]);
+            })
+          )
+        );
+      }
     } else if (isInsideOlt) {
       confirmBtn.textContent = 'Xác nhận Clear Serial';
 
@@ -2268,6 +2574,33 @@ export function mountRemoteInside({
         }
 
         sheetParts.push(el('div', { className: 'ri-embed-card ri-conn-box' }, connCardParts));
+      }
+
+      if (state.oltDetectedInfo && state.oltDetectedInfo.oltPop) {
+        const d = state.oltDetectedInfo;
+        const posLabel =
+          d.slot || d.port || d.onu
+            ? ` [S:${d.slot || '-'} / P:${d.port || '-'} / O:${d.onu || '-'}]`
+            : '';
+        const subParts = [];
+        if (d.ipOlt) subParts.push(`IP OLT: ${d.ipOlt}`);
+        subParts.push(
+          state.oltAutoMatched
+            ? 'Đã tự động chọn sẵn POP OLT & Port bên dưới'
+            : 'Chưa khớp tên OLT tự động — hãy lọc chọn POP OLT tương ứng bên dưới'
+        );
+        sheetParts.push(
+          el('div', { className: 'ri-olt-detected' }, [
+            el('div', {
+              className: 'ri-olt-detected-title',
+              text: `Thông số kết nối: ${d.oltPop}${posLabel}`,
+            }),
+            el('div', {
+              className: 'ri-olt-detected-sub',
+              text: subParts.join(' • '),
+            }),
+          ])
+        );
       }
 
       if (state.oltLoading) {
@@ -2408,11 +2741,14 @@ export function mountRemoteInside({
         populateOltSelect(state.oltSearch);
 
         searchInput.addEventListener('input', (e) => {
+          state.oltUserTouched = true;
           state.oltSearch = e.target.value;
           populateOltSelect(state.oltSearch);
         });
 
         oltSelect.addEventListener('change', (e) => {
+          state.oltUserTouched = true;
+          state.oltAutoMatched = false;
           state.oltSelectedId = e.target.value;
           state.oltSelectedPorts = [];
           const picked = state.oltList.find((o) => o.id === state.oltSelectedId);
@@ -2470,6 +2806,7 @@ export function mountRemoteInside({
               className: 'ri-text-btn',
               text: 'Bỏ chọn',
               onClick: () => {
+                state.oltUserTouched = true;
                 state.oltSelectedPorts = [];
                 render();
               },
@@ -2492,6 +2829,7 @@ export function mountRemoteInside({
               'aria-pressed': active ? 'true' : 'false',
               text: displayLabel,
               onClick: () => {
+                state.oltUserTouched = true;
                 if (selectedPortSet.has(p.value)) {
                   state.oltSelectedPorts = state.oltSelectedPorts.filter((x) => x !== p.value);
                 } else {

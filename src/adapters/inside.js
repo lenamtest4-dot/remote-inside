@@ -31,7 +31,10 @@ export const INSIDE_ENDPOINTS = {
     update: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC',
     log: 'http://mvc.inside.fpt.net/Contract/IPTVReplaceMAC/ReplaceMAC/GetLogByContract',
   },
-  kill_session: 'http://mvc.inside.fpt.net/KillSession/KillSession/DeleteSession',
+  kill_session: {
+    search: 'http://mvc.inside.fpt.net/KillSession/KillSession/SearchListForKillSession',
+    delete: 'http://mvc.inside.fpt.net/KillSession/KillSession/DeleteSession',
+  },
   clear_osp: {
     monitor: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/',
     viewport: 'http://inside.fpt.net/Functions/NetAdmin/PowerDSL/MonitorOLT/ViewPortPON.Asp',
@@ -41,6 +44,7 @@ export const INSIDE_ENDPOINTS = {
 };
 
 export const INSIDE_CONTRACT_CACHE = new Map();
+export const INSIDE_OLT_HINT_CACHE = new Map();
 export const INSIDE_OLT_CACHE = {
   locations: [],
   defaultLocationId: '',
@@ -48,6 +52,35 @@ export const INSIDE_OLT_CACHE = {
   oltsByLocation: new Map(),
   fetchedAt: 0,
 };
+
+export function setInsideOltHint(objId, info = {}) {
+  const key = String(objId || '').trim();
+  const oltPop = String(info.oltPop || '').trim();
+  if (!key || !oltPop) return null;
+  const entry = {
+    objId: key,
+    oltPop,
+    slot: String(info.slot || '').trim(),
+    port: String(info.port || '').trim(),
+    onu: String(info.onu || '').trim(),
+    ipOlt: String(info.ipOlt || '').trim(),
+    updatedAt: Date.now(),
+  };
+  INSIDE_OLT_HINT_CACHE.set(key, entry);
+  return entry;
+}
+
+export function getInsideOltHint(objId) {
+  const key = String(objId || '').trim();
+  if (!key) return null;
+  const entry = INSIDE_OLT_HINT_CACHE.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.updatedAt >= CACHE_TTL_MS) {
+    INSIDE_OLT_HINT_CACHE.delete(key);
+    return null;
+  }
+  return entry;
+}
 
 export function getCachedInsideContract(rawContractId) {
   const check = validateContractId(rawContractId);
@@ -371,7 +404,11 @@ function extractServerResponseMessage(responseText, json) {
     return json ? 'Thành công' : 'Thất bại';
   }
   if (typeof json === 'number') {
-    return `Mã phản hồi ${json}`;
+    return json === 1
+      ? 'Thành công (mã 1)'
+      : json === 0
+      ? 'Thất bại (máy chủ trả về 0)'
+      : `Mã phản hồi ${json}`;
   }
   if (json && typeof json === 'object') {
     const candidates = [json.msg, json.message, json.Message, json.Msg, json.error, json.Error];
@@ -434,6 +471,8 @@ export function parseInsideMutationResponse({
 
   const isJsonFailure =
     json === false ||
+    json === 0 ||
+    json === -1 ||
     (json &&
       typeof json === 'object' &&
       (json.status === false ||
@@ -680,19 +719,141 @@ async function executeInsideGetMutation({
   });
 }
 
-async function killSessionLive(contractId) {
-  const resolved = await resolveInsideObjId(contractId);
-  if (resolved.errorResult) {
-    return resolved.errorResult;
+/**
+ * Chuan hoa danh sach phien online tu KillSession/SearchListForKillSession.
+ */
+export function parseKillSessionRows(json) {
+  const rows = Array.isArray(json)
+    ? json
+    : json && typeof json === 'object' && Array.isArray(json.data)
+    ? json.data
+    : [];
+
+  return rows
+    .filter((r) => r && typeof r === 'object')
+    .slice(0, 20)
+    .map((r) => ({
+      objID: nonEmptyStr(r.ObjID ?? r.objID ?? r.objId ?? r.ID),
+      date: formatInsideTimestamp(r.Date ?? r.date ?? r.StartTime),
+      name: nonEmptyStr(r.Name ?? r.UserName),
+      nasName: nonEmptyStr(r.NASName ?? r.NAS),
+      ipAddress: nonEmptyStr(r.IPAddress ?? r.IP),
+      callerId: nonEmptyStr(r.CallerID ?? r.MAC),
+    }))
+    .filter((row) => row.objID || row.ipAddress);
+}
+
+/**
+ * Lay danh sach phien đang online theo hop dong tu KillSession/SearchListForKillSession.
+ */
+export async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+      sessions: [],
+    };
   }
 
-  const objID = resolved.objID;
-  const url = `${INSIDE_ENDPOINTS.kill_session}?objID=${encodeURIComponent(objID)}`;
+  const contractId = check.value;
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      sessions: [
+        {
+          objID: '1162622263',
+          date: '23/11/2026 04:16:30',
+          name: `Vtfdl-${contractId.toLowerCase()}`,
+          nasName: 'HCM-BRAS-CTR-03-05',
+          ipAddress: '21.174.165.216',
+          callerId: 'd4:61:95:a0:6e:41',
+        },
+      ],
+    };
+  }
+
+  const body = new URLSearchParams({
+    searchBy: '1',
+    searchValue: contractId,
+  });
+
+  const res = await requestPortal({
+    url: INSIDE_ENDPOINTS.kill_session.search,
+    method: 'POST',
+    headers: {
+      ...AJAX_HEADERS,
+      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    },
+    data: body.toString(),
+    timeout: 15000,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'error',
+      message: 'Không kết nối được tới mvc.inside.fpt.net để tìm phiên đang chạy. Hãy kiểm tra VPN.',
+      loginUrl: PORTALS.inside.url,
+      sessions: [],
+    };
+  }
+
+  const iam = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: INSIDE_ENDPOINTS.kill_session.search,
+  });
+  if (iam.expired) {
+    return {
+      status: 'iam_expired',
+      message: 'Phiên đăng nhập IAM đã hết hạn. Bấm nút bên dưới để đăng nhập lại.',
+      loginUrl: res.finalUrl || PORTALS.inside.url,
+      sessions: [],
+    };
+  }
+
+  if (!res.ok) {
+    return {
+      status: 'error',
+      message: `Không tải được danh sách phiên đang chạy (HTTP ${res.status}).`,
+      loginUrl: PORTALS.inside.url,
+      sessions: [],
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    sessions: parseKillSessionRows(safeJsonParse(res.responseText)),
+  };
+}
+
+async function killSessionLive(contractId, ctx = {}) {
+  let objID =
+    ctx.objID !== undefined && ctx.objID !== null ? String(ctx.objID).trim() : '';
+
+  if (!objID) {
+    const resolved = await resolveInsideObjId(contractId);
+    if (resolved.errorResult) {
+      return resolved.errorResult;
+    }
+    objID = resolved.objID;
+  }
+
+  const extraFields = [];
+  if (ctx.ipAddress) extraFields.push({ label: 'IP đã Kill', value: String(ctx.ipAddress) });
+  if (ctx.nasName) extraFields.push({ label: 'BRAS / NAS', value: String(ctx.nasName) });
+  if (ctx.sessionName) extraFields.push({ label: 'Tên truy nhập', value: String(ctx.sessionName) });
+
+  const url = `${INSIDE_ENDPOINTS.kill_session.delete}?objID=${encodeURIComponent(objID)}`;
   return executeInsideGetMutation({
     actionLabel: 'Kill Session',
     contractId,
     objID,
     url,
+    extraFields,
   });
 }
 
@@ -936,13 +1097,21 @@ function buildInsideMockResult(actionId, contractId, ctx = {}) {
         ],
       };
     }
-    case 'kill_session':
+    case 'kill_session': {
+      const fields = [{ label: 'Mã hợp đồng', value: contractId }];
+      if (ctx.objID) fields.push({ label: 'ObjID', value: String(ctx.objID) });
+      if (ctx.ipAddress) fields.push({ label: 'IP đã Kill', value: String(ctx.ipAddress) });
+      if (ctx.nasName) fields.push({ label: 'BRAS / NAS', value: String(ctx.nasName) });
       return {
         status: 'ok',
         mode: 'demo',
         title: `Đã Kill Session cho ${contractId} (Dữ liệu mô phỏng)`,
-        message: 'Lệnh mô phỏng thành công: Phiên PPPoE giả lập đã được ngắt để quay lại phiên mới.',
+        message: ctx.ipAddress
+          ? `Lệnh mô phỏng thành công: Đã ngắt phiên IP ${ctx.ipAddress} để thiết bị quay lại phiên mới.`
+          : 'Lệnh mô phỏng thành công: Phiên PPPoE giả lập đã được ngắt để quay lại phiên mới.',
+        summaryFields: ctx.ipAddress || ctx.objID ? fields : undefined,
       };
+    }
     case 'clear_osp': {
       const oltLabel = ctx.oltName || (ctx.oltId ? `OLT ${ctx.oltId}` : 'BRUP00101GC16');
       const portsCsv =
@@ -1196,6 +1365,7 @@ export function parseBoxMacLogItems(json) {
       const timeHit = pickField(
         lowerMap,
         [
+          'modifydate',
           'createdate',
           'createddate',
           'createdat',
@@ -1211,6 +1381,7 @@ export function parseBoxMacLogItems(json) {
         true
       );
       const actorHit = pickField(lowerMap, [
+        'modifyby',
         'createby',
         'createdby',
         'user',
@@ -1222,6 +1393,8 @@ export function parseBoxMacLogItems(json) {
         'updateby',
         'updatedby',
       ]);
+      const oldBoxTypeHit = pickField(lowerMap, ['oldboxtype_name', 'oldboxtype']);
+      const newBoxTypeHit = pickField(lowerMap, ['newboxtype_name', 'newboxtype']);
       const noteHit = pickField(lowerMap, [
         'note',
         'description',
@@ -1237,18 +1410,31 @@ export function parseBoxMacLogItems(json) {
       ]);
 
       const usedKeys = new Set(
-        [oldHit.key, newHit.key, timeHit.key, actorHit.key, noteHit.key].filter(Boolean)
+        [
+          oldHit.key,
+          newHit.key,
+          timeHit.key,
+          actorHit.key,
+          oldBoxTypeHit.key,
+          newBoxTypeHit.key,
+          noteHit.key,
+        ].filter(Boolean)
       );
+
+      const skippedExtra = new Set([
+        'contract',
+        'idcontract',
+        'id',
+        'objid',
+        'oldboxtype',
+        'newboxtype',
+        'oldboxtype_name',
+        'newboxtype_name',
+      ]);
 
       const extraFields = [];
       for (const [lk, { origKey, val }] of lowerMap.entries()) {
-        if (
-          usedKeys.has(lk) ||
-          lk === 'contract' ||
-          lk === 'idcontract' ||
-          lk === 'id' ||
-          LOG_PII_KEY_RE.test(origKey)
-        ) {
+        if (usedKeys.has(lk) || skippedExtra.has(lk) || LOG_PII_KEY_RE.test(origKey)) {
           continue;
         }
         const formatted = formatInsideTimestamp(val);
@@ -1262,6 +1448,8 @@ export function parseBoxMacLogItems(json) {
         newMac: newHit.value,
         time: timeHit.value,
         actor: actorHit.value,
+        oldBoxType: oldBoxTypeHit.value,
+        newBoxType: newBoxTypeHit.value,
         note: noteHit.value,
         extraFields,
       };
@@ -1292,6 +1480,8 @@ export async function fetchInsideBoxMacLogs(rawContractId, ctx = {}) {
           newMac: `FBOX${contractId}`,
           time: '20/11/2026 10:46:16',
           actor: 'ktv.demo',
+          oldBoxType: 'FPT Play Box S550',
+          newBoxType: 'FPT Play Box 650',
           note: 'Đổi Box tại nhà khách hàng (Mô phỏng)',
           extraFields: [],
         },
@@ -1300,6 +1490,8 @@ export async function fetchInsideBoxMacLogs(rawContractId, ctx = {}) {
           newMac: 'A42B8C109E4F',
           time: '12/09/2026 15:18:02',
           actor: 'ktv.demo2',
+          oldBoxType: 'FPT Play Box T590',
+          newBoxType: 'FPT Play Box S550',
           note: 'Thay thế thành công',
           extraFields: [],
         },
@@ -1533,6 +1725,78 @@ export function isExtendedPortOlt(oltName) {
   return tail === 'GC16' || tail === 'GC14';
 }
 
+function cleanRadiusToken(raw) {
+  const s = String(raw || '').trim();
+  if (!s || s === '-' || /^n\/a$/i.test(s) || /^chưa/i.test(s) || /^không/i.test(s)) {
+    return '';
+  }
+  return s;
+}
+
+/**
+ * Trich xuat OLT POP, Slot, Port, ONU va IP OLT tu noi dung hien thi trang Thong so ket noi Radius.
+ */
+export function parseRadiusOltFromText(rawText) {
+  if (!rawText || typeof rawText !== 'string') {
+    return null;
+  }
+  const normalized = rawText.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
+  const m = normalized.match(
+    /([A-Z0-9][A-Z0-9._-]{4,30})\s*\[\s*S\s*:\s*([^/\]]+?)\s*\/\s*P\s*:\s*([^/\]]+?)\s*\/\s*O\s*:\s*([^\]]+?)\s*\]/i
+  );
+  if (!m) {
+    return null;
+  }
+  let oltPop = cleanRadiusToken(m[1]).replace(/^ONU(?=[A-Z]{2,}\d)/i, '');
+  if (!oltPop) {
+    return null;
+  }
+  const slot = cleanRadiusToken(m[2]);
+  const port = cleanRadiusToken(m[3]);
+  const onu = cleanRadiusToken(m[4]);
+  const ipMatch = normalized.match(/IP\s*OLT[\s:]*(\d{1,3}(?:\.\d{1,3}){3})/i);
+  const ipOlt = ipMatch ? ipMatch[1].trim() : '';
+
+  return { oltPop, slot, port, onu, ipOlt };
+}
+
+/**
+ * Tim POP OLT phu hop trong danh sach GetOLTList.asp theo ten OLT tu Thong so ket noi.
+ */
+export function findMatchingOltOption(oltList, oltPop) {
+  const list = Array.isArray(oltList) ? oltList : [];
+  const raw = String(oltPop || '').trim();
+  if (!raw || list.length === 0) {
+    return null;
+  }
+
+  const lower = raw.toLowerCase();
+  const compact = raw.replace(/\s+/g, '').toUpperCase();
+
+  const exact = list.find(
+    (o) => String(o && o.name ? o.name : '').trim().toLowerCase() === lower
+  );
+  if (exact) return exact;
+
+  const startsOrCompact = list.find((o) => {
+    const oComp = String(o && o.name ? o.name : '').replace(/\s+/g, '').toUpperCase();
+    if (!oComp) return false;
+    return oComp === compact || oComp.startsWith(compact) || compact.startsWith(oComp);
+  });
+  if (startsOrCompact) return startsOrCompact;
+
+  if (compact.length >= 6) {
+    const partial = list.find((o) => {
+      const oComp = String(o && o.name ? o.name : '').replace(/\s+/g, '').toUpperCase();
+      if (oComp.length < 6) return false;
+      return oComp.includes(compact) || compact.includes(oComp);
+    });
+    if (partial) return partial;
+  }
+
+  return null;
+}
+
 function getHtmlAttr(attrs, attrName) {
   const re = new RegExp(`\\b${attrName}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i');
   const m = String(attrs || '').match(re);
@@ -1733,6 +1997,8 @@ export function parseClearSerialResponse({
 
   const isJsonFailure =
     json === false ||
+    json === 0 ||
+    json === -1 ||
     (json &&
       typeof json === 'object' &&
       (json.status === false ||
@@ -2079,7 +2345,7 @@ export async function runInsideAction(actionId, rawContractId, ctx = {}) {
     return lookupInsideLive(contractId);
   }
   if (actionId === 'kill_session' && INSIDE_ENDPOINTS.kill_session) {
-    return killSessionLive(contractId);
+    return killSessionLive(contractId, ctx);
   }
   if (actionId === 'reset_mac' && INSIDE_ENDPOINTS.reset_mac) {
     return resetMacModemLive(contractId, ctx.newMac || '', ctx);

@@ -42,18 +42,24 @@ import {
   extractJsAlertMessages,
   fetchInsideBoxMacLogs,
   fetchInsideModemInfo,
+  fetchInsideOnlineSessions,
+  findMatchingOltOption,
   formatInsideTimestamp,
+  getInsideOltHint,
   isExtendedPortOlt,
   normalizeBoxMac,
   parseBoxMacLogItems,
   parseClearSerialResponse,
   parseInsideLookupPayload,
   parseInsideMutationResponse,
+  parseKillSessionRows,
   parseLocationsFromMonitorHtml,
   parseOltListResponse,
   parseOltPortsFromHtml,
+  parseRadiusOltFromText,
   parseReplaceMacBoxResponse,
   runInsideAction,
+  setInsideOltHint,
   validateBoxNewMac,
 } from '../src/adapters/inside.js';
 
@@ -93,6 +99,10 @@ async function runTests() {
       `Userscript must include @connect for ${domain}`
     );
   }
+  assert.ok(
+    userscriptContent.includes('@connect      radius-apigateway.fpt.net'),
+    'Userscript must include @connect for radius-apigateway.fpt.net'
+  );
 
   const expectedGrants = [
     'GM_xmlhttpRequest',
@@ -110,8 +120,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.5.1'),
-    'Userscript must bump @version to 0.5.1'
+    userscriptContent.includes('@version      0.6.0'),
+    'Userscript must bump @version to 0.6.0'
   );
 
   // Parse JS syntax inside VM without executing
@@ -427,7 +437,13 @@ async function runTests() {
   console.log('6. Testing Inside live lookup parsers & HTML partial extraction...');
   assert.ok(INSIDE_ENDPOINTS.lookup && INSIDE_ENDPOINTS.lookup.detail.includes('/Contract/StatusNew/ViewReportDetail'));
   assert.ok(INSIDE_ENDPOINTS.reset_mac && INSIDE_ENDPOINTS.reset_mac.includes('/DSLLLine/ResetMAC/ChangeMAC'));
-  assert.ok(INSIDE_ENDPOINTS.kill_session && INSIDE_ENDPOINTS.kill_session.includes('/KillSession/KillSession/DeleteSession'));
+  assert.ok(
+    INSIDE_ENDPOINTS.kill_session &&
+      INSIDE_ENDPOINTS.kill_session.search &&
+      INSIDE_ENDPOINTS.kill_session.search.includes('/KillSession/KillSession/SearchListForKillSession') &&
+      INSIDE_ENDPOINTS.kill_session.delete &&
+      INSIDE_ENDPOINTS.kill_session.delete.includes('/KillSession/KillSession/DeleteSession')
+  );
   assert.ok(INSIDE_ENDPOINTS.reset_mac_box.list.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/GetMacContract'));
   assert.ok(INSIDE_ENDPOINTS.reset_mac_box.update.includes('/Contract/IPTVReplaceMAC/ReplaceMAC/UpdateMAC'));
   assert.ok(INSIDE_ENDPOINTS.clear_osp.oltList.includes('/MonitorOLT/GetOLTList.asp'));
@@ -960,6 +976,119 @@ async function runTests() {
   assert.equal(ctxJoined.includes('secretJwt'), false, 'Must redact Bearer token');
   assert.equal(ctxJoined.includes('VTAAR2393'), false, 'Must redact contract ID');
   console.log('   OK: Modem prefill, Box history logs, and Next.js chunk helpers passed.');
+
+  console.log('13. Testing Kill Session live rows, exact Box history schema, and Radius OLT auto-detect...');
+  assert.deepEqual(parseKillSessionRows(null), []);
+  const killRowsBare = parseKillSessionRows([
+    {
+      Date: '/Date(1795407390000)/',
+      Name: 'Vtfdl-vtaar2393',
+      NASName: 'HCM-BRAS-CTR-03-05',
+      IPAddress: '21.174.165.216',
+      CallerID: 'd4:61:95:a0:6e:41',
+      ObjID: 1162622263,
+    },
+  ]);
+  assert.equal(killRowsBare.length, 1);
+  assert.equal(killRowsBare[0].objID, '1162622263');
+  assert.equal(killRowsBare[0].ipAddress, '21.174.165.216');
+  assert.equal(killRowsBare[0].nasName, 'HCM-BRAS-CTR-03-05');
+  assert.equal(killRowsBare[0].name, 'Vtfdl-vtaar2393');
+  assert.equal(killRowsBare[0].callerId, 'd4:61:95:a0:6e:41');
+  assert.ok(killRowsBare[0].date.includes('/'));
+
+  const killRowsWrapped = parseKillSessionRows({
+    data: [{ ObjID: '9988', IPAddress: '10.1.2.3', NASName: 'BRAS-01' }],
+  });
+  assert.equal(killRowsWrapped.length, 1);
+  assert.equal(killRowsWrapped[0].objID, '9988');
+
+  const demoSessions = await fetchInsideOnlineSessions('VTAAR2393', { forceDemo: true });
+  assert.equal(demoSessions.status, 'ok');
+  assert.ok(demoSessions.sessions.length >= 1);
+  assert.ok(demoSessions.sessions[0].ipAddress);
+
+  const numOk = parseInsideMutationResponse({
+    actionLabel: 'Kill session',
+    contractId: 'VTAAR2393',
+    httpStatus: 200,
+    responseText: '1',
+  });
+  assert.equal(numOk.status, 'ok');
+  const numErr = parseInsideMutationResponse({
+    actionLabel: 'Kill session',
+    contractId: 'VTAAR2393',
+    httpStatus: 200,
+    responseText: '0',
+  });
+  assert.equal(numErr.status, 'error');
+
+  const exactBoxLogs = parseBoxMacLogItems([
+    {
+      ID: 101,
+      ObjID: 432227490,
+      Contract: 'VTAAR2393',
+      OldMAC: 'C894D2B746C4',
+      NewMAC: 'D46195A06E41',
+      ModifyDate: '/Date(1732345678000)/',
+      ModifyBy: 'namlp',
+      OldBoxType: 12,
+      NewBoxType: 14,
+      OldBoxType_Name: 'FPT Play Box S550',
+      NewBoxType_Name: 'FPT Play Box 650',
+    },
+  ]);
+  assert.equal(exactBoxLogs.length, 1);
+  assert.equal(exactBoxLogs[0].oldMac, 'C894D2B746C4');
+  assert.equal(exactBoxLogs[0].newMac, 'D46195A06E41');
+  assert.equal(exactBoxLogs[0].actor, 'namlp');
+  assert.equal(exactBoxLogs[0].oldBoxType, 'FPT Play Box S550');
+  assert.equal(exactBoxLogs[0].newBoxType, 'FPT Play Box 650');
+  assert.equal(exactBoxLogs[0].extraFields.length, 0, 'BoxType fields must not duplicate into extraFields');
+
+  const parsedSpaced = parseRadiusOltFromText(
+    'OLT / SLOT / PORT / ONU BRUP00101GC16 [S:0 / P:5 / O:79] IP OLT 11.72.121.17'
+  );
+  assert.deepEqual(parsedSpaced, {
+    oltPop: 'BRUP00101GC16',
+    slot: '0',
+    port: '5',
+    onu: '79',
+    ipOlt: '11.72.121.17',
+  });
+
+  const parsedGlued = parseRadiusOltFromText(
+    'OLT / SLOT / PORT / ONUBRUP00101GC16 [S:0 / P: - / O:79]'
+  );
+  assert.deepEqual(parsedGlued, {
+    oltPop: 'BRUP00101GC16',
+    slot: '0',
+    port: '',
+    onu: '79',
+    ipOlt: '',
+  });
+  assert.equal(parseRadiusOltFromText('Khong co thong tin OLT'), null);
+
+  const sampleOltList = [
+    { id: '101', name: 'BRUP00101GC16' },
+    { id: '102', name: 'BRUP00201GC14 - Ba Ria' },
+  ];
+  assert.deepEqual(findMatchingOltOption(sampleOltList, 'BRUP00101GC16'), {
+    id: '101',
+    name: 'BRUP00101GC16',
+  });
+  assert.deepEqual(findMatchingOltOption(sampleOltList, 'BRUP00201GC14'), {
+    id: '102',
+    name: 'BRUP00201GC14 - Ba Ria',
+  });
+  assert.equal(findMatchingOltOption(sampleOltList, 'UNKNOWNOLT99'), null);
+
+  setInsideOltHint('432227490', parsedSpaced);
+  const cachedOltHint = getInsideOltHint('432227490');
+  assert.equal(cachedOltHint.oltPop, 'BRUP00101GC16');
+  assert.equal(cachedOltHint.port, '5');
+  assert.equal(getInsideOltHint('999999999'), null);
+  console.log('   OK: Kill Session rows, Box history schema, and Radius OLT auto-detect passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

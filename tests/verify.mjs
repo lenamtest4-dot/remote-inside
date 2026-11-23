@@ -66,6 +66,7 @@ import {
 } from '../src/adapters/inside.js';
 import {
   PORT_ENDPOINTS,
+  bootstrapMvcPortSession,
   buildPortUrl,
   decodeHtmlEntities,
   detectPortSessionExpired,
@@ -81,6 +82,7 @@ import {
   parsePortMutationResponse,
   parsePortOptionsFromHtml,
   runPortAction,
+  triggerPortFtthMenuAction,
 } from '../src/adapters/port.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
@@ -142,8 +144,8 @@ async function runTests() {
   }
 
   assert.ok(
-    userscriptContent.includes('@version      0.8.1'),
-    'Userscript must bump @version to 0.8.1'
+    userscriptContent.includes('@version      0.8.2'),
+    'Userscript must bump @version to 0.8.2'
   );
 
   // Parse JS syntax inside VM without executing
@@ -1431,6 +1433,71 @@ async function runTests() {
   assert.ok(
     userscriptContent.includes('parseMvcPortTokenFromCookieString'),
     'Userscript bundle must include parseMvcPortTokenFromCookieString'
+  );
+  assert.equal(
+    PORT_ENDPOINTS.portIndexPage,
+    'http://port.fpt.net/Index.aspx',
+    'PORT_ENDPOINTS.portIndexPage must point to port.fpt.net/Index.aspx'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText(
+      '<frame name="leftFrame" src="LeftMenu.aspx?mvct=tok%2B123%3D&amp;mvcu=http://mvcport.fpt.net" />'
+    ),
+    'tok+123='
+  );
+  assert.equal(
+    extractMvcPortTokenFromText(
+      '<a href="http://mvcport.fpt.net/ftth_newport/contract/index?a=1&amp;Token=abc%2Bxyz">Tìm kiếm</a>'
+    ),
+    'abc+xyz'
+  );
+  assert.equal(
+    extractMvcPortTokenFromText('LeftMenu.aspx?mvcu=1&mvct=raw+plus=='),
+    'raw+plus==',
+    'Literal + in mvct token must be preserved without turning into space'
+  );
+
+  let calledMenuActionId = null;
+  const mockPortTopWin = {
+    top: {
+      frames: [
+        {
+          name: 'leftFrame',
+          location: { pathname: '/LeftMenu.aspx' },
+          Action(id) {
+            calledMenuActionId = id;
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(
+    triggerPortFtthMenuAction(mockPortTopWin),
+    true,
+    'triggerPortFtthMenuAction must find leftFrame and invoke Action(1322)'
+  );
+  assert.equal(calledMenuActionId, 1322);
+  assert.equal(
+    triggerPortFtthMenuAction({ top: { frames: [{ name: 'mainFrame', location: { pathname: '/Default1.aspx' } }] } }),
+    false,
+    'triggerPortFtthMenuAction must return false when leftFrame is missing'
+  );
+  assert.equal(
+    (await bootstrapMvcPortSession()).ok,
+    false,
+    'bootstrapMvcPortSession must return { ok: false } in preview/Node env without throwing'
+  );
+  assert.ok(
+    userscriptContent.includes('bootstrapMvcPortSession'),
+    'Userscript bundle must include bootstrapMvcPortSession'
+  );
+  assert.ok(
+    userscriptContent.includes('triggerPortFtthMenuAction'),
+    'Userscript bundle must include triggerPortFtthMenuAction'
+  );
+  assert.ok(
+    userscriptContent.toLowerCase().includes('leftmenu.aspx'),
+    'Userscript bundle must reference LeftMenu.aspx'
   );
   console.log('   OK: port.fpt.net adapter tests passed.');
 

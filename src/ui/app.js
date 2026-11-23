@@ -53,6 +53,7 @@ import {
   validateBoxNewMac,
 } from '../adapters/inside.js';
 import {
+  bootstrapMvcPortSession,
   buildPortUrl,
   fetchPortBranches,
   fetchPortConboxes,
@@ -61,6 +62,7 @@ import {
   fetchPortPops,
   fetchPortSlotList,
   parseMvcPortTokenFromCookieString,
+  triggerPortFtthMenuAction,
 } from '../adapters/port.js';
 import { executePortalAction } from '../adapters/portals.js';
 
@@ -157,6 +159,44 @@ export function mountRemoteInside({
     pageWindow && pageWindow.location && pageWindow.location.hostname
       ? pageWindow.location.hostname.toLowerCase()
       : '';
+  function isLoggedInPortHost() {
+    try {
+      return (
+        currentHost === 'port.fpt.net' &&
+        Boolean(pageWindow && pageWindow.location) &&
+        !/LoginPage\.aspx/i.test(pageWindow.location.pathname || '')
+      );
+    } catch {
+      return false;
+    }
+  }
+  function createPortModalAuthButton(loginUrl) {
+    if (isLoggedInPortHost()) {
+      return el('button', {
+        type: 'button',
+        className: 'ri-secondary-btn',
+        text: 'Kích hoạt FTTH NEW ngay',
+        onClick: () => {
+          const ok = triggerPortFtthMenuAction(pageWindow);
+          if (!ok) {
+            state.portModalError =
+              'Chưa gọi được menu tự động. Bạn bấm ở menu bên trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm "Thử tải lại".';
+            renderConfirm();
+          }
+        },
+      });
+    }
+    return el('button', {
+      type: 'button',
+      className: 'ri-secondary-btn',
+      text: 'Mở trang Port đăng nhập',
+      onClick: () => {
+        if (pageWindow && pageWindow.open) {
+          pageWindow.open(loginUrl, '_blank', 'noopener');
+        }
+      },
+    });
+  }
   const matchedPortalId = currentHost
     ? PORTAL_ORDER.find(
         (id) =>
@@ -335,17 +375,21 @@ export function mountRemoteInside({
       portal.id === 'port' && portal.sessionCheckUrl
         ? buildPortUrl(portal.sessionCheckUrl)
         : '';
-    const checked = await checkPortalSession(portal, { checkUrlOverride });
-    if (
-      portal.id === 'port' &&
-      checked.state === 'iam_expired' &&
-      currentHost === 'port.fpt.net' &&
-      pageWindow &&
-      pageWindow.location &&
-      !/LoginPage\.aspx/i.test(pageWindow.location.pathname || '')
-    ) {
-      checked.detail =
-        'Bạn đã vào port.fpt.net nhưng FTTH NEW (mvcport.fpt.net) chưa kích hoạt. Bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm lại vào ô trạng thái này.';
+    let checked = await checkPortalSession(portal, { checkUrlOverride });
+    if (portal.id === 'port' && checked.state === 'iam_expired') {
+      const boot = await bootstrapMvcPortSession();
+      if (boot && boot.ok) {
+        checked = {
+          state: 'ok',
+          label: 'IAM ổn',
+          loginUrl: portal.url,
+          detail: 'Đã tự động kích hoạt và kết nối tốt tới port.fpt.net (FTTH NEW).',
+        };
+      } else if (isLoggedInPortHost()) {
+        checked.label = 'Chưa bật FTTH NEW';
+        checked.detail =
+          'Bạn đã vào port.fpt.net nhưng FTTH NEW (mvcport.fpt.net) chưa kích hoạt. Bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm lại vào ô trạng thái này.';
+      }
     }
     if (state.activePortalId === portal.id) {
       state.sessionStatus = checked;
@@ -1214,7 +1258,10 @@ export function mountRemoteInside({
       if (res.status === 'iam_expired') {
         state.sessionStatus = {
           state: 'iam_expired',
-          label: 'Cần đăng nhập IAM',
+          label:
+            portal.id === 'port' && isLoggedInPortHost()
+              ? 'Chưa bật FTTH NEW'
+              : 'Cần đăng nhập IAM',
           loginUrl: res.loginUrl || portal.url,
           detail: res.message,
         };
@@ -2413,18 +2460,49 @@ export function mountRemoteInside({
       extraBtns.push(copySummaryBtn);
     }
     if (res.status === 'iam_expired' && res.loginUrl) {
-      extraBtns.push(
-        el('button', {
-          type: 'button',
-          className: 'ri-primary-btn',
-          text: 'Đăng nhập IAM ngay',
-          onClick: () => {
-            if (pageWindow && pageWindow.open) {
-              pageWindow.open(res.loginUrl, '_blank', 'noopener');
-            }
-          },
-        })
-      );
+      if (state.activePortalId === 'port' && isLoggedInPortHost()) {
+        extraBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Kích hoạt FTTH NEW ngay',
+            onClick: () => {
+              const ok = triggerPortFtthMenuAction(pageWindow);
+              if (!ok && state.result) {
+                state.result = {
+                  ...state.result,
+                  message:
+                    'Chưa gọi được menu tự động. Bạn bấm ở menu bên trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm Xem Port hiện tại lại nhé.',
+                };
+                renderMain();
+              }
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Mở lại port.fpt.net',
+            onClick: () => {
+              if (pageWindow && pageWindow.open) {
+                pageWindow.open(res.loginUrl, '_blank', 'noopener');
+              }
+            },
+          })
+        );
+      } else {
+        extraBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập IAM ngay',
+            onClick: () => {
+              if (pageWindow && pageWindow.open) {
+                pageWindow.open(res.loginUrl, '_blank', 'noopener');
+              }
+            },
+          })
+        );
+      }
     }
     if (res.status === 'needs_scan') {
       extraBtns.push(
@@ -3757,19 +3835,8 @@ export function mountRemoteInside({
             onClick: () => loadPortReleaseModal(contractId),
           }),
         ];
-        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
-          errActions.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-secondary-btn',
-              text: 'Mở trang Port đăng nhập',
-              onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
-                }
-              },
-            })
-          );
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập|chưa được kích hoạt/i.test(state.portModalError)) {
+          errActions.push(createPortModalAuthButton(state.portModalLoginUrl));
         }
         sheetParts.push(
           el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
@@ -3890,19 +3957,8 @@ export function mountRemoteInside({
             onClick: () => loadPortAssignModal(contractId),
           }),
         ];
-        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập/i.test(state.portModalError)) {
-          errActions.push(
-            el('button', {
-              type: 'button',
-              className: 'ri-secondary-btn',
-              text: 'Mở trang Port đăng nhập',
-              onClick: () => {
-                if (pageWindow && pageWindow.open) {
-                  pageWindow.open(state.portModalLoginUrl, '_blank', 'noopener');
-                }
-              },
-            })
-          );
+        if (state.portModalLoginUrl && /hết hạn|iam|đăng nhập|chưa được kích hoạt/i.test(state.portModalError)) {
+          errActions.push(createPortModalAuthButton(state.portModalLoginUrl));
         }
         sheetParts.push(
           el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [

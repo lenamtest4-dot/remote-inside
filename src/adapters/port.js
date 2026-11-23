@@ -17,6 +17,7 @@ export const PORT_ENDPOINTS = {
   lookup_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
   assign_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/InsertContract',
   release_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert_UpdateContact',
+  portIndexPage: 'http://port.fpt.net/Index.aspx',
   indexPage: 'http://mvcport.fpt.net/ftth_newport/contract/index',
   insertPage: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert',
   search: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
@@ -119,6 +120,7 @@ export function clearPortContractCache(rawContractId) {
 }
 
 let cachedMvcPortToken = '';
+let portBootstrapInFlight = null;
 
 function safeDecodeToken(raw) {
   if (!raw || typeof raw !== 'string') return '';
@@ -155,9 +157,19 @@ export function extractMvcPortTokenFromText(text) {
   if (!text || typeof text !== 'string') {
     return '';
   }
-  const m = text.match(/https?:\/\/mvcport\.fpt\.net\/[^"'<>\s]*?[?&]Token=([^"'&<>\s#]+)/i);
-  if (!m || !m[1]) return '';
-  return safeDecodeToken(m[1]);
+  const mvcMatch = text.match(
+    /https?:\\?\/\\?\/mvcport\.fpt\.net\\?\/[^"'<>\s]*?(?:[?&]|&amp;)Token=([^"'&<>\s#\\]+)/i
+  );
+  if (mvcMatch && mvcMatch[1]) {
+    return safeDecodeToken(mvcMatch[1]);
+  }
+  const leftMenuMatch = text.match(
+    /LeftMenu\.aspx[^"'<>\s]*?(?:[?&]|&amp;)mvct=([^"'&<>\s#\\]+)/i
+  );
+  if (leftMenuMatch && leftMenuMatch[1]) {
+    return safeDecodeToken(leftMenuMatch[1]);
+  }
+  return '';
 }
 
 function readTokenFromPortLocation(loc) {
@@ -167,11 +179,72 @@ function readTokenFromPortLocation(loc) {
     if (!host.endsWith('mvcport.fpt.net') && !host.endsWith('port.fpt.net')) {
       return '';
     }
-    const sp = new URLSearchParams(loc.search || '');
-    return safeDecodeToken(sp.get('Token') || sp.get('token') || '');
+    const rawSearch = String(loc.search || '');
+    const tokenMatch = rawSearch.match(/[?&]Token=([^&#]+)/i);
+    if (tokenMatch && tokenMatch[1]) {
+      return safeDecodeToken(tokenMatch[1]);
+    }
+    if (host.endsWith('port.fpt.net')) {
+      const mvctMatch = rawSearch.match(/[?&]mvct=([^&#]+)/i);
+      if (mvctMatch && mvctMatch[1]) {
+        return safeDecodeToken(mvctMatch[1]);
+      }
+    }
+    return '';
   } catch {
     return '';
   }
+}
+
+function appendPortTokenToUrl(rawUrl, token) {
+  if (!token) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    if (!/mvcport\.fpt\.net$/i.test(u.hostname) || u.searchParams.has('Token')) {
+      return rawUrl;
+    }
+    u.searchParams.set('Token', token);
+    return u.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+function collectPortCandidateWindows(entryWin) {
+  if (!entryWin) return [];
+  const roots = [entryWin];
+  try {
+    if (entryWin.top) roots.push(entryWin.top);
+  } catch {
+    // ignore cross-origin top access
+  }
+  try {
+    if (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.top) {
+      roots.push(unsafeWindow.top);
+    }
+  } catch {
+    // ignore cross-origin unsafeWindow top access
+  }
+
+  const visited = new Set();
+  const list = [];
+  for (const rootWin of roots) {
+    const windowsToCheck = [rootWin];
+    try {
+      const frameCount = rootWin && rootWin.frames ? Math.min(rootWin.frames.length, 12) : 0;
+      for (let i = 0; i < frameCount; i += 1) {
+        windowsToCheck.push(rootWin.frames[i]);
+      }
+    } catch {
+      // ignore cross-origin frame list
+    }
+    for (const candidateWin of windowsToCheck) {
+      if (!candidateWin || visited.has(candidateWin)) continue;
+      visited.add(candidateWin);
+      list.push(candidateWin);
+    }
+  }
+  return list;
 }
 
 function readTokenFromPortFrame(win) {
@@ -192,6 +265,22 @@ function readTokenFromPortFrame(win) {
     );
     if (cookieToken) return cookieToken;
 
+    const frameEls = doc.querySelectorAll('frame[src], iframe[src]');
+    for (const frameEl of frameEls) {
+      const srcAttr = frameEl.getAttribute('src') || '';
+      const extracted = extractMvcPortTokenFromText(srcAttr) || extractMvcPortTokenFromText(frameEl.src || '');
+      if (extracted) return extracted;
+      if (frameEl.src) {
+        try {
+          const parsedFrameUrl = new URL(frameEl.src);
+          const locTok = readTokenFromPortLocation(parsedFrameUrl);
+          if (locTok) return locTok;
+        } catch {
+          // ignore invalid frame URL
+        }
+      }
+    }
+
     const candidates = doc.querySelectorAll(
       'a[href*="mvcport.fpt.net"], a[href*="Token="], [onclick*="mvcport.fpt.net"], [onclick*="Token="]'
     );
@@ -207,7 +296,7 @@ function readTokenFromPortFrame(win) {
         try {
           const u = new URL(node.href);
           if (u.hostname.toLowerCase().endsWith('mvcport.fpt.net')) {
-            const qTok = safeDecodeToken(u.searchParams.get('Token') || u.searchParams.get('token') || '');
+            const qTok = readTokenFromPortLocation(u);
             if (qTok) return qTok;
           }
         } catch {
@@ -261,39 +350,12 @@ function getMvcPortTokenFromPage() {
       return locToken;
     }
 
-    const roots = [window];
-    try {
-      if (window.top) roots.push(window.top);
-    } catch {
-      // ignore cross-origin top access
-    }
-    try {
-      if (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.top) {
-        roots.push(unsafeWindow.top);
-      }
-    } catch {
-      // ignore cross-origin unsafeWindow top access
-    }
-
-    const visited = new Set();
-    for (const rootWin of roots) {
-      const windowsToCheck = [rootWin];
-      try {
-        const frameCount = rootWin && rootWin.frames ? Math.min(rootWin.frames.length, 12) : 0;
-        for (let i = 0; i < frameCount; i += 1) {
-          windowsToCheck.push(rootWin.frames[i]);
-        }
-      } catch {
-        // ignore cross-origin frame list
-      }
-      for (const candidateWin of windowsToCheck) {
-        if (!candidateWin || visited.has(candidateWin)) continue;
-        visited.add(candidateWin);
-        const frameToken = readTokenFromPortFrame(candidateWin);
-        if (frameToken) {
-          cachedMvcPortToken = frameToken;
-          return frameToken;
-        }
+    const candidateWins = collectPortCandidateWindows(window);
+    for (const candidateWin of candidateWins) {
+      const frameToken = readTokenFromPortFrame(candidateWin);
+      if (frameToken) {
+        cachedMvcPortToken = frameToken;
+        return frameToken;
       }
     }
 
@@ -304,18 +366,100 @@ function getMvcPortTokenFromPage() {
 }
 
 export function buildPortUrl(rawUrl) {
-  const token = getMvcPortTokenFromPage();
-  if (!token) return rawUrl;
-  try {
-    const u = new URL(rawUrl);
-    if (!/mvcport\.fpt\.net$/i.test(u.hostname) || u.searchParams.has('Token')) {
-      return rawUrl;
-    }
-    u.searchParams.set('Token', token);
-    return u.toString();
-  } catch {
-    return rawUrl;
+  return appendPortTokenToUrl(rawUrl, getMvcPortTokenFromPage());
+}
+
+export async function bootstrapMvcPortSession() {
+  if (!isUserscriptEnv()) {
+    return { ok: false, reason: 'preview' };
   }
+  if (portBootstrapInFlight) {
+    return portBootstrapInFlight;
+  }
+
+  portBootstrapInFlight = (async () => {
+    async function fetchTokenFromPortIndex() {
+      const idxRes = await requestPortal({
+        url: PORT_ENDPOINTS.portIndexPage,
+        method: 'GET',
+        timeout: 10000,
+      });
+      if (idxRes && idxRes.ok && !detectPortSessionExpired(idxRes, PORT_ENDPOINTS.portIndexPage).expired) {
+        const extracted = extractMvcPortTokenFromText(idxRes.responseText || '');
+        if (extracted) {
+          cachedMvcPortToken = extracted;
+          return extracted;
+        }
+      }
+      return '';
+    }
+
+    let token = getMvcPortTokenFromPage();
+    let fetchedIndex = false;
+    if (!token) {
+      fetchedIndex = true;
+      token = await fetchTokenFromPortIndex();
+    }
+    if (!token) {
+      return { ok: false, reason: 'no_token' };
+    }
+
+    const warmUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, token);
+    const warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
+    if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
+      return { ok: true, res: warmRes };
+    }
+
+    if (!fetchedIndex) {
+      cachedMvcPortToken = '';
+      const freshToken = await fetchTokenFromPortIndex();
+      if (freshToken && freshToken !== token) {
+        const warmUrl2 = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, freshToken);
+        const warmRes2 = await requestPortal({ url: warmUrl2, method: 'GET', timeout: 10000 });
+        if (warmRes2 && warmRes2.ok && !detectPortSessionExpired(warmRes2, warmUrl2).expired) {
+          return { ok: true, res: warmRes2 };
+        }
+      }
+    }
+
+    return { ok: false, reason: 'warmup_rejected', res: warmRes };
+  })().finally(() => {
+    portBootstrapInFlight = null;
+  });
+
+  return portBootstrapInFlight;
+}
+
+export function triggerPortFtthMenuAction(win = typeof window !== 'undefined' ? window : null) {
+  if (!win) return false;
+  const candidateWins = collectPortCandidateWindows(win);
+  for (const candidate of candidateWins) {
+    try {
+      const frameName = String(candidate.name || '').toLowerCase();
+      const pathname =
+        candidate.location && candidate.location.pathname
+          ? String(candidate.location.pathname).toLowerCase()
+          : '';
+      if (frameName !== 'leftframe' && !pathname.includes('leftmenu.aspx')) {
+        continue;
+      }
+      if (typeof candidate.Action === 'function') {
+        candidate.Action(1322);
+        return true;
+      }
+      const doc = candidate.document;
+      if (doc && doc.querySelector) {
+        const link = doc.querySelector('[onclick*="Action(1322)"]');
+        if (link && typeof link.click === 'function') {
+          link.click();
+          return true;
+        }
+      }
+    } catch {
+      // ignore cross-origin or detached frame errors
+    }
+  }
+  return false;
 }
 
 export function detectPortSessionExpired(res, requestedUrl) {
@@ -376,14 +520,10 @@ async function portRequest({
 
   const expiredCheck = detectPortSessionExpired(res, targetUrl);
   if (expiredCheck.expired) {
-    if (!_didBootstrap && url !== PORT_ENDPOINTS.indexPage) {
-      const token = getMvcPortTokenFromPage();
-      if (token) {
-        const warmUrl = buildPortUrl(PORT_ENDPOINTS.indexPage);
-        const warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
-        if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
-          return portRequest({ url, method, data, headers, timeout, _didBootstrap: true });
-        }
+    if (!_didBootstrap) {
+      const boot = await bootstrapMvcPortSession();
+      if (boot && boot.ok) {
+        return portRequest({ url, method, data, headers, timeout, _didBootstrap: true });
       }
     }
     if (_didBootstrap) {
@@ -403,7 +543,7 @@ async function portRequest({
       ok: false,
       statusType: 'iam_expired',
       message: onLoggedInPortHost
-        ? 'Bạn đã đăng nhập port.fpt.net nhưng phiên FTTH NEW (mvcport.fpt.net) chưa được kích hoạt. Hãy bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần để nạp phiên, rồi bấm thử lại (không cần đăng nhập lại hay F5).'
+        ? 'Bạn đã đăng nhập port.fpt.net nhưng phiên FTTH NEW (mvcport.fpt.net) chưa được kích hoạt. Bấm nút "Kích hoạt FTTH NEW ngay" bên dưới hoặc chọn menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm thử lại (không cần đăng nhập lại hay F5).'
         : 'Phiên đăng nhập Port (port.fpt.net) đã hết hạn hoặc chưa kích hoạt FTTH NEW. Bấm nút bên dưới để mở port.fpt.net đăng nhập rồi vào menu FTTH NEW → Hợp đồng → Tìm kiếm 1 lần (không cần F5).',
       loginUrl: PORTALS.port.url,
       res,

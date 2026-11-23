@@ -4,7 +4,13 @@
  */
 
 import { normalizeContractId } from '../config/portals.js';
-import { detectIamRedirect, isUserscriptEnv, requestPortal } from '../core/transport.js';
+import {
+  canWarmPortalSession,
+  detectIamRedirect,
+  isUserscriptEnv,
+  requestPortal,
+  warmPortalSession,
+} from '../core/transport.js';
 
 export const DEPLOYMENT_ENDPOINTS = {
   partnerMonitor: 'http://partner.fpt.net/pt-portal/monitor',
@@ -647,7 +653,11 @@ async function warmupAndRetryFoxJson(url, bodyObj, warmupUrl, opts = {}) {
   if (first.status !== 'iam_expired' || !warmupUrl) {
     return first;
   }
-  await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  if (canWarmPortalSession()) {
+    await warmPortalSession(warmupUrl, { timeout: 12000 });
+  } else {
+    await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  }
   return postFoxJson(url, bodyObj, opts);
 }
 

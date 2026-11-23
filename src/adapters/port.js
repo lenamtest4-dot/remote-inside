@@ -7,10 +7,12 @@
 
 import { PORTALS, validateContractId } from '../config/portals.js';
 import {
+  canWarmPortalSession,
   detectIamRedirect,
   isUserscriptEnv,
   requestPortal,
   sleep,
+  warmPortalSession,
 } from '../core/transport.js';
 
 export const PORT_ENDPOINTS = {
@@ -382,22 +384,25 @@ export async function bootstrapMvcPortSession() {
   }
 
   portBootstrapInFlight = (async () => {
-    async function fetchTokenFromPortIndex() {
+    async function fetchTokenFromPortIndex(allowWarmup = true) {
       const idxRes = await requestPortal({
         url: PORT_ENDPOINTS.portIndexPage,
         method: 'GET',
         timeout: 8000,
       });
-      if (!idxRes || !idxRes.ok) {
-        return '';
-      }
-      const idxFinalUrl = String(idxRes.finalUrl || '');
-      const idxBody = String(idxRes.responseText || '');
-      if (
+      const idxFinalUrl = String((idxRes && idxRes.finalUrl) || '');
+      const idxBody = String((idxRes && idxRes.responseText) || '');
+      const redirectedToAuth =
         /\/LoginPage\.aspx(?:\?|$|#)/i.test(idxFinalUrl) ||
         /https?:\/\/[^/]*(?:iam|sso|login|auth|signin|oauth|cas)/i.test(idxFinalUrl) ||
-        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody)
-      ) {
+        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody);
+      if (!idxRes || !idxRes.ok || redirectedToAuth) {
+        if (redirectedToAuth && allowWarmup && canWarmPortalSession()) {
+          const warm = await warmPortalSession(PORTALS.port.url, { timeout: 12000 });
+          if (warm && warm.ok) {
+            return fetchTokenFromPortIndex(false);
+          }
+        }
         return '';
       }
       const extracted = extractMvcPortTokenFromText(idxBody);

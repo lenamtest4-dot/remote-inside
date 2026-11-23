@@ -4,11 +4,16 @@
  * Khi mo file preview.html doc lap, tu dong chay che do xem thu (Demo).
  */
 
+import { IAM_SSO_TARGETS } from '../config/portals.js';
+
 const IAM_HOST_RE = /(iam|sso|login|auth|signin|oauth|cas)/i;
 const LOGIN_PASSWORD_INPUT_RE = /<input[^>]+type\s*=\s*["']?password["']?/i;
 const LOGIN_TITLE_RE = /<title[^>]*>[^<]*(iam|sign\s*in|đăng\s*nhập|login)[^<]*<\/title>/i;
+const WARM_CACHE_TTL_MS = 25000;
 
 let androidReqSeq = 0;
+const warmCacheByHost = new Map();
+const inFlightWarmByHost = new Map();
 
 export function isAndroidAppEnv() {
   return (
@@ -61,24 +66,10 @@ export function openExternalOrPortalUrl(
   return false;
 }
 
-function requestViaAndroidNative({
-  url,
-  method = 'GET',
-  headers = {},
-  data = null,
-  timeout = 15000,
-} = {}) {
-  if (typeof window === 'undefined' || !isAndroidAppEnv()) {
-    return Promise.resolve({
-      ok: false,
-      mode: 'android',
-      status: 0,
-      finalUrl: url || '',
-      responseText: '',
-      error: 'BRIDGE_UNAVAILABLE',
-    });
+function ensureNativePendingBridge() {
+  if (typeof window === 'undefined') {
+    return;
   }
-
   if (!window.__riNativePending || typeof window.__riNativePending.set !== 'function') {
     window.__riNativePending = new Map();
   }
@@ -120,11 +111,23 @@ function requestViaAndroidNative({
         entry.resolve({
           ok: false,
           mode: 'android',
-          status: 0,
+          status: entry.kind === 'warm' ? 'invalid_response' : 0,
           finalUrl: entry.url || '',
           responseText: '',
           responseHeaders: '',
           error: 'INVALID_BRIDGE_RESPONSE',
+        });
+        return;
+      }
+
+      if (entry.kind === 'warm' || typeof parsed.status === 'string') {
+        entry.resolve({
+          ok: Boolean(parsed.ok),
+          mode: 'android',
+          status: typeof parsed.status === 'string' ? parsed.status : parsed.ok ? 'ok' : 'error',
+          finalUrl: String(parsed.finalUrl || entry.url || ''),
+          sawAuth: Boolean(parsed.sawAuth),
+          error: parsed.error ? String(parsed.error) : undefined,
         });
         return;
       }
@@ -140,6 +143,27 @@ function requestViaAndroidNative({
       });
     };
   }
+}
+
+function requestViaAndroidNative({
+  url,
+  method = 'GET',
+  headers = {},
+  data = null,
+  timeout = 15000,
+} = {}) {
+  if (typeof window === 'undefined' || !isAndroidAppEnv()) {
+    return Promise.resolve({
+      ok: false,
+      mode: 'android',
+      status: 0,
+      finalUrl: url || '',
+      responseText: '',
+      error: 'BRIDGE_UNAVAILABLE',
+    });
+  }
+
+  ensureNativePendingBridge();
 
   const reqId = `ri_${++androidReqSeq}_${Date.now()}`;
   const numericTimeout = Math.max(1000, Number(timeout) || 15000);
@@ -161,6 +185,7 @@ function requestViaAndroidNative({
     }, numericTimeout + 3000);
 
     window.__riNativePending.set(reqId, {
+      kind: 'http',
       resolve,
       timer,
       url: url || '',
@@ -197,6 +222,159 @@ function requestViaAndroidNative({
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function canWarmPortalSession() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window !== 'undefined' &&
+    Boolean(window.RemoteInsideNative) &&
+    typeof window.RemoteInsideNative.warmPortalSession === 'function'
+  );
+}
+
+export function clearWarmSessionCache() {
+  warmCacheByHost.clear();
+}
+
+export function warmPortalSession(url, { timeout = 12000, force = false } = {}) {
+  if (!url || typeof url !== 'string') {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: '' });
+  }
+  if (!canWarmPortalSession()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', finalUrl: url });
+  }
+
+  const host = extractHost(url);
+  if (!host) {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: url });
+  }
+
+  if (!force) {
+    const cached = warmCacheByHost.get(host);
+    if (cached && Date.now() - cached.at < WARM_CACHE_TTL_MS) {
+      return Promise.resolve({ ...cached, cached: true });
+    }
+  }
+
+  const existingInFlight = inFlightWarmByHost.get(host);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_warm_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(3000, Math.min(20000, Number(timeout) || 12000));
+
+  const promise = new Promise((resolve) => {
+    const finish = (outcome) => {
+      const normalized = {
+        ok: Boolean(outcome && outcome.ok),
+        status: String((outcome && outcome.status) || 'error'),
+        finalUrl: String((outcome && outcome.finalUrl) || url),
+        sawAuth: Boolean(outcome && outcome.sawAuth),
+        at: Date.now(),
+      };
+      warmCacheByHost.set(host, normalized);
+      inFlightWarmByHost.delete(host);
+      resolve(normalized);
+    };
+
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      finish({ ok: false, status: 'timeout', finalUrl: url });
+    }, numericTimeout + 4000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'warm',
+      resolve: finish,
+      timer,
+      url,
+    });
+
+    try {
+      window.RemoteInsideNative.warmPortalSession(
+        JSON.stringify({
+          reqId,
+          url,
+          timeout: numericTimeout,
+        })
+      );
+    } catch {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      finish({ ok: false, status: 'error', finalUrl: url });
+    }
+  });
+
+  inFlightWarmByHost.set(host, promise);
+  return promise;
+}
+
+export async function syncIamSsoSessions({
+  targets = IAM_SSO_TARGETS,
+  skipHost = '',
+  force = true,
+  onProgress = null,
+  afterTarget = null,
+} = {}) {
+  const list = Array.isArray(targets) ? targets : [];
+  const normalizedSkip = String(skipHost || '').trim().toLowerCase();
+  if (force) {
+    clearWarmSessionCache();
+  }
+
+  const okTargets = [];
+  const needsLoginTargets = [];
+  const offlineTargets = [];
+  const results = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const target = list[i];
+    if (!target || !target.url) continue;
+    const targetHost = extractHost(target.url);
+    const matchesSkip =
+      Boolean(normalizedSkip) &&
+      (targetHost === normalizedSkip || targetHost.endsWith(`.${normalizedSkip}`));
+
+    let res;
+    if (matchesSkip) {
+      res = { ok: true, status: 'already_signed_in', finalUrl: target.url, skipped: true };
+    } else {
+      res = await warmPortalSession(target.url, { timeout: 12000, force });
+    }
+
+    if (res.ok && typeof afterTarget === 'function') {
+      try {
+        await afterTarget(target, res);
+      } catch {
+        // ignore follow-up hook errors so remaining SSO targets still sync
+      }
+    }
+
+    if (res.ok) {
+      okTargets.push(target);
+    } else if (res.status === 'network_error' || res.status === 'timeout' || res.status === 'ssl_error') {
+      offlineTargets.push(target);
+    } else {
+      needsLoginTargets.push(target);
+    }
+
+    results.push({ target, res });
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress({ index: i + 1, total: list.length, target, res });
+      } catch {
+        // ignore UI callback errors
+      }
+    }
+  }
+
+  return { okTargets, needsLoginTargets, offlineTargets, results };
 }
 
 function extractHost(rawUrl) {
@@ -343,7 +521,10 @@ export function requestPortal({
 /**
  * Kiem tra nhanh tinh trang ket noi VPN & phien dang nhap IAM cua 1 cong cu.
  */
-export async function checkPortalSession(portal, { checkUrlOverride = '' } = {}) {
+export async function checkPortalSession(
+  portal,
+  { checkUrlOverride = '', allowSsoWarmup = true } = {}
+) {
   if (!portal || !portal.url) {
     return {
       state: 'offline',
@@ -382,6 +563,28 @@ export async function checkPortalSession(portal, { checkUrlOverride = '' } = {})
   });
 
   if (iamCheck.expired) {
+    if (allowSsoWarmup && portal.iamSso && canWarmPortalSession()) {
+      const warm = await warmPortalSession(portal.url, { timeout: 12000 });
+      if (warm && warm.ok) {
+        const retryRes = await requestPortal({ url: checkUrl, method: 'GET', timeout: 10000 });
+        if (retryRes && retryRes.status >= 200 && retryRes.status < 400) {
+          const retryIam = detectIamRedirect({
+            status: retryRes.status,
+            finalUrl: retryRes.finalUrl,
+            responseText: retryRes.responseText,
+            requestedUrl: checkUrl,
+          });
+          if (!retryIam.expired) {
+            return {
+              state: 'ok',
+              label: 'IAM ổn',
+              loginUrl: portal.url,
+              detail: `Đã tự động đồng bộ phiên IAM cho ${portal.fullName}.`,
+            };
+          }
+        }
+      }
+    }
     return {
       state: 'iam_expired',
       label: 'Cần đăng nhập IAM',

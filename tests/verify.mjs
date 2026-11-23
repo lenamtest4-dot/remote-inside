@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import { fileURLToPath } from 'node:url';
 
 import {
+  IAM_SSO_TARGETS,
   PORTALS,
   PORTAL_ORDER,
   normalizeContractId,
@@ -19,12 +20,17 @@ import {
   setState,
 } from '../src/core/storage.js';
 import {
+  canWarmPortalSession,
+  checkPortalSession,
+  clearWarmSessionCache,
   detectIamRedirect,
   getRuntimeEnv,
   isAndroidAppEnv,
   isUserscriptEnv,
   openExternalOrPortalUrl,
   requestPortal,
+  syncIamSsoSessions,
+  warmPortalSession,
 } from '../src/core/transport.js';
 import {
   buildScanReport,
@@ -2527,6 +2533,250 @@ async function runTests() {
     'Built deployment ticket bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: FOX-ERP Phiếu triển khai tests passed.');
+
+  console.log('19. Testing Unified 1-Time IAM + Azure AD SSO Warmup & Sync...');
+  assert.equal(PORTALS.inside.iamSso, true);
+  assert.equal(PORTALS.port.iamSso, true);
+  assert.equal(PORTALS.recall.iamSso, true);
+  assert.equal(PORTALS.radius.iamSso, true);
+  assert.equal(PORTALS.camera.iamSso, false);
+  assert.equal(IAM_SSO_TARGETS.length, 6);
+  assert.equal(
+    IAM_SSO_TARGETS.some((t) => t.portalId === 'camera' || /fcam\.vn/.test(t.url)),
+    false,
+    'IAM_SSO_TARGETS must exclude Camera portal'
+  );
+
+  const prevWin19 = globalThis.window;
+  const hadWin19 = 'window' in globalThis;
+  try {
+    clearWarmSessionCache();
+    let warmCalls = [];
+    let httpCalls = [];
+    let warmOutcomes = {};
+    let portalIndexCount = 0;
+    let partnerAuthRecovered = false;
+    let portalCookieWarmed = false;
+    let mvcInsideRecovered = false;
+
+    const fakePending = new Map();
+    globalThis.window = {
+      location: { hostname: 'appassets.androidplatform.net', pathname: '/assets/remote-inside.html' },
+      __riNativePending: fakePending,
+      RemoteInsideNative: {
+        httpRequest(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          httpCalls.push(parsed.url);
+          queueMicrotask(() => {
+            let status = 200;
+            let finalUrl = parsed.url;
+            let responseText = '<html>OK</html>';
+
+            if (parsed.url === PORT_ENDPOINTS.portIndexPage) {
+              portalIndexCount += 1;
+              if (!portalCookieWarmed) {
+                finalUrl = 'http://port.fpt.net/LoginPage.aspx';
+                responseText = '<html><title>Login</title></html>';
+              } else {
+                finalUrl = PORT_ENDPOINTS.portIndexPage;
+                responseText = '<html><a href="http://mvcport.fpt.net/ftth_newport/contract/index?mvct=warmtoken19">FTTH</a></html>';
+              }
+            } else if (parsed.url.startsWith(PORT_ENDPOINTS.indexPage)) {
+              finalUrl = parsed.url;
+              responseText = '<html><div>FTTH NEW</div></html>';
+            } else if (parsed.url === PORTALS.radius.url) {
+              if (!warmCalls.includes(PORTALS.radius.url)) {
+                finalUrl = 'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth';
+                responseText = '<html><title>IAM</title></html>';
+              }
+            } else if (parsed.url === PORTALS.camera.url) {
+              finalUrl = 'https://fli-mngt.fcam.vn/login';
+              responseText = '<html><input type="password" /></html>';
+            } else if (parsed.url === DEPLOYMENT_ENDPOINTS.partnerGetContract) {
+              if (!partnerAuthRecovered) {
+                status = 401;
+                finalUrl = 'http://iam.fpt.net/auth/realms/fpt';
+                responseText = 'Unauthorized';
+              } else {
+                responseText = JSON.stringify({
+                  Succeeded: true,
+                  Data: [
+                    {
+                      type: 'tk',
+                      url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket?q=h19',
+                      isBackLog: false,
+                    },
+                  ],
+                });
+              }
+            } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getTicketInfo) {
+              responseText = JSON.stringify({
+                Succeeded: true,
+                Data: {
+                  ObjId: 1000001,
+                  Contract: 'SGN123456',
+                  FullName: 'NGUYEN VAN MAU',
+                  SupportInfInfo: [{ SupId: 900001, DepCode: 'TK.SGN123456.900001' }],
+                },
+              });
+            } else if (parsed.url === INSIDE_ENDPOINTS.bypass.page) {
+              if (!mvcInsideRecovered) {
+                status = 401;
+                finalUrl = 'http://iam.fpt.net/auth/realms/fpt';
+                responseText = 'Unauthorized';
+              } else {
+                responseText = '<html><body><input id="hdUser" value="demo.user" /></body></html>';
+              }
+            } else {
+              responseText = JSON.stringify({ Succeeded: true, Data: [] });
+            }
+
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({
+                ok: status >= 200 && status < 400,
+                status,
+                finalUrl,
+                responseText,
+                responseHeaders: '',
+              })
+            );
+          });
+        },
+        warmPortalSession(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          warmCalls.push(parsed.url);
+          queueMicrotask(() => {
+            const override = warmOutcomes[parsed.url];
+            if (parsed.url === PORTALS.port.url && (!override || override.ok)) {
+              portalCookieWarmed = true;
+            }
+            if (parsed.url === DEPLOYMENT_ENDPOINTS.partnerMonitor) {
+              partnerAuthRecovered = true;
+            }
+            if (parsed.url === 'http://mvc.inside.fpt.net/') {
+              mvcInsideRecovered = true;
+            }
+            const resObj = override || {
+              ok: true,
+              status: 'ok',
+              finalUrl: parsed.url,
+              sawAuth: true,
+            };
+            globalThis.window.__riNativeResolve(parsed.reqId, JSON.stringify(resObj));
+          });
+        },
+      },
+    };
+
+    assert.equal(canWarmPortalSession(), true);
+
+    const w1 = await warmPortalSession(PORTALS.inside.url, { timeout: 10000 });
+    assert.equal(w1.ok, true);
+    assert.equal(w1.status, 'ok');
+    const w2 = await warmPortalSession(PORTALS.inside.url, { timeout: 10000 });
+    assert.equal(w2.cached, true);
+    assert.equal(warmCalls.filter((u) => u === PORTALS.inside.url).length, 1);
+
+    clearWarmSessionCache();
+    warmCalls = [];
+    warmOutcomes[PORTALS.recall.url] = {
+      ok: false,
+      status: 'needs_login',
+      finalUrl: 'http://iam.fpt.net/auth/realms/fpt',
+      sawAuth: true,
+    };
+    let afterPortRan = false;
+    let progressCount = 0;
+    const syncRes = await syncIamSsoSessions({
+      targets: IAM_SSO_TARGETS,
+      skipHost: 'inside.fpt.net',
+      force: true,
+      afterTarget: async (target) => {
+        if (target.id === 'port') afterPortRan = true;
+      },
+      onProgress: () => {
+        progressCount += 1;
+      },
+    });
+    assert.equal(progressCount, 6);
+    assert.equal(afterPortRan, true);
+    assert.equal(warmCalls.includes(PORTALS.inside.url), false, 'skipHost must skip redundant warmup on signed-in host');
+    assert.equal(warmCalls.includes(PORTALS.port.url), true);
+    assert.equal(syncRes.okTargets.length, 5);
+    assert.equal(syncRes.needsLoginTargets.length, 1);
+    assert.equal(syncRes.needsLoginTargets[0].id, 'recall');
+
+    clearWarmSessionCache();
+    warmCalls = [];
+    const radiusSession = await checkPortalSession(PORTALS.radius);
+    assert.equal(radiusSession.state, 'ok', 'checkPortalSession must auto-warm IAM portal on Android');
+    assert.equal(warmCalls.includes(PORTALS.radius.url), true);
+
+    const camCallsBefore = warmCalls.length;
+    const camSession = await checkPortalSession(PORTALS.camera);
+    assert.equal(camSession.state, 'iam_expired', 'Camera must stay separate from IAM warmup');
+    assert.equal(warmCalls.length, camCallsBefore);
+
+    clearWarmSessionCache();
+    warmCalls = [];
+    portalCookieWarmed = false;
+    const bootRes = await bootstrapMvcPortSession();
+    assert.equal(bootRes.ok, true, 'bootstrapMvcPortSession must recover Port session via warmPortalSession');
+    assert.equal(warmCalls.includes(PORTALS.port.url), true);
+    assert.ok(portalIndexCount >= 2);
+
+    clearWarmSessionCache();
+    warmCalls = [];
+    partnerAuthRecovered = false;
+    const recoveredDeploy = await fetchDeploymentTicket('SGN123456');
+    assert.equal(recoveredDeploy.status, 'ok', 'fetchDeploymentTicket must warm Partner/FOX-ERP when expired');
+    assert.equal(warmCalls.includes(DEPLOYMENT_ENDPOINTS.partnerMonitor), true);
+
+    clearWarmSessionCache();
+    warmCalls = [];
+    mvcInsideRecovered = false;
+    const recoveredBypass = await fetchInsideByPassMeta({ forceRefresh: true });
+    assert.equal(recoveredBypass.status, 'ok', 'fetchInsideByPassMeta must warm mvc.inside when expired');
+    assert.equal(warmCalls.includes('http://mvc.inside.fpt.net/'), true);
+  } finally {
+    clearWarmSessionCache();
+    if (hadWin19) {
+      globalThis.window = prevWin19;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
+  for (const host of ['iam.fpt.net', 'login.microsoftonline.com']) {
+    assert.ok(
+      userscriptContent.includes(`// @connect      ${host}`),
+      `Userscript header must include @connect ${host}`
+    );
+  }
+  const mainActivitySrc = fs.readFileSync(
+    path.join(ROOT_DIR, 'android', 'app', 'src', 'main', 'java', 'com', 'remoteinside', 'app', 'MainActivity.kt'),
+    'utf8'
+  );
+  const layoutXmlSrc = fs.readFileSync(
+    path.join(ROOT_DIR, 'android', 'app', 'src', 'main', 'res', 'layout', 'activity_main.xml'),
+    'utf8'
+  );
+  for (const token of [
+    'ssoWebView',
+    'fun warmPortalSession',
+    'private fun isAuthHost',
+    'private fun isLoginPath',
+    'window.__riOnPortalBrowserClosed',
+  ]) {
+    assert.ok(mainActivitySrc.includes(token), `MainActivity.kt must contain ${token}`);
+  }
+  assert.ok(layoutXmlSrc.includes('android:id="@+id/ssoWebView"'), 'activity_main.xml must include ssoWebView');
+  for (const bundleToken of ['warmPortalSession', 'syncIamSsoSessions', 'Đăng nhập IAM (1 lần cho tất cả)']) {
+    assert.ok(androidAssetContent.includes(bundleToken), `Android bundle must include ${bundleToken}`);
+    assert.ok(userscriptContent.includes(bundleToken), `Userscript bundle must include ${bundleToken}`);
+  }
+  console.log('   OK: Unified 1-Time IAM + Azure AD SSO tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

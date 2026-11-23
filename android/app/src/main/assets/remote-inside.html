@@ -19,14 +19,22 @@
   <script>
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.11.1";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_VERSION__ = "0.12.0";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
  * Cau hinh 5 cong noi bo FPT va cac thao tac chuan hoa Ma Hop Dong.
  */
 const PORTAL_ORDER = ['inside', 'port', 'camera', 'recall', 'radius'];
+const IAM_SSO_TARGETS = [
+  { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
+  { id: 'partner', portalId: 'inside', label: 'Partner', url: 'https://partner.fpt.net/monitor' },
+  { id: 'fox_erp', portalId: 'inside', label: 'FOX-ERP', url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket' },
+  { id: 'port', portalId: 'port', label: 'Port (FTTH NEW)', url: 'http://port.fpt.net/' },
+  { id: 'recall', portalId: 'recall', label: 'Vật tư', url: 'https://nextgen.fpt.net/resource/recall' },
+  { id: 'radius', portalId: 'radius', label: 'Radius', url: 'http://radius-portal.fpt.net/networkConnection' },
+];
 const PORTALS = {
   inside: {
     id: 'inside',
@@ -34,6 +42,7 @@ const PORTALS = {
     fullName: 'inside.fpt.net',
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
+    iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 7 lệnh',
     description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
@@ -108,6 +117,7 @@ const PORTALS = {
     url: 'http://port.fpt.net/',
     sessionCheckUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
     hosts: ['port.fpt.net', 'mvcport.fpt.net'],
+    iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 3 lệnh',
     description: 'FTTH NEW: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi mới và Thu hồi Port.',
@@ -143,6 +153,7 @@ const PORTALS = {
     fullName: 'fli-mngt.fcam.vn',
     url: 'https://fli-mngt.fcam.vn/',
     hosts: ['fli-mngt.fcam.vn'],
+    iamSso: false,
     status: 'planned',
     statusLabel: 'Sắp ghép',
     description: 'Kiểm tra trạng thái và hỗ trợ xử lý lỗi Camera.',
@@ -170,6 +181,7 @@ const PORTALS = {
     fullName: 'nextgen.fpt.net/resource/recall',
     url: 'https://nextgen.fpt.net/resource/recall',
     hosts: ['nextgen.fpt.net'],
+    iamSso: true,
     status: 'planned',
     statusLabel: 'Sắp ghép',
     description: 'Tra cứu và cập nhật các vật tư thu hồi theo hợp đồng.',
@@ -197,6 +209,7 @@ const PORTALS = {
     fullName: 'radius-portal.fpt.net',
     url: 'http://radius-portal.fpt.net/networkConnection',
     hosts: ['radius-portal.fpt.net'],
+    iamSso: true,
     status: 'planned',
     statusLabel: 'Sắp ghép',
     description: 'Kiểm tra kết nối và bỏ IPNAT, IPv6 cho hợp đồng.',
@@ -399,8 +412,11 @@ function clearRecentContracts(storageAdapter = null) {
 const IAM_HOST_RE = /(iam|sso|login|auth|signin|oauth|cas)/i;
 const LOGIN_PASSWORD_INPUT_RE = /<input[^>]+type\s*=\s*["']?password["']?/i;
 const LOGIN_TITLE_RE = /<title[^>]*>[^<]*(iam|sign\s*in|đăng\s*nhập|login)[^<]*<\/title>/i;
+const WARM_CACHE_TTL_MS = 25000;
 
 let androidReqSeq = 0;
+const warmCacheByHost = new Map();
+const inFlightWarmByHost = new Map();
 function isAndroidAppEnv() {
   return (
     typeof window !== 'undefined' &&
@@ -449,24 +465,10 @@ function openExternalOrPortalUrl(
   return false;
 }
 
-function requestViaAndroidNative({
-  url,
-  method = 'GET',
-  headers = {},
-  data = null,
-  timeout = 15000,
-} = {}) {
-  if (typeof window === 'undefined' || !isAndroidAppEnv()) {
-    return Promise.resolve({
-      ok: false,
-      mode: 'android',
-      status: 0,
-      finalUrl: url || '',
-      responseText: '',
-      error: 'BRIDGE_UNAVAILABLE',
-    });
+function ensureNativePendingBridge() {
+  if (typeof window === 'undefined') {
+    return;
   }
-
   if (!window.__riNativePending || typeof window.__riNativePending.set !== 'function') {
     window.__riNativePending = new Map();
   }
@@ -508,11 +510,23 @@ function requestViaAndroidNative({
         entry.resolve({
           ok: false,
           mode: 'android',
-          status: 0,
+          status: entry.kind === 'warm' ? 'invalid_response' : 0,
           finalUrl: entry.url || '',
           responseText: '',
           responseHeaders: '',
           error: 'INVALID_BRIDGE_RESPONSE',
+        });
+        return;
+      }
+
+      if (entry.kind === 'warm' || typeof parsed.status === 'string') {
+        entry.resolve({
+          ok: Boolean(parsed.ok),
+          mode: 'android',
+          status: typeof parsed.status === 'string' ? parsed.status : parsed.ok ? 'ok' : 'error',
+          finalUrl: String(parsed.finalUrl || entry.url || ''),
+          sawAuth: Boolean(parsed.sawAuth),
+          error: parsed.error ? String(parsed.error) : undefined,
         });
         return;
       }
@@ -528,6 +542,27 @@ function requestViaAndroidNative({
       });
     };
   }
+}
+
+function requestViaAndroidNative({
+  url,
+  method = 'GET',
+  headers = {},
+  data = null,
+  timeout = 15000,
+} = {}) {
+  if (typeof window === 'undefined' || !isAndroidAppEnv()) {
+    return Promise.resolve({
+      ok: false,
+      mode: 'android',
+      status: 0,
+      finalUrl: url || '',
+      responseText: '',
+      error: 'BRIDGE_UNAVAILABLE',
+    });
+  }
+
+  ensureNativePendingBridge();
 
   const reqId = `ri_${++androidReqSeq}_${Date.now()}`;
   const numericTimeout = Math.max(1000, Number(timeout) || 15000);
@@ -549,6 +584,7 @@ function requestViaAndroidNative({
     }, numericTimeout + 3000);
 
     window.__riNativePending.set(reqId, {
+      kind: 'http',
       resolve,
       timer,
       url: url || '',
@@ -584,6 +620,155 @@ function requestViaAndroidNative({
 }
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function canWarmPortalSession() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window !== 'undefined' &&
+    Boolean(window.RemoteInsideNative) &&
+    typeof window.RemoteInsideNative.warmPortalSession === 'function'
+  );
+}
+function clearWarmSessionCache() {
+  warmCacheByHost.clear();
+}
+function warmPortalSession(url, { timeout = 12000, force = false } = {}) {
+  if (!url || typeof url !== 'string') {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: '' });
+  }
+  if (!canWarmPortalSession()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', finalUrl: url });
+  }
+
+  const host = extractHost(url);
+  if (!host) {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: url });
+  }
+
+  if (!force) {
+    const cached = warmCacheByHost.get(host);
+    if (cached && Date.now() - cached.at < WARM_CACHE_TTL_MS) {
+      return Promise.resolve({ ...cached, cached: true });
+    }
+  }
+
+  const existingInFlight = inFlightWarmByHost.get(host);
+  if (existingInFlight) {
+    return existingInFlight;
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_warm_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(3000, Math.min(20000, Number(timeout) || 12000));
+
+  const promise = new Promise((resolve) => {
+    const finish = (outcome) => {
+      const normalized = {
+        ok: Boolean(outcome && outcome.ok),
+        status: String((outcome && outcome.status) || 'error'),
+        finalUrl: String((outcome && outcome.finalUrl) || url),
+        sawAuth: Boolean(outcome && outcome.sawAuth),
+        at: Date.now(),
+      };
+      warmCacheByHost.set(host, normalized);
+      inFlightWarmByHost.delete(host);
+      resolve(normalized);
+    };
+
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      finish({ ok: false, status: 'timeout', finalUrl: url });
+    }, numericTimeout + 4000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'warm',
+      resolve: finish,
+      timer,
+      url,
+    });
+
+    try {
+      window.RemoteInsideNative.warmPortalSession(
+        JSON.stringify({
+          reqId,
+          url,
+          timeout: numericTimeout,
+        })
+      );
+    } catch {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      finish({ ok: false, status: 'error', finalUrl: url });
+    }
+  });
+
+  inFlightWarmByHost.set(host, promise);
+  return promise;
+}
+async function syncIamSsoSessions({
+  targets = IAM_SSO_TARGETS,
+  skipHost = '',
+  force = true,
+  onProgress = null,
+  afterTarget = null,
+} = {}) {
+  const list = Array.isArray(targets) ? targets : [];
+  const normalizedSkip = String(skipHost || '').trim().toLowerCase();
+  if (force) {
+    clearWarmSessionCache();
+  }
+
+  const okTargets = [];
+  const needsLoginTargets = [];
+  const offlineTargets = [];
+  const results = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const target = list[i];
+    if (!target || !target.url) continue;
+    const targetHost = extractHost(target.url);
+    const matchesSkip =
+      Boolean(normalizedSkip) &&
+      (targetHost === normalizedSkip || targetHost.endsWith(`.${normalizedSkip}`));
+
+    let res;
+    if (matchesSkip) {
+      res = { ok: true, status: 'already_signed_in', finalUrl: target.url, skipped: true };
+    } else {
+      res = await warmPortalSession(target.url, { timeout: 12000, force });
+    }
+
+    if (res.ok && typeof afterTarget === 'function') {
+      try {
+        await afterTarget(target, res);
+      } catch {
+        // ignore follow-up hook errors so remaining SSO targets still sync
+      }
+    }
+
+    if (res.ok) {
+      okTargets.push(target);
+    } else if (res.status === 'network_error' || res.status === 'timeout' || res.status === 'ssl_error') {
+      offlineTargets.push(target);
+    } else {
+      needsLoginTargets.push(target);
+    }
+
+    results.push({ target, res });
+    if (typeof onProgress === 'function') {
+      try {
+        onProgress({ index: i + 1, total: list.length, target, res });
+      } catch {
+        // ignore UI callback errors
+      }
+    }
+  }
+
+  return { okTargets, needsLoginTargets, offlineTargets, results };
 }
 
 function extractHost(rawUrl) {
@@ -730,7 +915,10 @@ function requestPortal({
 /**
  * Kiem tra nhanh tinh trang ket noi VPN & phien dang nhap IAM cua 1 cong cu.
  */
-async function checkPortalSession(portal, { checkUrlOverride = '' } = {}) {
+async function checkPortalSession(
+  portal,
+  { checkUrlOverride = '', allowSsoWarmup = true } = {}
+) {
   if (!portal || !portal.url) {
     return {
       state: 'offline',
@@ -769,6 +957,28 @@ async function checkPortalSession(portal, { checkUrlOverride = '' } = {}) {
   });
 
   if (iamCheck.expired) {
+    if (allowSsoWarmup && portal.iamSso && canWarmPortalSession()) {
+      const warm = await warmPortalSession(portal.url, { timeout: 12000 });
+      if (warm && warm.ok) {
+        const retryRes = await requestPortal({ url: checkUrl, method: 'GET', timeout: 10000 });
+        if (retryRes && retryRes.status >= 200 && retryRes.status < 400) {
+          const retryIam = detectIamRedirect({
+            status: retryRes.status,
+            finalUrl: retryRes.finalUrl,
+            responseText: retryRes.responseText,
+            requestedUrl: checkUrl,
+          });
+          if (!retryIam.expired) {
+            return {
+              state: 'ok',
+              label: 'IAM ổn',
+              loginUrl: portal.url,
+              detail: `Đã tự động đồng bộ phiên IAM cho ${portal.fullName}.`,
+            };
+          }
+        }
+      }
+    }
     return {
       state: 'iam_expired',
       label: 'Cần đăng nhập IAM',
@@ -3236,7 +3446,7 @@ function getLocationCandidates() {
   return candidates;
 }
 
-async function fetchInsideEndpoint(url, acceptHtml = false) {
+async function fetchInsideEndpoint(url, acceptHtml = false, _didSsoWarmup = false) {
   const res = await requestPortal({
     url,
     method: 'GET',
@@ -3257,6 +3467,15 @@ async function fetchInsideEndpoint(url, acceptHtml = false) {
     requestedUrl: url,
   });
   if (iam.expired) {
+    if (!_didSsoWarmup && canWarmPortalSession()) {
+      const warmUrl = /mvc\.inside\.fpt\.net/i.test(url)
+        ? 'http://mvc.inside.fpt.net/'
+        : PORTALS.inside.url;
+      const warm = await warmPortalSession(warmUrl, { timeout: 12000 });
+      if (warm && warm.ok) {
+        return fetchInsideEndpoint(url, acceptHtml, true);
+      }
+    }
     return { iamExpired: true, loginUrl: res.finalUrl || PORTALS.inside.url };
   }
 
@@ -3492,16 +3711,19 @@ async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
     searchValue: contractId,
   });
 
-  const res = await requestPortal({
-    url: INSIDE_ENDPOINTS.kill_session.search,
-    method: 'POST',
-    headers: {
-      ...AJAX_HEADERS,
-      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-    },
-    data: body.toString(),
-    timeout: 15000,
-  });
+  const sendSearch = () =>
+    requestPortal({
+      url: INSIDE_ENDPOINTS.kill_session.search,
+      method: 'POST',
+      headers: {
+        ...AJAX_HEADERS,
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+      },
+      data: body.toString(),
+      timeout: 15000,
+    });
+
+  let res = await sendSearch();
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -3512,12 +3734,33 @@ async function fetchInsideOnlineSessions(rawContractId, ctx = {}) {
     };
   }
 
-  const iam = detectIamRedirect({
+  let iam = detectIamRedirect({
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
     requestedUrl: INSIDE_ENDPOINTS.kill_session.search,
   });
+  if (iam.expired && canWarmPortalSession()) {
+    const warm = await warmPortalSession('http://mvc.inside.fpt.net/', { timeout: 12000 });
+    if (warm && warm.ok) {
+      res = await sendSearch();
+      if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+        return {
+          status: 'error',
+          message:
+            'Không kết nối được tới mvc.inside.fpt.net để tìm phiên đang chạy. Hãy kiểm tra VPN.',
+          loginUrl: PORTALS.inside.url,
+          sessions: [],
+        };
+      }
+      iam = detectIamRedirect({
+        status: res.status,
+        finalUrl: res.finalUrl,
+        responseText: res.responseText,
+        requestedUrl: INSIDE_ENDPOINTS.kill_session.search,
+      });
+    }
+  }
   if (iam.expired) {
     return {
       status: 'iam_expired',
@@ -5447,11 +5690,14 @@ async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = false }
     return { status: 'ok', mode: 'live', meta: INSIDE_BYPASS_META_CACHE.meta };
   }
 
-  const res = await requestPortal({
-    url: INSIDE_ENDPOINTS.bypass.page,
-    method: 'GET',
-    timeout: 15000,
-  });
+  const fetchPage = () =>
+    requestPortal({
+      url: INSIDE_ENDPOINTS.bypass.page,
+      method: 'GET',
+      timeout: 15000,
+    });
+
+  let res = await fetchPage();
 
   if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
     return {
@@ -5461,12 +5707,32 @@ async function fetchInsideByPassMeta({ forceRefresh = false, forceDemo = false }
     };
   }
 
-  const iam = detectIamRedirect({
+  let iam = detectIamRedirect({
     status: res.status,
     finalUrl: res.finalUrl,
     responseText: res.responseText,
     requestedUrl: INSIDE_ENDPOINTS.bypass.page,
   });
+  if (iam.expired && canWarmPortalSession()) {
+    const warm = await warmPortalSession('http://mvc.inside.fpt.net/', { timeout: 12000 });
+    if (warm && warm.ok) {
+      res = await fetchPage();
+      if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+        return {
+          status: 'error',
+          message:
+            'Không kết nối được tới trang CheckList ByPass (mvc.inside.fpt.net). Hãy kiểm tra VPN.',
+          loginUrl: PORTALS.inside.url,
+        };
+      }
+      iam = detectIamRedirect({
+        status: res.status,
+        finalUrl: res.finalUrl,
+        responseText: res.responseText,
+        requestedUrl: INSIDE_ENDPOINTS.bypass.page,
+      });
+    }
+  }
   if (iam.expired) {
     INSIDE_BYPASS_META_CACHE.meta = null;
     INSIDE_BYPASS_META_CACHE.expiresAt = 0;
@@ -6449,7 +6715,11 @@ async function warmupAndRetryFoxJson(url, bodyObj, warmupUrl, opts = {}) {
   if (first.status !== 'iam_expired' || !warmupUrl) {
     return first;
   }
-  await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  if (canWarmPortalSession()) {
+    await warmPortalSession(warmupUrl, { timeout: 12000 });
+  } else {
+    await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  }
   return postFoxJson(url, bodyObj, opts);
 }
 async function fetchDeploymentTicket(
@@ -7365,22 +7635,25 @@ async function bootstrapMvcPortSession() {
   }
 
   portBootstrapInFlight = (async () => {
-    async function fetchTokenFromPortIndex() {
+    async function fetchTokenFromPortIndex(allowWarmup = true) {
       const idxRes = await requestPortal({
         url: PORT_ENDPOINTS.portIndexPage,
         method: 'GET',
         timeout: 8000,
       });
-      if (!idxRes || !idxRes.ok) {
-        return '';
-      }
-      const idxFinalUrl = String(idxRes.finalUrl || '');
-      const idxBody = String(idxRes.responseText || '');
-      if (
+      const idxFinalUrl = String((idxRes && idxRes.finalUrl) || '');
+      const idxBody = String((idxRes && idxRes.responseText) || '');
+      const redirectedToAuth =
         /\/LoginPage\.aspx(?:\?|$|#)/i.test(idxFinalUrl) ||
         /https?:\/\/[^/]*(?:iam|sso|login|auth|signin|oauth|cas)/i.test(idxFinalUrl) ||
-        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody)
-      ) {
+        /<input[^>]+type\s*=\s*["']?password["']?/i.test(idxBody);
+      if (!idxRes || !idxRes.ok || redirectedToAuth) {
+        if (redirectedToAuth && allowWarmup && canWarmPortalSession()) {
+          const warm = await warmPortalSession(PORTALS.port.url, { timeout: 12000 });
+          if (warm && warm.ok) {
+            return fetchTokenFromPortIndex(false);
+          }
+        }
         return '';
       }
       const extracted = extractMvcPortTokenFromText(idxBody);
@@ -9031,6 +9304,8 @@ function mountRemoteInside({
     result: null,
     logs: [],
     isWide: false,
+    iamSyncing: false,
+    iamSyncText: '',
     openViews: {},
     viewReloadKeys: {},
     confirmAction: null,
@@ -9192,18 +9467,110 @@ function mountRemoteInside({
     ].slice(0, 20);
   }
 
+  function getUnifiedIamLoginUrl() {
+    const active = PORTALS[state.activePortalId];
+    if (active && active.iamSso && active.url) {
+      return active.url;
+    }
+    return PORTALS.inside.url;
+  }
+
   function syncSessionPillOrRenderMain() {
     const pillEl = mainLayer.querySelector('.ri-status-pill');
     if (pillEl) {
-      pillEl.setAttribute('data-state', state.sessionStatus.state);
+      const displayState = state.iamSyncing ? 'checking' : state.sessionStatus.state;
+      const displayLabel = state.iamSyncing
+        ? state.iamSyncText || 'Đang đồng bộ IAM…'
+        : state.sessionStatus.label;
+      pillEl.setAttribute('data-state', displayState);
       pillEl.title = state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM';
       const labelSpan = pillEl.querySelector('span:last-child');
       if (labelSpan) {
-        labelSpan.textContent = state.sessionStatus.label;
+        labelSpan.textContent = displayLabel;
       }
       return;
     }
     renderMain();
+  }
+
+  async function runUnifiedIamSync({ skipHost = '', announceResult = true } = {}) {
+    if (state.iamSyncing || !canWarmPortalSession()) {
+      return null;
+    }
+    state.iamSyncing = true;
+    state.iamSyncText = 'Đồng bộ IAM…';
+    syncSessionPillOrRenderMain();
+
+    let report = null;
+    try {
+      report = await syncIamSsoSessions({
+        targets: IAM_SSO_TARGETS,
+        skipHost,
+        force: true,
+        afterTarget: async (target) => {
+          if (target.id === 'port') {
+            await bootstrapMvcPortSession();
+          }
+        },
+        onProgress: ({ index, total }) => {
+          state.iamSyncText = `Đồng bộ IAM (${index}/${total})…`;
+          syncSessionPillOrRenderMain();
+        },
+      });
+    } finally {
+      state.iamSyncing = false;
+      state.iamSyncText = '';
+    }
+
+    await refreshSessionStatus();
+
+    if (announceResult && report) {
+      const okLabels = report.okTargets.map((t) => t.label);
+      const needsLogin = report.needsLoginTargets;
+      const offline = report.offlineTargets;
+
+      if (needsLogin.length === 0 && offline.length === 0) {
+        state.result = {
+          status: 'ok',
+          title: 'Đã đồng bộ IAM cho tất cả cổng',
+          message: `Đăng nhập 1 lần hoàn tất. Đã sẵn sàng: ${okLabels.join(', ')}.`,
+        };
+      } else if (okLabels.length > 0) {
+        const parts = [`Đã sẵn sàng: ${okLabels.join(', ')}.`];
+        if (needsLogin.length > 0) {
+          parts.push(
+            `${needsLogin.map((t) => t.label).join(', ')} yêu cầu xác nhận Azure AD thêm 1 chạm khi mở.`
+          );
+        }
+        if (offline.length > 0) {
+          parts.push(
+            `Chưa chạm tới được (kiểm tra VPN): ${offline.map((t) => t.label).join(', ')}.`
+          );
+        }
+        state.result = {
+          status: 'ok',
+          title: `Đã đồng bộ ${okLabels.length}/${report.results.length} cổng IAM`,
+          message: parts.join(' '),
+          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : '',
+          showLoginBtn: needsLogin.length > 0,
+        };
+      } else {
+        const parts = ['Phiên IAM (Azure AD) chưa sẵn sàng để đồng bộ.'];
+        if (offline.length > 0) {
+          parts.push(
+            `Không chạm tới được (kiểm tra VPN): ${offline.map((t) => t.label).join(', ')}.`
+          );
+        }
+        state.result = {
+          status: 'iam_expired',
+          title: 'Chưa hoàn tất đăng nhập IAM',
+          message: parts.join(' '),
+          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : getUnifiedIamLoginUrl(),
+        };
+      }
+      renderMain();
+    }
+    return report;
   }
 
   async function refreshSessionStatus() {
@@ -11748,18 +12115,25 @@ function mountRemoteInside({
 
   function renderTopBar() {
     const isAndroid = isAndroidAppEnv();
+    const pillState = state.iamSyncing ? 'checking' : state.sessionStatus.state;
+    const pillLabel = state.iamSyncing
+      ? state.iamSyncText || 'Đang đồng bộ IAM…'
+      : state.sessionStatus.label;
     const pill = el(
       'button',
       {
         type: 'button',
         className: 'ri-status-pill',
-        'data-state': state.sessionStatus.state,
+        'data-state': pillState,
         title: state.sessionStatus.detail || 'Bấm để kiểm tra lại phiên IAM',
         onClick: () => {
+          if (state.iamSyncing) {
+            return;
+          }
           if (isAndroid && state.sessionStatus.state === 'iam_expired') {
             openExternalOrPortalUrl(
-              state.sessionStatus.loginUrl || PORTALS[state.activePortalId].url,
-              { mode: 'login', title: 'Đăng nhập IAM', pageWindow }
+              state.sessionStatus.loginUrl || getUnifiedIamLoginUrl(),
+              { mode: 'login', title: 'Đăng nhập IAM (1 lần cho tất cả)', pageWindow }
             );
             return;
           }
@@ -11768,7 +12142,7 @@ function mountRemoteInside({
       },
       [
         el('span', { className: 'ri-status-dot' }),
-        el('span', { text: state.sessionStatus.label }),
+        el('span', { text: pillLabel }),
       ]
     );
 
@@ -12088,7 +12462,7 @@ function mountRemoteInside({
       });
       extraBtns.push(copySummaryBtn);
     }
-    if (res.status === 'iam_expired' && res.loginUrl) {
+    if ((res.status === 'iam_expired' || res.showLoginBtn) && res.loginUrl) {
       if (state.activePortalId === 'port' && isLoggedInPortHost()) {
         extraBtns.push(
           el('button', {
@@ -15542,31 +15916,31 @@ function mountRemoteInside({
         ]),
         el('p', {
           className: 'ri-sheet-sub',
-          text: `Phiên bản v${versionStr} — Dùng chung phiên đăng nhập IAM & VPN công ty trên điện thoại.`,
+          text: `Phiên bản v${versionStr} — Chỉ cần đăng nhập IAM (Azure AD) 1 lần trên điện thoại.`,
         }),
         el('div', { className: 'ri-privacy-note' }, [
           el('div', {
-            text: 'Ứng dụng không lưu mật khẩu hay token. Toàn bộ thao tác chạy trực tiếp bằng cookie phiên IAM hợp lệ trong WebView bảo mật.',
+            text: 'Ứng dụng không lưu mật khẩu hay token. Chỉ cần đăng nhập IAM (Azure AD) 1 lần — ứng dụng tự đồng bộ phiên cho Inside, FOX-ERP/Partner, Port, Vật tư và Radius.',
           }),
         ]),
         el('div', { className: 'ri-result-actions' }, [
           el('button', {
             type: 'button',
             className: 'ri-primary-btn',
-            text: 'Đăng nhập Inside (IAM)',
-            onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+            text: 'Đăng nhập IAM (1 lần cho tất cả)',
+            onClick: () =>
+              openLogin(getUnifiedIamLoginUrl(), 'Đăng nhập IAM (Azure AD)'),
           }),
           el('button', {
             type: 'button',
-            className: 'ri-primary-btn',
-            text: 'Đăng nhập Port (FTTH NEW)',
-            onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-primary-btn',
-            text: 'Đăng nhập FOX-ERP / Partner',
-            onClick: () => openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
+            className: 'ri-secondary-btn',
+            disabled: state.iamSyncing,
+            text: state.iamSyncing ? 'Đang đồng bộ…' : 'Đồng bộ lại phiên tất cả cổng IAM',
+            onClick: () => {
+              state.appMenuOpen = false;
+              renderScanner();
+              runUnifiedIamSync({ force: true, announceResult: true });
+            },
           }),
           el('button', {
             type: 'button',
@@ -15589,6 +15963,7 @@ function mountRemoteInside({
             className: 'ri-danger-btn',
             text: 'Đăng xuất (Xóa cookie phiên)',
             onClick: () => {
+              clearWarmSessionCache();
               if (
                 typeof window !== 'undefined' &&
                 window.RemoteInsideNative &&
@@ -15608,6 +15983,53 @@ function mountRemoteInside({
               refreshSessionStatus();
             },
           }),
+        ]),
+        el('details', { className: 'ri-confirm-input-wrap' }, [
+          el('summary', {
+            className: 'ri-summary-toggle',
+            text: 'Mở trang cổng riêng lẻ (khi cần)',
+          }),
+          el('div', { className: 'ri-result-actions' }, [
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Inside',
+              onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Port',
+              onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'FOX-ERP / Partner',
+              onClick: () =>
+                openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Vật tư',
+              onClick: () => openLogin(PORTALS.recall.url, 'Mở cổng Vật tư'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Radius',
+              onClick: () => openLogin(PORTALS.radius.url, 'Mở cổng Radius'),
+            }),
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Camera (đăng nhập riêng)',
+              onClick: () => openLogin(PORTALS.camera.url, 'Đăng nhập Camera'),
+            }),
+          ]),
+        ]),
+        el('div', { className: 'ri-sheet-buttons' }, [
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
@@ -15809,7 +16231,13 @@ function mountRemoteInside({
   }
 
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {
-    window.__riOnPortalBrowserClosed = () => {
+    window.__riOnPortalBrowserClosed = (completedHost = '', loginCompleted = false) => {
+      clearWarmSessionCache();
+      const cleanHost = String(completedHost || '').trim().toLowerCase();
+      if (loginCompleted && canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
+        runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
+        return;
+      }
       refreshSessionStatus();
     };
     window.__riHandleBack = () => {

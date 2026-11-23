@@ -157,6 +157,7 @@ import {
   findEquipmentDebtGrid,
   findEquipmentDebtPageControls,
   formatEquipmentDebtClipboardText,
+  getEquipmentRealBodyRows,
   isEquipmentPortalLocation,
   loadEquipmentDebtContext,
   parseEquipmentDebtColumns,
@@ -165,6 +166,7 @@ import {
   parseEquipmentDebtPagerInfo,
   queryEquipmentDebtByStaff,
   queryEquipmentDebtHolders,
+  readEquipmentFilterState,
 } from '../src/adapters/equipment.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
@@ -3108,11 +3110,133 @@ async function runTests() {
   assert.equal(demoEquipCtx.dataset.activeMaterials, 5, '1 demo material intentionally has 0 stock');
 
   // Verify equipment tokens in built bundles & 0 PII matches
+  const emptyPlaceholderTr = {
+    className: 'rz-datatable-emptymessage-row',
+    querySelectorAll: () => [{ innerText: 'No records to display.' }],
+  };
+  const emptyMockTable = {
+    className: 'rz-grid-table',
+    querySelectorAll: (sel) => {
+      if (sel === 'thead tr') return [{ querySelectorAll: () => [makeEquipCell('Nhân viên')] }];
+      if (sel === 'tbody tr') return [emptyPlaceholderTr];
+      return [];
+    },
+  };
+  assert.deepEqual(getEquipmentRealBodyRows(emptyMockTable), [], 'Must filter out Radzen empty placeholder row');
+  const emptyMockGrid = {
+    querySelectorAll: (sel) =>
+      sel === 'thead th, thead td' ? [makeEquipCell('Nhân viên')] : [],
+    querySelector: (sel) => {
+      if (sel === 'table.rz-grid-table') return emptyMockTable;
+      if (sel === '.rz-pager-summary') return { innerText: 'Page 1 of 1 (0 items)' };
+      return null;
+    },
+  };
+  const emptyMockDoc = {
+    querySelectorAll: (sel) => {
+      if (sel === '.rz-data-grid') return [emptyMockGrid];
+      if (sel.includes('rz-tabview-nav')) return [{ innerText: 'Tồn công nợ theo NV', className: 'rz-tabview-selected' }];
+      if (sel === 'button') return [{ innerText: 'Xem danh sách' }];
+      if (sel === '.rz-form-field') {
+        return [
+          {
+            querySelector: (s) =>
+              s.includes('label') ? { innerText: 'Vùng' } : { className: 'rz-dropdown rz-state-empty', innerText: '' },
+          },
+          {
+            querySelector: (s) =>
+              s.includes('label') ? { innerText: 'Tỉnh thành' } : { className: 'rz-dropdown rz-state-empty', innerText: '' },
+          },
+          {
+            querySelector: (s) =>
+              s.includes('label') ? { innerText: 'Đối tác' } : { className: 'rz-dropdown rz-state-empty', innerText: '' },
+          },
+        ];
+      }
+      return [];
+    },
+  };
+  assert.equal(readEquipmentFilterState(emptyMockDoc).missingRequired, true);
+  const hadGm20 = Object.prototype.hasOwnProperty.call(globalThis, 'GM_xmlhttpRequest');
+  const prevGm20 = globalThis.GM_xmlhttpRequest;
+  try {
+    globalThis.GM_xmlhttpRequest = () => {};
+    const emptyCtxRes = await loadEquipmentDebtContext({
+      pageLocation: { hostname: 'nextgen.fpt.net', pathname: '/resource/equipment/' },
+      pageDocument: emptyMockDoc,
+    });
+    assert.equal(
+      emptyCtxRes.status,
+      'needs_report_loaded',
+      'Empty Radzen table with emptymessage row must NOT be treated as loaded data'
+    );
+    assert.equal(emptyCtxRes.filterMissing, true);
+  } finally {
+    if (hadGm20) {
+      globalThis.GM_xmlhttpRequest = prevGm20;
+    } else {
+      delete globalThis.GM_xmlhttpRequest;
+    }
+  }
+
+  // Test delayed tbody render after pager summary flips Page 1 -> Page 2
+  let delayedSummaryPage = 1;
+  let delayedTbodyPage = 1;
+  const delayedNextBtn = {
+    get className() {
+      return delayedSummaryPage >= 2 ? 'rz-pager-next rz-state-disabled' : 'rz-pager-next';
+    },
+    getAttribute: () => null,
+    click: () => {
+      delayedSummaryPage = 2;
+      setTimeout(() => {
+        delayedTbodyPage = 2;
+      }, 170);
+    },
+  };
+  const delayedTable = {
+    className: 'rz-grid-table',
+    querySelectorAll: (sel) => {
+      if (sel === 'thead tr') return [equipTheadRow0, equipTheadRow1];
+      if (sel === 'tbody tr') {
+        const rows = delayedTbodyPage === 1 ? equipAllRowsData.slice(0, 2) : equipAllRowsData.slice(2, 4);
+        return rows.map(makeEquipBodyTr);
+      }
+      return [];
+    },
+  };
+  const delayedGrid = {
+    querySelectorAll: (sel) =>
+      sel === 'thead th, thead td' ? [makeEquipCell('Nhân viên')] : [],
+    querySelector: (sel) => {
+      if (sel === 'table.rz-grid-table') return delayedTable;
+      if (sel === '.rz-pager') {
+        return {
+          querySelector: (s) => (s === '.rz-pager-next' ? delayedNextBtn : null),
+        };
+      }
+      if (sel === '.rz-pager-summary') {
+        return { innerText: `Page ${delayedSummaryPage} of 2 (4 items)` };
+      }
+      return null;
+    },
+  };
+  const delayedDoc = {
+    querySelectorAll: (sel) => (sel === '.rz-data-grid' ? [delayedGrid] : []),
+  };
+  const delayedRes = await collectEquipmentDebtFromDocument(delayedDoc, { waitMs: 1200 });
+  assert.equal(
+    delayedRes.dataset.totalStaff,
+    4,
+    'Collector must wait for delayed tbody content change even after pager summary updates early'
+  );
+
   for (const token of [
     'equipment_debt',
     'collectEquipmentDebtFromDocument',
     'queryEquipmentDebtHolders',
     'formatEquipmentDebtClipboardText',
+    'getEquipmentRealBodyRows',
     EQUIPMENT_ENDPOINTS.base,
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);

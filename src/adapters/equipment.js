@@ -75,6 +75,67 @@ function findEquipmentTableInGrid(grid) {
   return grid.querySelector('table.rz-grid-table') || grid.querySelector('table') || null;
 }
 
+export function getEquipmentRealBodyRows(tableEl) {
+  if (!tableEl || typeof tableEl.querySelectorAll !== 'function') return [];
+  const allRows = Array.from(tableEl.querySelectorAll('tbody tr'));
+  return allRows.filter((tr) => {
+    if (!tr) return false;
+    const cls = String(tr.className || '');
+    if (/rz-datatable-emptymessage-row/i.test(cls)) return false;
+    if (typeof tr.querySelectorAll === 'function') {
+      const cells = Array.from(tr.querySelectorAll('td, th'));
+      if (cells.length < 2) return false;
+      const firstText = getEquipmentElText(cells[0]);
+      if (!firstText || /^no records to display\.?$|^không có dữ liệu\.?$/i.test(firstText)) {
+        return false;
+      }
+    }
+    return true;
+  });
+}
+
+function findEquipmentReportMenuBtn(doc) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  return (
+    Array.from(doc.querySelectorAll('button')).find((b) =>
+      /^báo cáo$/i.test(getEquipmentElText(b))
+    ) || null
+  );
+}
+
+export function readEquipmentFilterState(doc) {
+  const result = {
+    hasRegion: false,
+    hasProvince: false,
+    hasPartner: false,
+    missingRequired: false,
+  };
+  if (!doc || typeof doc.querySelectorAll !== 'function') return result;
+  const fields = Array.from(doc.querySelectorAll('.rz-form-field'));
+  let sawAnyField = false;
+
+  for (const field of fields) {
+    if (!field || typeof field.querySelector !== 'function') continue;
+    const labelEl = field.querySelector('label, .rz-form-field-label');
+    const labelText = getEquipmentElText(labelEl);
+    if (!/^(?:vùng|tỉnh thành|đối tác)$/i.test(labelText)) continue;
+    sawAnyField = true;
+
+    const dd = field.querySelector('.rz-dropdown, .rz-multiselect');
+    const ddCls = String((dd && dd.className) || '');
+    const ddText = dd ? getEquipmentElText(dd) : '';
+    const hasVal = Boolean(ddText && !/rz-state-empty/i.test(ddCls));
+    if (/^vùng$/i.test(labelText)) result.hasRegion = hasVal;
+    if (/^tỉnh thành$/i.test(labelText)) result.hasProvince = hasVal;
+    if (/^đối tác$/i.test(labelText)) result.hasPartner = hasVal;
+  }
+
+  if (sawAnyField) {
+    result.missingRequired = !(result.hasRegion && result.hasProvince && result.hasPartner);
+  }
+  return result;
+}
+
 export function parseEquipmentDebtPagerInfo(scopeEl) {
   const fallback = { currentPage: 1, totalPages: 1, totalItems: 0, rawText: '' };
   if (!scopeEl || typeof scopeEl.querySelector !== 'function') return fallback;
@@ -215,7 +276,7 @@ export function parseEquipmentDebtPageRows(tableEl, columnsInfo) {
     ? columnsInfo.staffColIndex
     : 0;
   const materials = (columnsInfo && Array.isArray(columnsInfo.materials) && columnsInfo.materials) || [];
-  const trList = Array.from(tableEl.querySelectorAll('tbody tr'));
+  const trList = getEquipmentRealBodyRows(tableEl);
   const parsed = [];
 
   for (const tr of trList) {
@@ -390,26 +451,49 @@ function isEquipmentPagerDisabled(el) {
   return false;
 }
 
-function readEquipmentGridSignature(grid) {
+function readEquipmentGridSnapshotState(grid) {
   const pager = parseEquipmentDebtPagerInfo(grid);
   const table = findEquipmentTableInGrid(grid);
-  const rows = table && typeof table.querySelectorAll === 'function'
-    ? Array.from(table.querySelectorAll('tbody tr'))
-    : [];
+  const rows = getEquipmentRealBodyRows(table);
   const firstCell =
     rows[0] && typeof rows[0].querySelector === 'function'
       ? rows[0].querySelector('td, th')
       : null;
-  const firstStaff = getEquipmentElText(firstCell);
-  return `${pager.currentPage}/${pager.totalPages}/${pager.totalItems}|${rows.length}|${firstStaff}`;
+  const lastRow = rows.length > 0 ? rows[rows.length - 1] : null;
+  const lastCell =
+    lastRow && typeof lastRow.querySelector === 'function'
+      ? lastRow.querySelector('td, th')
+      : null;
+  return {
+    currentPage: pager.currentPage,
+    totalPages: pager.totalPages,
+    totalItems: pager.totalItems,
+    rowCount: rows.length,
+    firstStaff: getEquipmentElText(firstCell),
+    lastStaff: getEquipmentElText(lastCell),
+  };
 }
 
-async function waitForEquipmentGridChange(grid, prevSig, timeoutMs = 4500) {
+async function waitForEquipmentPageContentChange(
+  grid,
+  prevState,
+  { mode = 'page', timeoutMs = 5500 } = {}
+) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     await sleep(150);
-    const nextSig = readEquipmentGridSignature(grid);
-    if (nextSig !== prevSig) {
+    const next = readEquipmentGridSnapshotState(grid);
+    if (next.rowCount === 0) continue;
+    const contentChanged =
+      next.firstStaff !== prevState.firstStaff ||
+      next.lastStaff !== prevState.lastStaff ||
+      next.rowCount !== prevState.rowCount;
+    const changed =
+      mode === 'pagesize'
+        ? next.rowCount !== prevState.rowCount || next.totalPages !== prevState.totalPages
+        : contentChanged;
+    if (changed) {
+      await sleep(180);
       return true;
     }
   }
@@ -418,7 +502,7 @@ async function waitForEquipmentGridChange(grid, prevSig, timeoutMs = 4500) {
 
 export async function collectEquipmentDebtFromDocument(
   doc,
-  { onProgress = null, maxPages = 30, waitMs = 4500 } = {}
+  { onProgress = null, maxPages = 30, waitMs = 5500 } = {}
 ) {
   const ctrls = findEquipmentDebtPageControls(doc);
   const grid = ctrls.grid;
@@ -428,6 +512,8 @@ export async function collectEquipmentDebtFromDocument(
       hasDebtTab: ctrls.hasDebtTab,
       isDebtTabActive: ctrls.isDebtTabActive,
       hasViewListBtn: Boolean(ctrls.viewListBtn),
+      hasReportMenuBtn: Boolean(findEquipmentReportMenuBtn(doc)),
+      filterMissing: readEquipmentFilterState(doc).missingRequired,
       message:
         'Chưa thấy bảng "Tồn công nợ theo NV" trên trang. Hãy vào Báo cáo → Báo cáo nợ → Xem danh sách.',
     };
@@ -469,13 +555,16 @@ export async function collectEquipmentDebtFromDocument(
         numericItems.sort((a, b) => b.size - a.size);
         const best = numericItems[0];
         if (best && best.size > currentSize && typeof best.el.click === 'function') {
-          const prevSig = readEquipmentGridSignature(grid);
+          const prevSnap = readEquipmentGridSnapshotState(grid);
           if (typeof dd.click === 'function') {
             dd.click();
             await sleep(80);
           }
           best.el.click();
-          await waitForEquipmentGridChange(grid, prevSig, Math.min(waitMs, 3000));
+          await waitForEquipmentPageContentChange(grid, prevSnap, {
+            mode: 'pagesize',
+            timeoutMs: Math.min(waitMs, 3500),
+          });
           pagerInfo = parseEquipmentDebtPagerInfo(grid);
         }
       }
@@ -490,9 +579,12 @@ export async function collectEquipmentDebtFromDocument(
         ? pagerEl.querySelector('.rz-pager-first')
         : null;
     if (firstBtn && !isEquipmentPagerDisabled(firstBtn) && typeof firstBtn.click === 'function') {
-      const prevSig = readEquipmentGridSignature(grid);
+      const prevSnap = readEquipmentGridSnapshotState(grid);
       firstBtn.click();
-      await waitForEquipmentGridChange(grid, prevSig, waitMs);
+      await waitForEquipmentPageContentChange(grid, prevSnap, {
+        mode: 'page',
+        timeoutMs: waitMs,
+      });
       pagerInfo = parseEquipmentDebtPagerInfo(grid);
     }
   }
@@ -538,9 +630,12 @@ export async function collectEquipmentDebtFromDocument(
       break;
     }
 
-    const prevSig = readEquipmentGridSignature(grid);
+    const prevSnap = readEquipmentGridSnapshotState(grid);
     nextBtn.click();
-    const changed = await waitForEquipmentGridChange(grid, prevSig, waitMs);
+    const changed = await waitForEquipmentPageContentChange(grid, prevSnap, {
+      mode: 'page',
+      timeoutMs: waitMs,
+    });
     if (!changed) {
       break;
     }
@@ -558,6 +653,46 @@ export async function collectEquipmentDebtFromDocument(
     mode: 'live',
     dataset,
   };
+}
+
+export async function triggerEquipmentOpenDebtReportMenu(doc) {
+  const reportBtn = findEquipmentReportMenuBtn(doc);
+  if (!reportBtn || typeof reportBtn.click !== 'function') {
+    return { ok: false, error: 'Không tìm thấy menu "Báo cáo" trên trang Quản lý vật tư.' };
+  }
+  reportBtn.click();
+  await sleep(280);
+  if (!doc || typeof doc.querySelectorAll !== 'function') {
+    return { ok: false, error: 'Không mở được danh sách menu Báo cáo.' };
+  }
+  const items = Array.from(
+    doc.querySelectorAll('.mud-popover-open .mud-list-item, .mud-list-item, .mud-menu-item')
+  );
+  const debtItem = items.find((el) => /^báo cáo nợ$/i.test(getEquipmentElText(el))) || null;
+  if (!debtItem || typeof debtItem.click !== 'function') {
+    return { ok: false, error: 'Không tìm thấy mục "Báo cáo nợ" trong menu Báo cáo.' };
+  }
+  debtItem.click();
+  return { ok: true };
+}
+
+export async function waitForEquipmentReportLoad(doc, { timeoutMs = 15000, onTick = null } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(300);
+    const grid = findEquipmentDebtGrid(doc);
+    const table = findEquipmentTableInGrid(grid);
+    const realRows = getEquipmentRealBodyRows(table);
+    const cols = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+    if (typeof onTick === 'function') {
+      onTick({ rows: realRows.length, cols: cols.materials.length });
+    }
+    if (realRows.length > 0 && cols.materials.length > 0) {
+      await sleep(200);
+      return true;
+    }
+  }
+  return false;
 }
 
 export function triggerEquipmentDebtTab(doc) {
@@ -632,27 +767,39 @@ export async function loadEquipmentDebtContext(ctx = {}) {
 
   const ctrls = findEquipmentDebtPageControls(doc);
   const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
-  const bodyRows =
-    table && typeof table.querySelectorAll === 'function'
-      ? table.querySelectorAll('tbody tr').length
-      : 0;
+  const realRows = getEquipmentRealBodyRows(table);
+  const columns = table ? parseEquipmentDebtColumns(table) : { materials: [] };
 
-  if (!ctrls.grid || !table || bodyRows === 0) {
+  if (!ctrls.grid || !table || realRows.length === 0 || columns.materials.length === 0) {
+    const hasReportMenuBtn = Boolean(findEquipmentReportMenuBtn(doc));
+    const filterState = readEquipmentFilterState(doc);
+    let message =
+      'Trên trang Quản lý vật tư, mở Báo cáo → Báo cáo nợ → chọn Vùng/Tỉnh thành/Đối tác → bấm Xem danh sách rồi bấm Đọc lại dữ liệu.';
+    if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
+      message = 'Đang ở Báo cáo nợ nhưng chưa chọn tab "Tồn công nợ theo NV". Bấm chuyển tab bên dưới.';
+    } else if (ctrls.hasDebtTab && filterState.missingRequired) {
+      message =
+        'Chưa chọn Vùng / Tỉnh thành / Đối tác trên trang Báo cáo nợ. Bấm "Thu gọn để chọn" rồi chọn điều kiện và bấm Xem danh sách.';
+    } else if (ctrls.hasDebtTab && ctrls.viewListBtn) {
+      message =
+        'Bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để chạy "Xem danh sách" và gom KTV.';
+    }
+
     return {
       status: 'needs_report_loaded',
       mode: 'live',
       hasDebtTab: ctrls.hasDebtTab,
       isDebtTabActive: ctrls.isDebtTabActive,
       hasViewListBtn: Boolean(ctrls.viewListBtn),
-      message: ctrls.hasDebtTab
-        ? 'Đang ở trang Báo cáo nợ nhưng bảng "Tồn công nợ theo NV" chưa có dữ liệu. Bấm nút bên dưới để tải danh sách.'
-        : 'Trên trang Quản lý vật tư, hãy mở menu Báo cáo → Báo cáo nợ → bấm Xem danh sách rồi bấm Đọc lại.',
+      hasReportMenuBtn,
+      filterMissing: filterState.missingRequired,
+      message,
     };
   }
 
   return collectEquipmentDebtFromDocument(doc, {
     onProgress: ctx.onProgress,
     maxPages: ctx.maxPages || 30,
-    waitMs: ctx.waitMs || 4500,
+    waitMs: ctx.waitMs || 5500,
   });
 }

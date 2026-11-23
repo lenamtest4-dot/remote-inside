@@ -120,6 +120,8 @@ import {
   queryEquipmentDebtHolders,
   triggerEquipmentDebtTab,
   triggerEquipmentDebtViewList,
+  triggerEquipmentOpenDebtReportMenu,
+  waitForEquipmentReportLoad,
 } from '../adapters/equipment.js';
 import { executePortalAction } from '../adapters/portals.js';
 
@@ -443,6 +445,8 @@ export function mountRemoteInside({
     equipDebtHasTab: false,
     equipDebtTabActive: false,
     equipDebtHasViewBtn: false,
+    equipDebtHasReportMenu: false,
+    equipDebtFilterMissing: false,
     equipDebtViewMode: 'by_material',
     equipDebtGroup: '',
     equipDebtOnlyNonZero: true,
@@ -662,6 +666,8 @@ export function mountRemoteInside({
     state.equipDebtHasTab = false;
     state.equipDebtTabActive = false;
     state.equipDebtHasViewBtn = false;
+    state.equipDebtHasReportMenu = false;
+    state.equipDebtFilterMissing = false;
     state.equipDebtViewMode = 'by_material';
     state.equipDebtGroup = '';
     state.equipDebtOnlyNonZero = true;
@@ -2061,7 +2067,9 @@ export function mountRemoteInside({
       state.equipDebtHasTab = Boolean(res.hasDebtTab);
       state.equipDebtTabActive = Boolean(res.isDebtTabActive);
       state.equipDebtHasViewBtn = Boolean(res.hasViewListBtn);
-      state.equipDebtError = res.status !== 'ok' && res.message ? '' : '';
+      state.equipDebtHasReportMenu = Boolean(res.hasReportMenuBtn);
+      state.equipDebtFilterMissing = Boolean(res.filterMissing);
+      state.equipDebtError = '';
 
       if (res.status === 'ok' && res.dataset) {
         state.equipDebtDataset = res.dataset;
@@ -4355,6 +4363,7 @@ export function mountRemoteInside({
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
         el('h2', {
+          id: 'ri-sheet-title',
           className: 'ri-sheet-title',
           text: isInsideKill
             ? 'Kill Session — Phiên đang chạy'
@@ -4378,19 +4387,21 @@ export function mountRemoteInside({
           },
         }),
       ]),
-      el('p', {
-        className: 'ri-sheet-sub',
-        text: isInsideKill
-          ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
-          : isInsideDeploy
-          ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
-          : isRecallManage
-          ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
-          : isEquipmentDebt
-          ? 'Chọn vật tư để xem ngay những KTV đang giữ (tự lọc bỏ KTV tồn = 0).'
-          : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
-      }),
-    ];
+      isEquipmentDebt && state.equipDebtStatus === 'ok'
+        ? null
+        : el('p', {
+            className: 'ri-sheet-sub',
+            text: isInsideKill
+              ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
+              : isInsideDeploy
+              ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
+              : isRecallManage
+              ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
+              : isEquipmentDebt
+              ? 'Đọc trực tiếp bảng Tồn công nợ theo NV và lọc bỏ KTV tồn = 0.'
+              : act.confirmNote || `Thao tác sẽ được gửi lên ${portal.fullName}.`,
+          }),
+    ].filter(Boolean);
 
     if (contractId && !isEquipmentDebt) {
       sheetParts.push(
@@ -6342,14 +6353,14 @@ export function mountRemoteInside({
 
       if (state.recallLoading) {
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status is-loading' }, [
+          el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
             el('span', { className: 'ri-spinner' }),
             el('span', { text: 'Đang đọc danh sách vật tư thu hồi…' }),
           ])
         );
       } else if (state.recallError) {
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error', 'aria-live': 'polite' }, [
             el('div', { text: state.recallError }),
             el('div', { className: 'ri-result-actions' }, [
               el('button', {
@@ -6895,14 +6906,14 @@ export function mountRemoteInside({
 
       if (state.equipDebtLoading) {
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status is-loading' }, [
+          el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
             el('span', { className: 'ri-spinner' }),
             el('span', { text: state.equipDebtProgress || 'Đang đọc bảng Tồn công nợ theo NV…' }),
           ])
         );
       } else if (state.equipDebtError) {
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error', 'aria-live': 'polite' }, [
             el('div', { text: state.equipDebtError }),
             el('div', { className: 'ri-result-actions' }, [
               el('button', {
@@ -6916,7 +6927,7 @@ export function mountRemoteInside({
         );
       } else if (state.equipDebtStatus === 'needs_equipment_page') {
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
             el('div', {
               text:
                 state.equipDebtNotice ||
@@ -6926,7 +6937,7 @@ export function mountRemoteInside({
               el('button', {
                 type: 'button',
                 className: 'ri-primary-btn',
-                text: 'Mở Quản lý vật tư (NextGen)',
+                text: 'Mở Quản lý vật tư',
                 onClick: () => {
                   openExternalOrPortalUrl(EQUIPMENT_ENDPOINTS.base, {
                     mode: 'portal',
@@ -6946,7 +6957,35 @@ export function mountRemoteInside({
         );
       } else if (state.equipDebtStatus === 'needs_report_loaded') {
         const promptBtns = [];
-        if (state.equipDebtHasTab && !state.equipDebtTabActive) {
+        if (!state.equipDebtHasTab && state.equipDebtHasReportMenu) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Mở Báo cáo → Báo cáo nợ',
+              onClick: async () => {
+                state.equipDebtLoading = true;
+                state.equipDebtProgress = 'Đang mở trang Báo cáo nợ…';
+                renderConfirm();
+                const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
+                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                if (!mRes.ok) {
+                  state.equipDebtLoading = false;
+                  state.equipDebtProgress = '';
+                  state.equipDebtNotice = mRes.error;
+                  state.equipDebtNoticeTone = 'error';
+                  renderConfirm();
+                  return;
+                }
+                setTimeout(() => {
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    loadEquipmentDebtModal();
+                  }
+                }, 900);
+              },
+            })
+          );
+        } else if (state.equipDebtHasTab && !state.equipDebtTabActive) {
           promptBtns.push(
             el('button', {
               type: 'button',
@@ -6971,13 +7010,13 @@ export function mountRemoteInside({
               },
             })
           );
-        } else if (state.equipDebtHasViewBtn) {
+        } else if (state.equipDebtHasViewBtn && !state.equipDebtFilterMissing) {
           promptBtns.push(
             el('button', {
               type: 'button',
               className: 'ri-primary-btn',
-              text: 'Bấm "Xem danh sách" & tải dữ liệu',
-              onClick: () => {
+              text: 'Bấm "Xem danh sách" & gom dữ liệu',
+              onClick: async () => {
                 const vRes = triggerEquipmentDebtViewList(pageDocument);
                 if (!vRes.ok) {
                   state.equipDebtNotice = vRes.error;
@@ -6986,36 +7025,64 @@ export function mountRemoteInside({
                   return;
                 }
                 state.equipDebtLoading = true;
-                state.equipDebtProgress = 'Đang tải danh sách tồn nợ từ hệ thống…';
+                state.equipDebtProgress = 'Đang chờ NextGen tải bảng tồn nợ KTV…';
                 renderConfirm();
-                setTimeout(() => {
-                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
-                    loadEquipmentDebtModal();
-                  }
-                }, 1500);
+                const ok = await waitForEquipmentReportLoad(pageDocument, { timeoutMs: 15000 });
+                if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
+                if (!ok) {
+                  state.equipDebtLoading = false;
+                  state.equipDebtProgress = '';
+                  state.equipDebtNotice =
+                    'Chưa thấy bảng dữ liệu xuất hiện. Kiểm tra lại bộ lọc Vùng/Tỉnh thành/Đối tác rồi bấm Đọc lại.';
+                  state.equipDebtNoticeTone = 'warn';
+                  renderConfirm();
+                  return;
+                }
+                loadEquipmentDebtModal();
               },
             })
           );
         }
+
+        if (state.equipDebtFilterMissing) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: 'Thu gọn để chọn bộ lọc',
+              onClick: () => {
+                state.isOpen = false;
+                render();
+              },
+            })
+          );
+        }
+
         promptBtns.push(
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
             text: 'Đọc lại dữ liệu',
             onClick: () => loadEquipmentDebtModal(),
-          }),
-          el('button', {
-            type: 'button',
-            className: 'ri-secondary-btn',
-            text: 'Thu gọn để thao tác',
-            onClick: () => {
-              state.isOpen = false;
-              render();
-            },
           })
         );
+
+        if (!state.equipDebtFilterMissing) {
+          promptBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-secondary-btn',
+              text: 'Thu gọn để thao tác',
+              onClick: () => {
+                state.isOpen = false;
+                render();
+              },
+            })
+          );
+        }
+
         sheetParts.push(
-          el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn' }, [
+          el('div', { className: 'ri-sheet-status', 'data-tone': state.equipDebtNoticeTone || 'warn', 'aria-live': 'polite' }, [
             el('div', {
               text:
                 state.equipDebtNotice ||
@@ -7029,26 +7096,19 @@ export function mountRemoteInside({
         const meta = ds.meta || {};
         const statsLabel = [
           `${ds.totalStaff} KTV`,
-          `${ds.activeMaterials}/${ds.totalMaterials} VT đang tồn`,
-          meta.pagesScanned > 1 ? `đã gom ${meta.pagesScanned} trang` : '',
+          `${ds.activeMaterials} VT có tồn`,
+          meta.pagesScanned > 1 ? `${meta.pagesScanned} trang` : '',
         ]
           .filter(Boolean)
           .join(' • ');
 
         sheetParts.push(
-          el('div', { className: 'ri-confirm-input-wrap' }, [
-            el('div', { className: 'ri-inline-head' }, [
-              el('span', { className: 'ri-field-hint', text: statsLabel }),
+          el('div', { className: 'ri-debt-topbar' }, [
+            el('div', { className: 'ri-mode-row ri-debt-tabs', role: 'tablist' }, [
               el('button', {
                 type: 'button',
-                className: 'ri-text-btn',
-                text: 'Tải lại dữ liệu',
-                onClick: () => loadEquipmentDebtModal(),
-              }),
-            ]),
-            el('div', { className: 'ri-mode-row' }, [
-              el('button', {
-                type: 'button',
+                role: 'tab',
+                'aria-selected': state.equipDebtViewMode === 'by_material' ? 'true' : 'false',
                 className: `ri-mode-btn${state.equipDebtViewMode === 'by_material' ? ' is-active' : ''}`,
                 text: 'Theo vật tư',
                 onClick: () => {
@@ -7058,12 +7118,23 @@ export function mountRemoteInside({
               }),
               el('button', {
                 type: 'button',
+                role: 'tab',
+                'aria-selected': state.equipDebtViewMode === 'by_staff' ? 'true' : 'false',
                 className: `ri-mode-btn${state.equipDebtViewMode === 'by_staff' ? ' is-active' : ''}`,
                 text: 'Theo KTV',
                 onClick: () => {
                   state.equipDebtViewMode = 'by_staff';
                   renderConfirm();
                 },
+              }),
+            ]),
+            el('div', { className: 'ri-debt-meta-row' }, [
+              el('span', { className: 'ri-field-hint', text: statsLabel }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadEquipmentDebtModal(),
               }),
             ]),
           ])
@@ -7074,6 +7145,7 @@ export function mountRemoteInside({
             el('div', {
               className: 'ri-sheet-status',
               'data-tone': state.equipDebtNoticeTone || 'info',
+              'aria-live': 'polite',
             }, [el('div', { text: state.equipDebtNotice })])
           );
         }
@@ -7085,12 +7157,12 @@ export function mountRemoteInside({
 
           const staffSel = el(
             'select',
-            { className: 'ri-select', id: 'ri-debt-staff-select' },
+            { className: 'ri-select', id: 'ri-debt-staff-select', 'aria-label': 'Chọn KTV cần xem tồn vật tư' },
             staffSource.map((r) => {
               const itemCount = Object.keys(r.stocks || {}).length;
               const o = el('option', {
                 value: r.staff,
-                text: `${r.staff} (${itemCount} loại VT)`,
+                text: `${r.staff} (${itemCount} VT)`,
               });
               if (r.staff === state.equipDebtSelectedStaff) o.selected = true;
               return o;
@@ -7098,7 +7170,7 @@ export function mountRemoteInside({
           );
           staffSel.value = state.equipDebtSelectedStaff;
 
-          const staffResultsSlot = el('div', { 'data-ri-slot': 'debt-staff-results' });
+          const staffResultsSlot = el('div', { 'data-ri-slot': 'debt-staff-results', 'aria-live': 'polite' });
 
           function renderDebtStaffSlot() {
             staffResultsSlot.textContent = '';
@@ -7112,12 +7184,14 @@ export function mountRemoteInside({
               return;
             }
             staffResultsSlot.appendChild(
-              el('div', { className: 'ri-olt-detected' }, [
-                el('div', { className: 'ri-olt-detected-title', text: staffRes.staff }),
-                el('div', {
-                  className: 'ri-olt-detected-sub',
-                  text: `Đang giữ ${staffRes.itemCount} loại vật tư • Tổng SL: ${staffRes.totalQty}`,
-                }),
+              el('div', { className: 'ri-debt-summary-bar' }, [
+                el('div', { className: 'ri-debt-summary-info' }, [
+                  el('div', { className: 'ri-debt-summary-title', text: staffRes.staff }),
+                  el('div', {
+                    className: 'ri-debt-summary-metric',
+                    text: `${staffRes.itemCount} loại VT • Tổng SL: ${staffRes.totalQty}`,
+                  }),
+                ]),
               ])
             );
             if (staffRes.items.length === 0) {
@@ -7132,12 +7206,14 @@ export function mountRemoteInside({
               el(
                 'div',
                 { className: 'ri-debt-list' },
-                staffRes.items.map((it) =>
+                staffRes.items.map((it, idx) =>
                   el(
                     'button',
                     {
                       type: 'button',
                       className: 'ri-debt-row',
+                      title: 'Chạm để xem các KTV khác cùng giữ vật tư này',
+                      'aria-label': `${it.name} (${it.group}), số lượng ${it.qty}`,
                       onClick: () => {
                         state.equipDebtViewMode = 'by_material';
                         state.equipDebtGroup = '';
@@ -7147,6 +7223,7 @@ export function mountRemoteInside({
                       },
                     },
                     [
+                      el('span', { className: 'ri-debt-rank', text: String(idx + 1) }),
                       el('div', { className: 'ri-debt-row-main' }, [
                         el('div', { className: 'ri-debt-name', text: it.name }),
                         el('div', { className: 'ri-debt-sub', text: it.group }),
@@ -7165,14 +7242,7 @@ export function mountRemoteInside({
           });
 
           sheetParts.push(
-            el('div', { className: 'ri-confirm-input-wrap' }, [
-              el('label', {
-                className: 'ri-confirm-label',
-                for: 'ri-debt-staff-select',
-                text: `Chọn KTV (${staffSource.length} KTV có tồn)`,
-              }),
-              staffSel,
-            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [staffSel]),
             staffResultsSlot
           );
           renderDebtStaffSlot();
@@ -7180,12 +7250,12 @@ export function mountRemoteInside({
           const groups = Array.isArray(ds.groups) ? ds.groups : [];
           const materials = Array.isArray(ds.materials) ? ds.materials : [];
 
-          const groupSel = el('select', { className: 'ri-select', id: 'ri-debt-group' }, [
+          const groupSel = el('select', { className: 'ri-select', id: 'ri-debt-group', 'aria-label': 'Lọc theo nhóm vật tư' }, [
             el('option', { value: '', text: `Tất cả nhóm (${ds.totalMaterials} VT)` }),
             ...groups.map((g) => {
               const o = el('option', {
                 value: g.name,
-                text: `${g.name} (${g.activeMaterialCount}/${g.materialCount} có tồn)`,
+                text: `${g.name} (${g.activeMaterialCount}/${g.materialCount})`,
               });
               if (g.name === state.equipDebtGroup) o.selected = true;
               return o;
@@ -7195,24 +7265,26 @@ export function mountRemoteInside({
 
           const nonZeroToggleBtn = el('button', {
             type: 'button',
-            className: `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`,
-            text: state.equipDebtOnlyNonZero ? 'Chỉ VT có tồn (Bật)' : 'Cả VT tồn = 0',
+            className: `ri-mode-btn ri-debt-chip${state.equipDebtOnlyNonZero ? ' is-active' : ''}`,
+            'aria-pressed': state.equipDebtOnlyNonZero ? 'true' : 'false',
+            text: state.equipDebtOnlyNonZero ? 'Chỉ có tồn' : 'Cả tồn = 0',
           });
 
           const matSearchInput = el('input', {
             type: 'text',
             className: 'ri-confirm-input',
             id: 'ri-debt-mat-search',
-            placeholder: 'Tìm nhanh vật tư (VD: AX3000, Box, Cap, IQ 4S)…',
+            'aria-label': 'Tìm nhanh vật tư',
+            placeholder: 'Tìm vật tư (VD: AX3000, Box, Cap)…',
             autocomplete: 'off',
             spellcheck: 'false',
             value: state.equipDebtSearch,
           });
           matSearchInput.value = state.equipDebtSearch;
 
-          const matCountSpan = el('span', { className: 'ri-text-btn' });
-          const matSel = el('select', { className: 'ri-select', id: 'ri-debt-material' });
-          const resultsSlot = el('div', { 'data-ri-slot': 'debt-results' });
+          const matCountSpan = el('span', { className: 'ri-debt-match-count' });
+          const matSel = el('select', { className: 'ri-select', id: 'ri-debt-material', 'aria-label': 'Chọn vật tư cần xem KTV đang giữ' });
+          const resultsSlot = el('div', { 'data-ri-slot': 'debt-results', 'aria-live': 'polite' });
 
           function populateDebtMaterials() {
             const q = String(state.equipDebtSearch || '').trim().toLowerCase();
@@ -7229,7 +7301,7 @@ export function mountRemoteInside({
               return true;
             });
 
-            matCountSpan.textContent = `${filtered.length} vật tư`;
+            matCountSpan.textContent = `${filtered.length} VT`;
             matSel.textContent = '';
             if (filtered.length === 0) {
               matSel.appendChild(el('option', { value: '', text: '-- Không có vật tư khớp lọc --' }));
@@ -7244,7 +7316,7 @@ export function mountRemoteInside({
             }
             for (const m of filtered) {
               const suffix =
-                m.holderCount > 0 ? ` — ${m.holderCount} KTV (Tổng: ${m.totalQty})` : ' — Tồn: 0';
+                m.holderCount > 0 ? ` (${m.holderCount} KTV • ${m.totalQty})` : ' (0)';
               const o = el('option', { value: m.key, text: `${m.name}${suffix}` });
               if (m.key === state.equipDebtSelectedKey) o.selected = true;
               matSel.appendChild(o);
@@ -7269,48 +7341,45 @@ export function mountRemoteInside({
             const mat = qRes.material;
             if (!mat) return;
 
-            resultsSlot.appendChild(
-              el('div', { className: 'ri-olt-detected' }, [
-                el('div', {
-                  className: 'ri-olt-detected-title',
-                  text: `${mat.name} (${mat.group || 'Khác'})`,
-                }),
-                el('div', {
-                  className: 'ri-olt-detected-sub',
-                  text: `Tổng tồn: ${qRes.totalQty} • ${qRes.holderCount} KTV đang giữ (đã bỏ KTV tồn = 0)`,
-                }),
-              ])
-            );
+            const sortBtn = el('button', {
+              type: 'button',
+              className: 'ri-debt-pill-btn',
+              'aria-pressed': state.equipDebtSort === 'name_asc' ? 'true' : 'false',
+              text: state.equipDebtSort === 'qty_desc' ? '↓ Nhiều nhất' : 'A–Z',
+              title: 'Đổi thứ tự sắp xếp',
+              onClick: () => {
+                state.equipDebtSort =
+                  state.equipDebtSort === 'qty_desc' ? 'name_asc' : 'qty_desc';
+                renderDebtResultsSlot();
+              },
+            });
+
+            const copyBtn = el('button', {
+              type: 'button',
+              className: 'ri-debt-pill-btn is-accent',
+              disabled: qRes.holders.length === 0,
+              text: 'Chép',
+              title: `Chép danh sách ${qRes.holderCount} KTV`,
+              onClick: async () => {
+                const text = formatEquipmentDebtClipboardText(qRes);
+                if (!text) return;
+                await copyTextSafe(text);
+                state.equipDebtNotice = `Đã chép "${mat.name}" (${qRes.holderCount} KTV).`;
+                state.equipDebtNoticeTone = 'ok';
+                renderConfirm();
+              },
+            });
 
             resultsSlot.appendChild(
-              el('div', { className: 'ri-recall-toolbar ri-confirm-input-wrap' }, [
-                el('button', {
-                  type: 'button',
-                  className: 'ri-secondary-btn',
-                  text:
-                    state.equipDebtSort === 'qty_desc'
-                      ? 'Sắp xếp: Nhiều → Ít'
-                      : 'Sắp xếp: Tên A → Z',
-                  onClick: () => {
-                    state.equipDebtSort =
-                      state.equipDebtSort === 'qty_desc' ? 'name_asc' : 'qty_desc';
-                    renderDebtResultsSlot();
-                  },
-                }),
-                el('button', {
-                  type: 'button',
-                  className: 'ri-primary-btn',
-                  disabled: qRes.holders.length === 0,
-                  text: `Chép danh sách (${qRes.holderCount} KTV)`,
-                  onClick: async () => {
-                    const text = formatEquipmentDebtClipboardText(qRes);
-                    if (!text) return;
-                    await copyTextSafe(text);
-                    state.equipDebtNotice = `Đã chép danh sách tồn "${mat.name}" (${qRes.holderCount} KTV).`;
-                    state.equipDebtNoticeTone = 'ok';
-                    renderConfirm();
-                  },
-                }),
+              el('div', { className: 'ri-debt-summary-bar' }, [
+                el('div', { className: 'ri-debt-summary-info' }, [
+                  el('div', { className: 'ri-debt-summary-title', text: mat.name }),
+                  el('div', {
+                    className: 'ri-debt-summary-metric',
+                    text: `${mat.group || 'Khác'} • Tổng: ${qRes.totalQty} • ${qRes.holderCount} KTV`,
+                  }),
+                ]),
+                el('div', { className: 'ri-debt-summary-actions' }, [sortBtn, copyBtn]),
               ])
             );
 
@@ -7333,6 +7402,8 @@ export function mountRemoteInside({
                     {
                       type: 'button',
                       className: 'ri-debt-row',
+                      title: 'Chạm để xem toàn bộ vật tư KTV này đang giữ',
+                      'aria-label': `KTV ${h.staff}, đang giữ ${h.qty} — chạm để xem chi tiết`,
                       onClick: () => {
                         state.equipDebtSelectedStaff = h.staff;
                         state.equipDebtViewMode = 'by_staff';
@@ -7340,13 +7411,8 @@ export function mountRemoteInside({
                       },
                     },
                     [
-                      el('div', { className: 'ri-debt-row-main' }, [
-                        el('div', {
-                          className: 'ri-debt-name',
-                          text: `${idx + 1}. ${h.staff}`,
-                        }),
-                        el('div', { className: 'ri-debt-sub', text: 'Chạm để xem toàn bộ VT của KTV' }),
-                      ]),
+                      el('span', { className: 'ri-debt-rank', text: String(idx + 1) }),
+                      el('span', { className: 'ri-debt-name', text: h.staff }),
                       el('span', { className: 'ri-debt-qty', text: String(h.qty) }),
                     ]
                   )
@@ -7363,10 +7429,11 @@ export function mountRemoteInside({
 
           nonZeroToggleBtn.addEventListener('click', () => {
             state.equipDebtOnlyNonZero = !state.equipDebtOnlyNonZero;
-            nonZeroToggleBtn.className = `ri-mode-btn${state.equipDebtOnlyNonZero ? ' is-active' : ''}`;
+            nonZeroToggleBtn.className = `ri-mode-btn ri-debt-chip${state.equipDebtOnlyNonZero ? ' is-active' : ''}`;
+            nonZeroToggleBtn.setAttribute('aria-pressed', state.equipDebtOnlyNonZero ? 'true' : 'false');
             nonZeroToggleBtn.textContent = state.equipDebtOnlyNonZero
-              ? 'Chỉ VT có tồn (Bật)'
-              : 'Cả VT tồn = 0';
+              ? 'Chỉ có tồn'
+              : 'Cả tồn = 0';
             populateDebtMaterials();
             renderDebtResultsSlot();
           });
@@ -7386,26 +7453,11 @@ export function mountRemoteInside({
           renderDebtResultsSlot();
 
           sheetParts.push(
-            el('div', { className: 'ri-confirm-input-wrap' }, [
-              el('label', {
-                className: 'ri-confirm-label',
-                for: 'ri-debt-group',
-                text: 'Nhóm vật tư & bộ lọc',
-              }),
+            el('div', { className: 'ri-debt-picker' }, [
               el('div', { className: 'ri-debt-filter-row' }, [groupSel, nonZeroToggleBtn]),
+              el('div', { className: 'ri-debt-search-row' }, [matSearchInput, matCountSpan]),
+              matSel,
             ]),
-            el('div', { className: 'ri-confirm-input-wrap' }, [
-              el('div', { className: 'ri-inline-head' }, [
-                el('label', {
-                  className: 'ri-confirm-label',
-                  for: 'ri-debt-mat-search',
-                  text: 'Chọn vật tư',
-                }),
-                matCountSpan,
-              ]),
-              matSearchInput,
-            ]),
-            el('div', { className: 'ri-confirm-input-wrap' }, [matSel]),
             resultsSlot
           );
         }
@@ -7994,7 +8046,12 @@ export function mountRemoteInside({
     }
     sheetParts.push(el('div', { className: 'ri-sheet-buttons' }, sheetButtons));
 
-    return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
+    return el('div', {
+      className: 'ri-sheet-backdrop',
+      role: 'dialog',
+      'aria-modal': 'true',
+      'aria-labelledby': 'ri-sheet-title',
+    }, [
       el('div', { className: 'ri-sheet' }, sheetParts),
     ]);
   }
@@ -8421,6 +8478,21 @@ export function mountRemoteInside({
   }
 
   render();
+  if (pageDocument && typeof pageDocument.addEventListener === 'function') {
+    pageDocument.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Escape') return;
+      if (state.confirmAction) {
+        resetConfirmState();
+        render();
+      } else if (state.appMenuOpen) {
+        state.appMenuOpen = false;
+        renderScanner();
+      } else if (state.scannerOpen) {
+        state.scannerOpen = false;
+        renderScanner();
+      }
+    });
+  }
   if (standalone) {
     refreshSessionStatus();
   } else if (isUserscriptEnv() && pageWindow && pageDocument) {

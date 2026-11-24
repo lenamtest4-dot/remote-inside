@@ -18,14 +18,14 @@
   <script>
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.13.2";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_VERSION__ = "0.14.1";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
  * Cau hinh 5 cong noi bo FPT va cac thao tac chuan hoa Ma Hop Dong.
  */
-const PORTAL_ORDER = ['inside', 'port', 'recall', 'camera', 'radius'];
+const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
   { id: 'partner', portalId: 'inside', label: 'Partner', url: 'https://partner.fpt.net/monitor' },
@@ -225,10 +225,21 @@ const PORTALS = {
     url: 'http://radius-portal.fpt.net/networkConnection',
     hosts: ['radius-portal.fpt.net'],
     iamSso: true,
-    status: 'planned',
-    statusLabel: 'Sắp ghép',
-    description: 'Kiểm tra kết nối và bỏ IPNAT, IPv6 cho hợp đồng.',
+    status: 'priority',
+    statusLabel: 'IPNAT & IPv6',
+    description:
+      'Radius Portal: Tra cứu thông số kết nối, chỉnh Tình trạng NAT (IPNAT), IPv6 và Kill Session.',
     actions: [
+      {
+        id: 'edit_radius',
+        label: 'Chỉnh IPNAT & IPv6',
+        description:
+          'Tra cứu hợp đồng và cập nhật Tình trạng NAT, IPv6 Status cùng tùy chọn Kill Session.',
+        kind: 'primary',
+        requiresConfirm: true,
+        confirmNote:
+          'Chỉnh Tình trạng NAT, IPv6 Status và Kill Session trực tiếp trên Radius Portal.',
+      },
       {
         id: 'check_radius',
         label: 'Kiểm tra kết nối',
@@ -238,19 +249,21 @@ const PORTALS = {
       },
       {
         id: 'remove_ipnat',
-        label: 'Bỏ IPNAT',
-        description: 'Gỡ cấu hình IPNAT đang áp trên thuê bao.',
+        label: 'Bỏ IPNAT (ByPass)',
+        description: 'Mở nhanh chế độ ByPass NAT (5) và điền sẵn ghi chú không dấu.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Thao tác này sẽ bỏ IPNAT cho hợp đồng trên Radius Portal.',
+        confirmNote:
+          'Mở sẵn chế độ ByPass NAT để kiểm tra ghi chú không dấu và xác nhận lưu trên Radius.',
       },
       {
         id: 'remove_ipv6',
-        label: 'Bỏ IPv6',
-        description: 'Tắt cấp phát IPv6 cho kết nối của hợp đồng.',
+        label: 'Bỏ IPv6 (Deactivate)',
+        description: 'Mở nhanh chế độ tắt IPv6 (Deactivate) và điền sẵn ghi chú không dấu.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Thao tác này sẽ bỏ IPv6 cho hợp đồng trên Radius Portal.',
+        confirmNote:
+          'Mở sẵn chế độ Deactivate IPv6 để kiểm tra ghi chú không dấu và xác nhận lưu trên Radius.',
       },
     ],
   },
@@ -658,6 +671,7 @@ function requestViaAndroidNative({
   headers = {},
   data = null,
   timeout = 15000,
+  useRadiusBearer = false,
 } = {}) {
   if (typeof window === 'undefined' || !isAndroidAppEnv()) {
     return Promise.resolve({
@@ -707,6 +721,7 @@ function requestViaAndroidNative({
           headers: headers || {},
           data: data === null || data === undefined ? null : String(data),
           timeout: numericTimeout,
+          useRadiusBearer: Boolean(useRadiusBearer),
         })
       );
     } catch (err) {
@@ -1077,9 +1092,10 @@ function requestPortal({
   headers = {},
   data = null,
   timeout = 15000,
+  useRadiusBearer = false,
 } = {}) {
   if (isAndroidAppEnv()) {
-    return requestViaAndroidNative({ url, method, headers, data, timeout });
+    return requestViaAndroidNative({ url, method, headers, data, timeout, useRadiusBearer });
   }
 
   if (typeof GM_xmlhttpRequest !== 'function') {
@@ -2892,6 +2908,8 @@ const DEFAULT_JS_CONTEXT_RE =
 
 const SPA_VENDOR_CHUNK_RE =
   /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill|fullcalendar|vuetify|iconify|mdi)/i;
+const SPA_ROUTE_CHUNK_RE = /(?:\/chunks\/app\/|\/page-)/i;
+const MAX_SPA_CHUNK_URLS = 80;
 
 /**
  * Trich xuat danh sach chunk JS/MJS cung origin tu HTML (<link modulepreload>, <script src>) va PerformanceResourceTiming.
@@ -2910,7 +2928,7 @@ function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
   const seen = new Set();
 
   function addCandidate(rawUrl) {
-    if (!rawUrl || typeof rawUrl !== 'string' || urls.length >= 35) {
+    if (!rawUrl || typeof rawUrl !== 'string') {
       return;
     }
     const trimmed = rawUrl.trim();
@@ -2947,7 +2965,7 @@ function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
     );
     const linkRe = /<link\b([^>]*)>/gi;
     let lm;
-    while ((lm = linkRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+    while ((lm = linkRe.exec(cleanedHtml)) !== null) {
       const attrs = lm[1] || '';
       const rel = getAttrValue(attrs, 'rel');
       if (!/\b(?:modulepreload|preload|prefetch)\b/i.test(rel)) {
@@ -2961,7 +2979,7 @@ function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
 
     const scriptTagRe = /<script\b([^>]*)>/gi;
     let sm;
-    while ((sm = scriptTagRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+    while ((sm = scriptTagRe.exec(cleanedHtml)) !== null) {
       const src = getAttrValue(sm[1] || '', 'src');
       if (src) {
         addCandidate(src);
@@ -2971,7 +2989,6 @@ function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
 
   if (Array.isArray(perfEntries)) {
     for (const entry of perfEntries) {
-      if (urls.length >= 35) break;
       const rawName = typeof entry === 'string' ? entry : entry && entry.name;
       if (typeof rawName === 'string' && rawName) {
         addCandidate(rawName);
@@ -2979,11 +2996,33 @@ function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
     }
   }
 
-  return urls;
+  const pageRouteUrls = [];
+  const otherRouteUrls = [];
+  const otherUrls = [];
+  for (const u of urls) {
+    if (/\/page-[^/]+\.js$/i.test(u)) {
+      pageRouteUrls.push(u);
+    } else if (SPA_ROUTE_CHUNK_RE.test(u)) {
+      otherRouteUrls.push(u);
+    } else {
+      otherUrls.push(u);
+    }
+  }
+  const prioritizedRoutes = [...pageRouteUrls, ...otherRouteUrls];
+  const budget = Math.max(0, MAX_SPA_CHUNK_URLS - prioritizedRoutes.length);
+  let selectedOtherUrls = otherUrls;
+  if (otherUrls.length > budget) {
+    const headCount = Math.floor(budget * 0.4);
+    const tailCount = budget - headCount;
+    const headUrls = headCount > 0 ? otherUrls.slice(0, headCount) : [];
+    const tailUrls = tailCount > 0 ? otherUrls.slice(-tailCount) : [];
+    selectedOtherUrls = [...headUrls, ...tailUrls];
+  }
+  return [...prioritizedRoutes, ...selectedOtherUrls].slice(0, MAX_SPA_CHUNK_URLS);
 }
 
 /**
- * Trich xuat URL Next.js App Router chunk (app/public/partial/.../page-*.js) tu HTML/RSC payload.
+ * Trich xuat URL Next.js App Router chunk (app/.../page-*.js) tu HTML/RSC payload.
  */
 function extractNextAppChunkUrls(
   htmlText,
@@ -3000,21 +3039,44 @@ function extractNextAppChunkUrls(
   }
 
   const normalized = htmlText.replace(/\\\//g, '/');
-  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/public\/partial\/[a-zA-Z0-9_\/-]+\.js/g;
-  const urls = [];
+  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/[a-zA-Z0-9_\/()[\].%-]+\.js/g;
+  const routeUrls = [];
+  const otherUrls = [];
   const seen = new Set();
-  let m;
 
-  while ((m = chunkRe.exec(normalized)) !== null && urls.length < 6) {
-    const cleanRel = m[0].replace(/^\/?_next\//, '').replace(/^\//, '');
-    const fullUrl = `${origin}/_next/${cleanRel}`;
-    if (!seen.has(fullUrl)) {
-      seen.add(fullUrl);
-      urls.push(fullUrl);
+  function pushUrl(fullUrl) {
+    if (!fullUrl || seen.has(fullUrl)) {
+      return;
+    }
+    seen.add(fullUrl);
+    if (
+      /\/(?:public\/partial\/|page-[^/]+\.js$)/.test(fullUrl) ||
+      !/\/(?:layout|loading|not-found|error)-/.test(fullUrl)
+    ) {
+      routeUrls.push(fullUrl);
+    } else {
+      otherUrls.push(fullUrl);
     }
   }
 
-  return urls;
+  let m;
+  while ((m = chunkRe.exec(normalized)) !== null && seen.size < 36) {
+    const cleanRel = m[0].replace(/^\/?_next\//, '').replace(/^\//, '');
+    if (SPA_VENDOR_CHUNK_RE.test(cleanRel)) {
+      continue;
+    }
+    pushUrl(`${origin}/_next/${cleanRel}`);
+    if (/[()[\]]/.test(cleanRel)) {
+      const encodedRel = cleanRel
+        .replace(/\(/g, '%28')
+        .replace(/\)/g, '%29')
+        .replace(/\[/g, '%5B')
+        .replace(/\]/g, '%5D');
+      pushUrl(`${origin}/_next/${encodedRel}`);
+    }
+  }
+
+  return [...routeUrls, ...otherUrls].slice(0, 24);
 }
 
 /**
@@ -12062,10 +12124,900 @@ async function loadEquipmentDebtContext(ctx = {}) {
   };
 }
 
+// --- adapters/radius.js ---
+/**
+ * Adapter nghiep vu cho Radius Portal (radius-portal.fpt.net / radius-apigateway.fpt.net).
+ * Ho tro tra cuu Thong so ket noi (GetbyObjID) va cap nhat IPNAT (statusNAT), IPv6 (statusIPv6) + Kill Session.
+ */
+const RADIUS_ENDPOINTS = {
+  PORTAL_URL: 'http://radius-portal.fpt.net/networkConnection',
+  API_BASE: 'http://radius-apigateway.fpt.net/api/v2',
+  GET_BY_OBJ_ID: 'http://radius-apigateway.fpt.net/api/v2/NetworkConnection/GetbyObjID',
+  CHANGE: 'http://radius-apigateway.fpt.net/api/v2/NetworkConnection/Change',
+};
+const RADIUS_NAT_OPTIONS = [
+  { value: '1', label: 'Default NAT' },
+  { value: '3', label: 'Khách hàng dùng Camera' },
+  { value: '5', label: 'ByPass NAT' },
+];
+const RADIUS_IPV6_STATUS = {
+  RULE: 0,
+  ACTIVE: 2,
+  DEACTIVATE: 3,
+};
+const RADIUS_IPV6_OPTIONS = [
+  { value: 3, label: 'Deactivate' },
+  { value: 2, label: 'Active' },
+  { value: 0, label: 'Rule' },
+];
+const RADIUS_CONTRACT_STATUS_LABELS = {
+  1: 'Bình thường',
+  2: 'Tạm ngưng',
+  3: 'Tạm ngưng',
+  4: 'Tạm ngưng',
+  5: 'Chủ TB đi vắng',
+  6: 'Hủy',
+  7: 'Đổi địa điểm',
+  99: 'Chờ thanh lý',
+};
+const RADIUS_IPV6_ONLY_LABELS = {
+  '-2': 'Action fail',
+  0: 'Deactivate',
+  1: 'Active',
+  2: 'Processing',
+};
+const RADIUS_NAT_NOTE_PRESETS = [
+  'KH yeu cau bo IPNAT',
+  'KH su dung Camera',
+  'Khoi phuc Default NAT',
+];
+const RADIUS_IPV6_NOTE_PRESETS = [
+  'Bo IPv6 cho KH',
+  'Bat IPv6 cho KH',
+  'Chuyen IPv6 ve Rule',
+];
+
+const VALID_NAT_VALUES = new Set(RADIUS_NAT_OPTIONS.map((o) => String(o.value)));
+const VALID_IPV6_VALUES = new Set(RADIUS_IPV6_OPTIONS.map((o) => Number(o.value)));
+const NON_ASCII_RE = /[^\u0000-\u007F]/;
+
+const demoRadiusRecords = new Map();
+
+function buildDefaultDemoRecord(contractId) {
+  return {
+    objID: 1000012345,
+    contract: contractId,
+    name: `${contractId.toLowerCase()}-demo`,
+    macAddress: 'AA:BB:CC:DD:EE:01',
+    status: 1,
+    locationID: 8,
+    locationName: 'Khu vực Demo',
+    localType: 519,
+    localTypeName: 'Giga',
+    dpi: 0,
+    statusNAT: '1',
+    descriptionNAT: 'Default NAT',
+    spamPool: 1,
+    poolListName: 'DEFAULT_POOL',
+    spampoolLocation: 'Vung Demo',
+    spampoolLocaltype: 'Giga',
+    spampoolHD: '',
+    spampoolOnline: 'DEFAULT_POOL',
+    ipAddress: '100.64.10.25',
+    callerID: 'AA:BB:CC:DD:EE:01',
+    ipFront: '',
+    ipRoute: '',
+    ipRouteIPv6: '2405:4800:demo::/64',
+    coAID: 0,
+    descriptionCoA: '',
+    serviceAddOn: '-',
+    ipV6Only: 0,
+    isIpv6Support: true,
+    statusIPv6: RADIUS_IPV6_STATUS.ACTIVE,
+    descriptionIPv6: 'Bat IPv6 cho KH',
+  };
+}
+
+function getOrCreateDemoRecord(contractId) {
+  if (!demoRadiusRecords.has(contractId)) {
+    demoRadiusRecords.set(contractId, buildDefaultDemoRecord(contractId));
+  }
+  return { ...demoRadiusRecords.get(contractId) };
+}
+
+/**
+ * Tra ve nhan hien thi cho Tinh trang NAT ("1" | "3" | "5").
+ */
+function getRadiusNatLabel(code) {
+  const key = code === undefined || code === null ? '' : String(code).trim();
+  const matched = RADIUS_NAT_OPTIONS.find((item) => String(item.value) === key);
+  return matched ? matched.label : key ? `Mã ${key}` : 'Không xác định';
+}
+
+/**
+ * Tra ve nhan hien thi cho IPv6 Status (0 | 2 | 3).
+ */
+function getRadiusIpv6Label(code) {
+  if (code === undefined || code === null || code === '') {
+    return 'Không xác định';
+  }
+  const num = Number(code);
+  const matched = RADIUS_IPV6_OPTIONS.find((item) => Number(item.value) === num);
+  return matched ? matched.label : `Mã ${num}`;
+}
+
+/**
+ * Tra ve nhan tinh trang hop dong Radius.
+ */
+function getRadiusContractStatusLabel(code) {
+  if (code === undefined || code === null || code === '') {
+    return '—';
+  }
+  const num = Number(code);
+  return RADIUS_CONTRACT_STATUS_LABELS[num] || `Mã ${num}`;
+}
+
+/**
+ * Tra ve nhan IPv6 Only Status (-2 | 0 | 1 | 2).
+ */
+function getRadiusIpv6OnlyLabel(code) {
+  if (code === undefined || code === null || code === '') {
+    return 'Deactivate';
+  }
+  const key = String(Number(code));
+  return RADIUS_IPV6_ONLY_LABELS[key] || `Mã ${key}`;
+}
+
+/**
+ * Chuyen chuoi tieng Viet co dau thanh ASCII khong dau hop le cho Radius API.
+ */
+function stripVietnameseDiacritics(raw) {
+  if (raw === undefined || raw === null) {
+    return '';
+  }
+  return String(raw)
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\u0000-\u007F]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Kiem tra ghi chu Radius: bat buoc nhap va chi cho phep tieng Viet khong dau (ASCII).
+ */
+function validateRadiusNote(raw, fieldLabel = '') {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  const prefix = fieldLabel ? `[${fieldLabel}] ` : '';
+  if (!value) {
+    return {
+      valid: false,
+      value: '',
+      error: `${prefix}Ghi chú không được để trống (nhập tiếng Việt không dấu).`,
+    };
+  }
+  if (NON_ASCII_RE.test(value)) {
+    return {
+      valid: false,
+      value,
+      error: `${prefix}Ghi chú bắt buộc là tiếng Việt KHÔNG DẤU (bấm "Bỏ dấu" để chuyển nhanh).`,
+    };
+  }
+  return { valid: true, value, error: '' };
+}
+
+/**
+ * Doc tam cookie accesstoken_iam_radius tu chuoi Cookie (khong luu tru).
+ */
+function parseRadiusTokenFromCookieString(cookieStr) {
+  if (!cookieStr || typeof cookieStr !== 'string') {
+    return '';
+  }
+  const parts = cookieStr.split(';');
+  for (const part of parts) {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx <= 0) continue;
+    const name = part.slice(0, eqIdx).trim();
+    if (name !== 'accesstoken_iam_radius') continue;
+    const rawVal = part
+      .slice(eqIdx + 1)
+      .trim()
+      .replace(/^"|"$/g, '');
+    if (!rawVal) return '';
+    try {
+      return decodeURIComponent(rawVal).trim();
+    } catch {
+      return rawVal;
+    }
+  }
+  return '';
+}
+
+/**
+ * Chuan hoa 1 ban ghi ket noi Radius tu NetworkConnection/GetbyObjID.
+ */
+function normalizeRadiusRecord(raw = {}) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const rawNat =
+    src.statusNAT !== undefined && src.statusNAT !== null && String(src.statusNAT).trim() !== ''
+      ? String(src.statusNAT).trim()
+      : '1';
+  const rawIpv6Num =
+    src.statusIPv6 !== undefined && src.statusIPv6 !== null && src.statusIPv6 !== ''
+      ? Number(src.statusIPv6)
+      : RADIUS_IPV6_STATUS.RULE;
+  const parsedObjId = Number(src.objID ?? src.objId ?? 0);
+
+  return {
+    objID: Number.isFinite(parsedObjId) ? parsedObjId : 0,
+    contract: String(src.contract || '').trim().toUpperCase(),
+    name: String(src.name || '').trim(),
+    macAddress: String(src.macAddress || '').trim(),
+    status:
+      src.status !== undefined && src.status !== null && src.status !== ''
+        ? Number(src.status)
+        : 0,
+    locationID:
+      src.locationID !== undefined && src.locationID !== null ? Number(src.locationID) : 0,
+    locationName: String(src.locationName || '').trim(),
+    localTypeName: String(src.localTypeName || '').trim(),
+    statusNAT: rawNat,
+    descriptionNAT: String(src.descriptionNAT || '').trim(),
+    statusIPv6: Number.isFinite(rawIpv6Num) ? rawIpv6Num : RADIUS_IPV6_STATUS.RULE,
+    descriptionIPv6: String(src.descriptionIPv6 || '').trim(),
+    ipV6Only:
+      src.ipV6Only !== undefined && src.ipV6Only !== null && src.ipV6Only !== ''
+        ? Number(src.ipV6Only)
+        : 0,
+    isIpv6Support: Boolean(src.isIpv6Support),
+    dpi: src.dpi !== undefined && src.dpi !== null && src.dpi !== '' ? Number(src.dpi) : 0,
+    coAID: src.coAID !== undefined && src.coAID !== null && src.coAID !== '' ? Number(src.coAID) : 0,
+    poolListName: String(src.poolListName || '').trim(),
+    ipAddress: String(src.ipAddress || '').trim(),
+    callerID: String(src.callerID || '').trim(),
+    ipRoute: String(src.ipRoute || '').trim(),
+    ipRouteIPv6: String(src.ipRouteIPv6 || '').trim(),
+  };
+}
+
+/**
+ * Tao danh sach summaryFields de hien thi tren the ket qua Radius.
+ */
+function buildRadiusSummaryFields(rawRecord) {
+  const rec = normalizeRadiusRecord(rawRecord);
+  const ipMac =
+    rec.ipAddress || rec.callerID
+      ? [rec.ipAddress, rec.callerID].filter(Boolean).join(' / ')
+      : '—';
+  const regionLocalType =
+    [rec.locationName, rec.localTypeName].filter(Boolean).join(' • ') || '—';
+
+  return [
+    { label: 'Số hợp đồng', value: rec.contract || '—' },
+    { label: 'Mã đối tượng (ObjID)', value: rec.objID ? String(rec.objID) : '—' },
+    { label: 'Tên truy nhập', value: rec.name || '—' },
+    { label: 'Tình trạng HĐ', value: getRadiusContractStatusLabel(rec.status) },
+    { label: 'Tình trạng NAT', value: `${getRadiusNatLabel(rec.statusNAT)} (${rec.statusNAT})` },
+    { label: 'Ghi chú NAT', value: rec.descriptionNAT || '—' },
+    { label: 'IPv6 Status', value: getRadiusIpv6Label(rec.statusIPv6) },
+    { label: 'Ghi chú IPv6', value: rec.descriptionIPv6 || '—' },
+    { label: 'Hỗ trợ IPv6', value: rec.isIpv6Support ? 'Có' : 'Không' },
+    { label: 'IPv6 Only', value: getRadiusIpv6OnlyLabel(rec.ipV6Only) },
+    { label: 'IP / MAC kết nối', value: ipMac },
+    { label: 'Spam Pool', value: rec.poolListName || '—' },
+    { label: 'Vùng miền / Gói cước', value: regionLocalType },
+  ];
+}
+
+/**
+ * Kiem tra va dung payload chuan cho POST /api/v2/NetworkConnection/Change.
+ */
+function buildRadiusChangePayload(rawRecord, draft = {}) {
+  const rec = normalizeRadiusRecord(rawRecord);
+  if (!rec.objID || rec.objID <= 0) {
+    return {
+      ok: false,
+      error: 'Không có ObjID hợp lệ của hợp đồng để gửi cập nhật Radius.',
+    };
+  }
+
+  const nextNatStatus =
+    draft.natStatus !== undefined && draft.natStatus !== null && String(draft.natStatus).trim() !== ''
+      ? String(draft.natStatus).trim()
+      : rec.statusNAT;
+  const natChanged = nextNatStatus !== String(rec.statusNAT);
+
+  const hasDraftIpv6Status =
+    draft.ipv6Status !== undefined &&
+    draft.ipv6Status !== null &&
+    String(draft.ipv6Status).trim() !== '';
+  const nextIpv6Status = hasDraftIpv6Status ? Number(draft.ipv6Status) : Number(rec.statusIPv6);
+  const rawDraftIpv6Note =
+    typeof draft.ipv6Description === 'string'
+      ? draft.ipv6Description.trim()
+      : rec.descriptionIPv6;
+  const ipv6StatusChanged = Number(nextIpv6Status) !== Number(rec.statusIPv6);
+  const ipv6NoteEdited =
+    typeof draft.ipv6Description === 'string' &&
+    rawDraftIpv6Note.length > 0 &&
+    rawDraftIpv6Note !== String(rec.descriptionIPv6 || '').trim();
+  const ipv6Changed = ipv6StatusChanged || ipv6NoteEdited;
+
+  const payload = {
+    objID: Number(rec.objID),
+    isKillSession: draft.isKillSession !== false,
+  };
+  const changes = { nat: false, ipv6: false };
+
+  if (natChanged) {
+    if (!VALID_NAT_VALUES.has(nextNatStatus)) {
+      return {
+        ok: false,
+        error: 'Giá trị Tình trạng NAT không hợp lệ (chỉ chấp nhận 1, 3 hoặc 5).',
+      };
+    }
+    const rawNatNote =
+      typeof draft.natDescription === 'string' ? draft.natDescription : rec.descriptionNAT;
+    const natNoteCheck = validateRadiusNote(rawNatNote, 'NAT');
+    if (!natNoteCheck.valid) {
+      return { ok: false, error: natNoteCheck.error };
+    }
+    payload.changeNAT = {
+      natStatus: nextNatStatus,
+      natDescription: natNoteCheck.value,
+    };
+    changes.nat = true;
+  }
+
+  if (ipv6Changed) {
+    if (!VALID_IPV6_VALUES.has(nextIpv6Status)) {
+      return {
+        ok: false,
+        error: 'Giá trị IPv6 Status không hợp lệ (chỉ chấp nhận Deactivate, Active hoặc Rule).',
+      };
+    }
+    if (Number(rec.ipV6Only) === 1 && nextIpv6Status === RADIUS_IPV6_STATUS.DEACTIVATE) {
+      return {
+        ok: false,
+        error: 'Thuê bao đang bật IPv6 Only, không thể chuyển IPv6 Status về Deactivate.',
+      };
+    }
+    const ipv6NoteCheck = validateRadiusNote(rawDraftIpv6Note, 'IPv6');
+    if (!ipv6NoteCheck.valid) {
+      return { ok: false, error: ipv6NoteCheck.error };
+    }
+    payload.changeIpv6 = {
+      ipv6Status: Number(nextIpv6Status),
+      ipv6Description: ipv6NoteCheck.value,
+    };
+    changes.ipv6 = true;
+  }
+
+  if (!changes.nat && !changes.ipv6) {
+    return {
+      ok: false,
+      error: 'Bạn chưa thay đổi Tình trạng NAT hoặc IPv6 Status nào so với hiện tại.',
+    };
+  }
+
+  return {
+    ok: true,
+    payload,
+    changes,
+    nextNatStatus,
+    nextIpv6Status,
+  };
+}
+
+function tryParseJson(text) {
+  if (!text || typeof text !== 'string') return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function extractMessageList(rawMsg) {
+  if (!rawMsg) return [];
+  if (Array.isArray(rawMsg)) {
+    return rawMsg
+      .map((item) => {
+        if (typeof item === 'string') return item.trim();
+        if (item && typeof item === 'object') {
+          return String(item.message || item.error_message || item.detail || item.status || '').trim();
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+  if (typeof rawMsg === 'string') {
+    return rawMsg.trim() ? [rawMsg.trim()] : [];
+  }
+  return [];
+}
+
+/**
+ * Phan tich phan hoi HTTP cua GetbyObjID.
+ */
+function parseRadiusLookupResponse(rawText, httpStatus = 200, contractId = '') {
+  if (httpStatus === 401) {
+    return {
+      ok: false,
+      authRequired: true,
+      error: 'Phiên token Radius đã hết hạn hoặc chưa đồng bộ (HTTP 401).',
+    };
+  }
+  if (httpStatus === 403) {
+    return {
+      ok: false,
+      forbidden: true,
+      error: 'Tài khoản không có quyền truy cập dữ liệu Radius (HTTP 403).',
+    };
+  }
+
+  const json = tryParseJson(rawText);
+  if (httpStatus < 200 || httpStatus >= 300) {
+    const apiErr =
+      (json && (json.error?.message || json.error_message || json.message)) ||
+      `Lỗi máy chủ Radius (HTTP ${httpStatus || 0}).`;
+    return { ok: false, error: String(apiErr) };
+  }
+
+  if (!json || typeof json !== 'object') {
+    return {
+      ok: false,
+      error: 'Phản hồi từ Radius API không đúng định dạng JSON.',
+    };
+  }
+
+  if (json.error_code !== undefined && Number(json.error_code) !== 0) {
+    return {
+      ok: false,
+      error: String(json.error_message || json.status || 'Tra cứu Radius thất bại.'),
+    };
+  }
+
+  const rows = Array.isArray(json.data) ? json.data : [];
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      notFound: true,
+      error:
+        String(json.error_message || '').trim() ||
+        `Không tìm thấy thông số kết nối trên Radius cho ${contractId || 'hợp đồng này'}.`,
+    };
+  }
+
+  const normalizedRows = rows.map(normalizeRadiusRecord);
+  const preferred =
+    (contractId && normalizedRows.find((r) => r.contract === contractId)) || normalizedRows[0];
+
+  return {
+    ok: true,
+    record: preferred,
+    records: normalizedRows,
+  };
+}
+
+/**
+ * Phan tich phan hoi HTTP cua POST /api/v2/NetworkConnection/Change.
+ */
+function parseRadiusChangeResponse(rawText, httpStatus = 200) {
+  if (httpStatus === 401) {
+    return {
+      ok: false,
+      authRequired: true,
+      error: 'Phiên token Radius đã hết hạn (HTTP 401). Hãy đồng bộ IAM hoặc đăng nhập lại Radius.',
+    };
+  }
+  if (httpStatus === 403) {
+    return {
+      ok: false,
+      forbidden: true,
+      error: 'Tài khoản không có quyền cập nhật cấu hình Radius (HTTP 403).',
+    };
+  }
+
+  const json = tryParseJson(rawText);
+  if (httpStatus < 200 || httpStatus >= 300) {
+    const apiErr =
+      (json &&
+        ((json.error && json.error.message) ||
+          json.error_message ||
+          extractMessageList(json.message).join(' • '))) ||
+      `Cập nhật Radius thất bại (HTTP ${httpStatus || 0}).`;
+    return { ok: false, error: String(apiErr) };
+  }
+
+  if (!json || typeof json !== 'object') {
+    return {
+      ok: true,
+      message: 'Đã gửi yêu cầu cập nhật Radius thành công.',
+      details: [],
+    };
+  }
+
+  const msgList = extractMessageList(json.message);
+  const statusText = String(json.status || '').trim();
+  const errCode =
+    json.error_code !== undefined && json.error_code !== null ? Number(json.error_code) : 0;
+
+  if ((Number.isFinite(errCode) && errCode !== 0 && errCode !== 200) || /^fail$/i.test(statusText)) {
+    return {
+      ok: false,
+      error:
+        String(json.error_message || '').trim() ||
+        msgList.join(' • ') ||
+        'Radius trả về trạng thái cập nhật không thành công.',
+      details: msgList,
+    };
+  }
+
+  const combinedMsg =
+    msgList.join(' • ') ||
+    String(json.error_message || '').trim() ||
+    'Đã cập nhật thông số Radius thành công.';
+
+  return {
+    ok: true,
+    message: combinedMsg,
+    details: msgList,
+  };
+}
+
+function getTransientPageToken(ctx = {}) {
+  const doc =
+    ctx.pageDocument || (typeof document !== 'undefined' ? document : null);
+  if (!doc || typeof doc.cookie !== 'string') {
+    return '';
+  }
+  return parseRadiusTokenFromCookieString(doc.cookie);
+}
+
+async function requestRadiusApi(url, { method = 'POST', body = null, ctx = {}, allowWarmRetry = true } = {}) {
+  const payloadStr = body !== null && body !== undefined ? JSON.stringify(body) : null;
+
+  if (isAndroidAppEnv()) {
+    const res = await requestPortal({
+      url,
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      data: payloadStr,
+      timeout: 15000,
+      useRadiusBearer: true,
+    });
+
+    const missingTokenOr401 =
+      res.status === 401 || res.error === 'RADIUS_TOKEN_MISSING';
+    if (missingTokenOr401 && allowWarmRetry && canWarmPortalSession()) {
+      const warmRes = await warmPortalSession(RADIUS_ENDPOINTS.PORTAL_URL, {
+        force: true,
+        timeout: 15000,
+      });
+      if (warmRes && warmRes.ok) {
+        return requestRadiusApi(url, { method, body, ctx, allowWarmRetry: false });
+      }
+      return {
+        ok: false,
+        status: 401,
+        responseText: '',
+        error: 'RADIUS_TOKEN_MISSING',
+        authRequired: true,
+      };
+    }
+    return res;
+  }
+
+  const pageToken = getTransientPageToken(ctx);
+  if (!pageToken) {
+    return {
+      ok: false,
+      status: 401,
+      responseText: '',
+      error: 'RADIUS_PORTAL_COOKIE_UNAVAILABLE',
+      authRequired: true,
+    };
+  }
+
+  return requestPortal({
+    url,
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: `Bearer ${pageToken}`,
+    },
+    data: payloadStr,
+    timeout: 15000,
+  });
+}
+
+function buildRadiusAuthErrorResult(detail = '') {
+  const onAndroid = isAndroidAppEnv();
+  return {
+    status: 'iam_expired',
+    message:
+      detail ||
+      (onAndroid
+        ? 'Chưa có token truy cập Radius (accesstoken_iam_radius). Bấm "Đăng nhập Radius (IAM)" để đồng bộ phiên và thử lại.'
+        : 'Đang chạy ở tab khác nên trình duyệt chưa đọc được cookie Radius. Hãy mở trang http://radius-portal.fpt.net/networkConnection đang đăng nhập IAM rồi bấm lại.'),
+    loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+  };
+}
+
+/**
+ * Tra cuu thong tin ket noi Radius theo So HD / ObjID / Username.
+ */
+async function fetchRadiusConnection(rawContractId, ctx = {}) {
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+    };
+  }
+  const contractId = check.value;
+
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    await sleep(220);
+    const demoRec = getOrCreateDemoRecord(contractId);
+    return {
+      status: 'ok',
+      mode: 'demo',
+      record: demoRec,
+      summaryFields: buildRadiusSummaryFields(demoRec),
+    };
+  }
+
+  const res = await requestRadiusApi(RADIUS_ENDPOINTS.GET_BY_OBJ_ID, {
+    method: 'POST',
+    body: { searchType: 1, searchValue: contractId },
+    ctx,
+  });
+
+  if (res.authRequired) {
+    return buildRadiusAuthErrorResult();
+  }
+  if (!res.status && res.error) {
+    return {
+      status: 'error',
+      message: `Không thể kết nối máy chủ Radius (${res.error}). Kiểm tra lại VPN công ty.`,
+      loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+    };
+  }
+
+  const parsed = parseRadiusLookupResponse(res.responseText, res.status, contractId);
+  if (parsed.authRequired) {
+    return buildRadiusAuthErrorResult(parsed.error);
+  }
+  if (!parsed.ok) {
+    return {
+      status: 'error',
+      message: parsed.error,
+      loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+    };
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    record: parsed.record,
+    records: parsed.records,
+    summaryFields: buildRadiusSummaryFields(parsed.record),
+  };
+}
+
+/**
+ * Gui thay doi IPNAT / IPv6 / Kill Session len POST /api/v2/NetworkConnection/Change.
+ */
+async function submitRadiusConnectionChange(rawRecord, draft = {}, ctx = {}) {
+  const rec = normalizeRadiusRecord(rawRecord);
+  const built = buildRadiusChangePayload(rec, draft);
+  if (!built.ok) {
+    return {
+      status: 'validation_error',
+      message: built.error,
+    };
+  }
+
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    await sleep(250);
+    const updated = { ...rec };
+    if (built.payload.changeNAT) {
+      updated.statusNAT = built.payload.changeNAT.natStatus;
+      updated.descriptionNAT = built.payload.changeNAT.natDescription;
+    }
+    if (built.payload.changeIpv6) {
+      updated.statusIPv6 = built.payload.changeIpv6.ipv6Status;
+      updated.descriptionIPv6 = built.payload.changeIpv6.ipv6Description;
+    }
+    if (updated.contract) {
+      demoRadiusRecords.set(updated.contract, updated);
+    }
+    return {
+      status: 'ok',
+      mode: 'demo',
+      record: updated,
+      payload: built.payload,
+      changes: built.changes,
+      summaryFields: buildRadiusSummaryFields(updated),
+      message: `Đã mô phỏng cập nhật Radius cho ${updated.contract || updated.objID} (${
+        built.payload.isKillSession ? 'kèm Kill Session' : 'không Kill Session'
+      }).`,
+    };
+  }
+
+  const res = await requestRadiusApi(RADIUS_ENDPOINTS.CHANGE, {
+    method: 'POST',
+    body: built.payload,
+    ctx,
+  });
+
+  if (res.authRequired) {
+    return buildRadiusAuthErrorResult();
+  }
+  if (!res.status && res.error) {
+    return {
+      status: 'error',
+      message: `Không thể gửi lệnh cập nhật Radius (${res.error}). Kiểm tra lại VPN công ty.`,
+      loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+    };
+  }
+
+  const parsed = parseRadiusChangeResponse(res.responseText, res.status);
+  if (parsed.authRequired) {
+    return buildRadiusAuthErrorResult(parsed.error);
+  }
+  if (!parsed.ok) {
+    return {
+      status: 'error',
+      message: parsed.error,
+      loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+    };
+  }
+
+  let freshRecord = {
+    ...rec,
+    ...(built.payload.changeNAT
+      ? {
+          statusNAT: built.payload.changeNAT.natStatus,
+          descriptionNAT: built.payload.changeNAT.natDescription,
+        }
+      : {}),
+    ...(built.payload.changeIpv6
+      ? {
+          statusIPv6: built.payload.changeIpv6.ipv6Status,
+          descriptionIPv6: built.payload.changeIpv6.ipv6Description,
+        }
+      : {}),
+  };
+
+  if (rec.contract) {
+    const refreshed = await fetchRadiusConnection(rec.contract, ctx);
+    if (refreshed.status === 'ok' && refreshed.record) {
+      freshRecord = refreshed.record;
+    }
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    record: freshRecord,
+    payload: built.payload,
+    changes: built.changes,
+    summaryFields: buildRadiusSummaryFields(freshRecord),
+    message: parsed.message,
+  };
+}
+
+/**
+ * Thuc thi hanh dong tu giao dien cho cong Radius Portal.
+ */
+async function runRadiusAction(actionId, rawContractId, ctx = {}) {
+  const portal = PORTALS.radius;
+  const action = portal.actions.find((a) => a.id === actionId);
+  if (!action) {
+    return {
+      status: 'error',
+      message: 'Thao tác không hợp lệ trên Radius Portal.',
+    };
+  }
+
+  const check = validateContractId(rawContractId);
+  if (!check.valid) {
+    return {
+      status: 'validation_error',
+      message: check.error,
+    };
+  }
+  const contractId = check.value;
+
+  if (actionId === 'check_radius') {
+    const lookup = await fetchRadiusConnection(contractId, ctx);
+    if (lookup.status !== 'ok') {
+      return lookup;
+    }
+    const demoSuffix = lookup.mode === 'demo' ? ' (Dữ liệu mô phỏng)' : '';
+    return {
+      status: 'ok',
+      mode: lookup.mode,
+      title: `Thông số Radius — ${contractId}${demoSuffix}`,
+      message: `NAT: ${getRadiusNatLabel(lookup.record.statusNAT)} • IPv6: ${getRadiusIpv6Label(
+        lookup.record.statusIPv6
+      )}`,
+      summaryFields: lookup.summaryFields,
+      radiusRecord: lookup.record,
+      sourceUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+      sourceLabel: 'Mở Radius Portal',
+    };
+  }
+
+  let baseRecord = ctx.record ? normalizeRadiusRecord(ctx.record) : null;
+  if (!baseRecord || !baseRecord.objID) {
+    const lookup = await fetchRadiusConnection(contractId, ctx);
+    if (lookup.status !== 'ok') {
+      return lookup;
+    }
+    baseRecord = lookup.record;
+  }
+
+  let draft = {
+    natStatus: ctx.natStatus !== undefined ? ctx.natStatus : baseRecord.statusNAT,
+    natDescription:
+      ctx.natDescription !== undefined ? ctx.natDescription : baseRecord.descriptionNAT,
+    ipv6Status: ctx.ipv6Status !== undefined ? ctx.ipv6Status : baseRecord.statusIPv6,
+    ipv6Description:
+      ctx.ipv6Description !== undefined ? ctx.ipv6Description : baseRecord.descriptionIPv6,
+    isKillSession: ctx.isKillSession !== false,
+  };
+
+  if (actionId === 'remove_ipnat' && ctx.natStatus === undefined) {
+    draft.natStatus = '5';
+    draft.natDescription = draft.natDescription || 'KH yeu cau bo IPNAT';
+  }
+  if (actionId === 'remove_ipv6' && ctx.ipv6Status === undefined) {
+    draft.ipv6Status = RADIUS_IPV6_STATUS.DEACTIVATE;
+    draft.ipv6Description = draft.ipv6Description || 'Bo IPv6 cho KH';
+  }
+
+  const submitRes = await submitRadiusConnectionChange(baseRecord, draft, ctx);
+  if (submitRes.status !== 'ok') {
+    return submitRes;
+  }
+
+  const changedParts = [];
+  if (submitRes.changes.nat) {
+    changedParts.push(`NAT -> ${getRadiusNatLabel(submitRes.record.statusNAT)}`);
+  }
+  if (submitRes.changes.ipv6) {
+    changedParts.push(`IPv6 -> ${getRadiusIpv6Label(submitRes.record.statusIPv6)}`);
+  }
+  const killNote = submitRes.payload.isKillSession ? 'Có Kill Session' : 'Không Kill Session';
+  const demoSuffix = submitRes.mode === 'demo' ? ' (Mô phỏng)' : '';
+
+  return {
+    status: 'ok',
+    mode: submitRes.mode,
+    title: `Đã cập nhật Radius — ${contractId}${demoSuffix}`,
+    message: `${submitRes.message} (${[...changedParts, killNote].join(' • ')})`,
+    summaryFields: submitRes.summaryFields,
+    radiusRecord: submitRes.record,
+    sourceUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+    sourceLabel: 'Mở Radius Portal',
+  };
+}
+
 // --- adapters/portals.js ---
 /**
  * Bo dieu phoi thao tac chung cho ca 5 cong noi bo FPT.
  */
+
 
 
 
@@ -12115,6 +13067,9 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
   }
   if (portalId === 'recall') {
     return runRecallAction(actionId, rawContractId, ctx);
+  }
+  if (portalId === 'radius') {
+    return runRadiusAction(actionId, rawContractId, ctx);
   }
 
   const check = validateContractId(rawContractId);
@@ -12169,6 +13124,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
  * Giao dien dieu khien Remote Inside (1 man hinh toi uu Android & MacBook).
  * Toan bo chuoi tu nguoi dung deu duoc gan bang textContent de dam bao an toan.
  */
+
 
 
 
@@ -12522,6 +13478,16 @@ function mountRemoteInside({
     equipDebtSelectedKey: '',
     equipDebtSort: 'qty_desc',
     equipDebtSelectedStaff: '',
+    radiusLoading: false,
+    radiusError: '',
+    radiusLoginUrl: '',
+    radiusRecord: null,
+    radiusNatStatus: '1',
+    radiusNatNote: '',
+    radiusIpv6Status: RADIUS_IPV6_STATUS.RULE,
+    radiusIpv6Note: '',
+    radiusKillSession: true,
+    radiusPresetApplied: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -12849,6 +13815,19 @@ function mountRemoteInside({
     state.equipDebtSelectedStaff = '';
   }
 
+  function resetRadiusModalState() {
+    state.radiusLoading = false;
+    state.radiusError = '';
+    state.radiusLoginUrl = '';
+    state.radiusRecord = null;
+    state.radiusNatStatus = '1';
+    state.radiusNatNote = '';
+    state.radiusIpv6Status = RADIUS_IPV6_STATUS.RULE;
+    state.radiusIpv6Note = '';
+    state.radiusKillSession = true;
+    state.radiusPresetApplied = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -12938,6 +13917,7 @@ function mountRemoteInside({
     resetDeployModalState();
     resetRecallModalState();
     resetEquipDebtModalState();
+    resetRadiusModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -14448,6 +15428,100 @@ function mountRemoteInside({
     renderConfirm();
   }
 
+  function applyRadiusRecordToDraft(record, actionId) {
+    state.radiusRecord = record;
+    let nextNatStatus = record.statusNAT || '1';
+    let nextNatNote = record.descriptionNAT || '';
+    let nextIpv6Status =
+      record.statusIPv6 !== undefined && record.statusIPv6 !== null
+        ? Number(record.statusIPv6)
+        : RADIUS_IPV6_STATUS.RULE;
+    let nextIpv6Note = record.descriptionIPv6 || '';
+    let presetLabel = '';
+
+    if (actionId === 'remove_ipnat' && nextNatStatus !== '5') {
+      nextNatStatus = '5';
+      if (!nextNatNote || nextNatNote === 'Default NAT') {
+        nextNatNote = 'KH yeu cau bo IPNAT';
+      }
+      presetLabel = 'Đã chọn sẵn ByPass NAT (5) và ghi chú không dấu.';
+    } else if (actionId === 'remove_ipv6') {
+      if (Number(record.ipV6Only) !== 1 && nextIpv6Status !== RADIUS_IPV6_STATUS.DEACTIVATE) {
+        nextIpv6Status = RADIUS_IPV6_STATUS.DEACTIVATE;
+        if (!nextIpv6Note) {
+          nextIpv6Note = 'Bo IPv6 cho KH';
+        }
+        presetLabel = 'Đã chọn sẵn Deactivate IPv6 và ghi chú không dấu.';
+      } else if (Number(record.ipV6Only) === 1) {
+        presetLabel = 'Thuê bao đang bật IPv6 Only — không thể chuyển về Deactivate.';
+      }
+    }
+
+    state.radiusNatStatus = nextNatStatus;
+    state.radiusNatNote = nextNatNote;
+    state.radiusIpv6Status = nextIpv6Status;
+    state.radiusIpv6Note = nextIpv6Note;
+    state.radiusKillSession = true;
+    state.radiusPresetApplied = presetLabel;
+  }
+
+  async function loadRadiusModal(rawContractId, actionId = 'edit_radius', preloadedRecord = null) {
+    const contractId = normalizeContractId(rawContractId || state.contractInput);
+    if (!contractId) return;
+
+    if (
+      preloadedRecord &&
+      preloadedRecord.objID &&
+      (!preloadedRecord.contract || preloadedRecord.contract === contractId)
+    ) {
+      state.radiusLoading = false;
+      state.radiusError = '';
+      state.radiusLoginUrl = '';
+      applyRadiusRecordToDraft(preloadedRecord, actionId);
+      renderConfirm();
+      return;
+    }
+
+    state.radiusLoading = true;
+    state.radiusError = '';
+    state.radiusLoginUrl = '';
+    state.radiusRecord = null;
+    state.radiusPresetApplied = '';
+    renderConfirm();
+
+    try {
+      const res = await fetchRadiusConnection(contractId, {
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      });
+      if (
+        !state.confirmAction ||
+        !['edit_radius', 'remove_ipnat', 'remove_ipv6'].includes(state.confirmAction.id)
+      ) {
+        return;
+      }
+      state.radiusLoading = false;
+      if (res.status === 'ok' && res.record) {
+        applyRadiusRecordToDraft(res.record, actionId);
+      } else {
+        state.radiusError = res.message || 'Không tải được thông tin kết nối Radius.';
+        state.radiusLoginUrl = res.loginUrl || RADIUS_ENDPOINTS.PORTAL_URL;
+      }
+    } catch (err) {
+      if (
+        !state.confirmAction ||
+        !['edit_radius', 'remove_ipnat', 'remove_ipv6'].includes(state.confirmAction.id)
+      ) {
+        return;
+      }
+      state.radiusLoading = false;
+      state.radiusError =
+        err && err.message ? err.message : 'Lỗi đọc dữ liệu từ Radius Portal.';
+      state.radiusLoginUrl = RADIUS_ENDPOINTS.PORTAL_URL;
+    }
+    renderConfirm();
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
@@ -14495,6 +15569,13 @@ function mountRemoteInside({
         loadRecallModal(state.contractInput, { clearNotice: true });
       } else if (state.activePortalId === 'recall' && action.id === 'equipment_debt') {
         loadEquipmentDebtModal();
+      } else if (
+        state.activePortalId === 'radius' &&
+        (action.id === 'edit_radius' ||
+          action.id === 'remove_ipnat' ||
+          action.id === 'remove_ipv6')
+      ) {
+        loadRadiusModal(state.contractInput, action.id);
       }
       return;
     }
@@ -14521,6 +15602,11 @@ function mountRemoteInside({
     const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
     const isPortAssignLog = portal.id === 'port' && action.id === 'assign_port';
     const isPortReleaseLog = portal.id === 'port' && action.id === 'release_port';
+    const isRadiusEditLog =
+      portal.id === 'radius' &&
+      (action.id === 'edit_radius' ||
+        action.id === 'remove_ipnat' ||
+        action.id === 'remove_ipv6');
     const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
@@ -14540,6 +15626,23 @@ function mountRemoteInside({
       logTarget = contractId ? `${contractId} • ${baseDev}` : baseDev;
     } else if (isPortReleaseLog) {
       logTarget = contractId ? `${contractId} • Thu hồi` : 'Thu hồi';
+    } else if (isRadiusEditLog && actionCtx.record) {
+      const radParts = [];
+      if (
+        actionCtx.natStatus !== undefined &&
+        String(actionCtx.natStatus) !== String(actionCtx.record.statusNAT)
+      ) {
+        radParts.push(`NAT: ${getRadiusNatLabel(actionCtx.natStatus)}`);
+      }
+      if (
+        actionCtx.ipv6Status !== undefined &&
+        Number(actionCtx.ipv6Status) !== Number(actionCtx.record.statusIPv6)
+      ) {
+        radParts.push(`IPv6: ${getRadiusIpv6Label(actionCtx.ipv6Status)}`);
+      }
+      if (radParts.length > 0) {
+        logTarget = [contractId, ...radParts].filter(Boolean).join(' • ');
+      }
     }
 
     try {
@@ -14663,14 +15766,38 @@ function mountRemoteInside({
         typeof pageWindow.performance.getEntriesByType === 'function'
           ? pageWindow.performance.getEntriesByType('resource')
           : [];
-      const candidateScriptUrls = [
+      const domScriptUrls =
+        pageDocument && pageDocument.scripts
+          ? Array.from(pageDocument.scripts)
+              .map((s) => (s && s.src ? String(s.src).trim() : ''))
+              .filter(Boolean)
+          : [];
+      const rawCandidateUrls = [
+        ...domScriptUrls,
         ...(Array.isArray(apiHints.scriptUrls) ? apiHints.scriptUrls : []),
         ...extractNextAppChunkUrls(htmlText, pageHref),
         ...extractSpaChunkUrls(htmlText, pageHref, perfEntries),
       ];
+      const pageRouteCandidates = [];
+      const appChunkCandidates = [];
+      const otherCandidates = [];
+      for (const u of rawCandidateUrls) {
+        if (/\/page-[^/]+\.js$/i.test(u)) {
+          pageRouteCandidates.push(u);
+        } else if (/\/chunks\/app\//i.test(u)) {
+          appChunkCandidates.push(u);
+        } else {
+          otherCandidates.push(u);
+        }
+      }
+      const sortedCandidateUrls = [
+        ...pageRouteCandidates,
+        ...appChunkCandidates,
+        ...otherCandidates,
+      ];
       const seenScripts = new Set();
       const customScriptUrls = [];
-      for (const rawUrl of candidateScriptUrls) {
+      for (const rawUrl of sortedCandidateUrls) {
         if (!rawUrl || seenScripts.has(rawUrl) || VENDOR_SCRIPT_RE.test(rawUrl)) {
           continue;
         }
@@ -14679,15 +15806,18 @@ function mountRemoteInside({
           if (origin && parsed.origin !== origin) {
             continue;
           }
-          seenScripts.add(parsed.href);
-          customScriptUrls.push(parsed.href);
-          if (customScriptUrls.length >= 35) break;
+          if (!seenScripts.has(parsed.href)) {
+            seenScripts.add(parsed.href);
+            customScriptUrls.push(parsed.href);
+            if (customScriptUrls.length >= 70) break;
+          }
         } catch {
           // skip malformed script URL
         }
       }
 
       const collectedSnippets = [];
+      const seenSnippetPaths = new Set();
       if (isUserscriptEnv() && customScriptUrls.length > 0) {
         const settled = await Promise.allSettled(
           customScriptUrls.map((url) => requestPortal({ url, method: 'GET', timeout: 10000 }))
@@ -14708,16 +15838,34 @@ function mountRemoteInside({
           } catch {
             // keep defaults
           }
+          let normPath = jsPath;
+          try {
+            normPath = decodeURIComponent(jsPath);
+          } catch {
+            normPath = jsPath;
+          }
+          if (seenSnippetPaths.has(normPath)) {
+            continue;
+          }
+          seenSnippetPaths.add(normPath);
+          const isPageRouteChunk = /\/page-[^/]+\.js$/i.test(normPath);
           const chunkApiHints = extractApiHintsFromJs(res.responseText, contractId);
           const codeContexts = extractCodeContextsFromJs(
             res.responseText,
-            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract)/i,
+            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract|NetworkConnection|statusNAT|statusIPv6|descriptionNAT|descriptionIPv6|ByPass\s*NAT|Default\s*NAT|killSession|isKill|ngắt\s*phiên|không\s*dấu|khong\s*dau|ActiveProfile|VerifyIPv6|coAID|spamPool|ipV6Only|accesstoken_iam_radius|ChangeNetworkConnection|Deactivate|Tình\s*trạng\s*NAT|IPv6\s*Status|Ghi\s*chú|Kill\s*Session|Cập\s*nhật\s*thông\s*tin|changeNetworkConnection|NetworkConnection\/Change|isIpv6Support|statusCGNAT|SetIpv6Status)/i,
             contractId,
-            { maxTotal: 55000, maxContexts: 65, radius: 480 }
+            isPageRouteChunk
+              ? { maxTotal: 75000, maxContexts: 90, radius: 600 }
+              : { maxTotal: 55000, maxContexts: 65, radius: 480 }
           );
           if (chunkApiHints.length > 0 || codeContexts.length > 0) {
+            const routeBoost = isPageRouteChunk
+              ? 500
+              : /\/chunks\/app\/(?!layout-|loading-|not-found-|error-|login\/)/i.test(normPath)
+                ? 100
+                : 0;
             collectedSnippets.push({
-              score: chunkApiHints.length * 3 + codeContexts.length * 2,
+              score: chunkApiHints.length * 3 + codeContexts.length * 2 + routeBoost,
               snippet: {
                 origin: jsOrigin,
                 pathname: jsPath,
@@ -16058,6 +17206,26 @@ function mountRemoteInside({
         })
       );
     }
+    if (state.activePortalId === 'radius' && res.status === 'ok' && res.radiusRecord) {
+      extraBtns.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-primary-btn',
+          text: 'Chỉnh IPNAT / IPv6',
+          onClick: () => {
+            const editAction = PORTALS.radius.actions.find((a) => a.id === 'edit_radius');
+            if (!editAction) return;
+            resetConfirmState();
+            state.confirmAction = editAction;
+            loadRadiusModal(
+              state.contractInput || res.radiusRecord.contract,
+              editAction.id,
+              res.radiusRecord
+            );
+          },
+        })
+      );
+    }
     if (res.sourceUrl) {
       extraBtns.push(
         el('button', {
@@ -16736,6 +17904,16 @@ function mountRemoteInside({
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
     const isEquipmentDebt = portal.id === 'recall' && act.id === 'equipment_debt';
+    const isRadiusEdit =
+      portal.id === 'radius' &&
+      (act.id === 'edit_radius' || act.id === 'remove_ipnat' || act.id === 'remove_ipv6');
+
+    const radiusSheetTitle =
+      act.id === 'remove_ipnat'
+        ? 'Bỏ IPNAT (ByPass NAT)'
+        : act.id === 'remove_ipv6'
+        ? 'Bỏ IPv6 (Deactivate)'
+        : 'Chỉnh IPNAT & IPv6 (Radius)';
 
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
@@ -16752,6 +17930,8 @@ function mountRemoteInside({
             ? 'Phiếu thu hồi vật tư'
             : isEquipmentDebt
             ? 'Tồn nợ vật tư theo KTV'
+            : isRadiusEdit
+            ? radiusSheetTitle
             : `Xác nhận ${act.label}?`,
         }),
         el('button', {
@@ -20819,6 +21999,424 @@ function mountRemoteInside({
             });
           });
         }
+      }
+    } else if (isRadiusEdit) {
+      confirmBtn.textContent = 'Xác nhận lưu Radius';
+
+      if (state.radiusLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông số Radius cho ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.radiusError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadRadiusModal(contractId, act.id),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đăng nhập Radius (IAM)',
+            onClick: () => {
+              openExternalOrPortalUrl(state.radiusLoginUrl || RADIUS_ENDPOINTS.PORTAL_URL, {
+                mode: 'login',
+                title: 'Đăng nhập Radius (IAM)',
+                pageWindow,
+              });
+            },
+          }),
+        ];
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.radiusError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (!state.radiusRecord) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', { text: `Chưa có dữ liệu kết nối Radius cho ${contractId}.` }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Tải lại',
+                onClick: () => loadRadiusModal(contractId, act.id),
+              }),
+            ]),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const rec = state.radiusRecord;
+        const ipv6OnlyLocked = Number(rec.ipV6Only) === 1;
+        const metaLines = [
+          `ObjID: ${rec.objID || '—'}`,
+          `Tên truy nhập: ${rec.name || '—'}`,
+          `Tình trạng HĐ: ${getRadiusContractStatusLabel(rec.status)}`,
+          rec.ipAddress || rec.callerID
+            ? `IP / MAC: ${[rec.ipAddress, rec.callerID].filter(Boolean).join(' / ')}`
+            : '',
+          rec.poolListName ? `Spam Pool: ${rec.poolListName}` : '',
+          rec.locationName || rec.localTypeName
+            ? `Vùng / Gói: ${[rec.locationName, rec.localTypeName].filter(Boolean).join(' • ')}`
+            : '',
+          `Hỗ trợ IPv6: ${rec.isIpv6Support ? 'Có' : 'Không'} • IPv6 Only: ${getRadiusIpv6OnlyLabel(
+            rec.ipV6Only
+          )}`,
+        ].filter(Boolean);
+
+        sheetParts.push(
+          el('div', { className: 'ri-modem-info' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Thông số Radius hiện tại' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadRadiusModal(contractId, act.id, null),
+              }),
+            ]),
+            el('div', { className: 'ri-radius-badges' }, [
+              el('span', {
+                className: 'ri-recall-badge',
+                'data-tone': String(rec.statusNAT) === '5' ? 'warn' : 'ok',
+                text: `NAT: ${getRadiusNatLabel(rec.statusNAT)} (${rec.statusNAT})`,
+              }),
+              el('span', {
+                className: 'ri-recall-badge',
+                'data-tone':
+                  Number(rec.statusIPv6) === RADIUS_IPV6_STATUS.DEACTIVATE ? 'danger' : 'ok',
+                text: `IPv6: ${getRadiusIpv6Label(rec.statusIPv6)}`,
+              }),
+            ]),
+            ...metaLines.map((line) => el('div', { className: 'ri-box-sub', text: line })),
+          ])
+        );
+
+        if (state.radiusPresetApplied) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': ipv6OnlyLocked && act.id === 'remove_ipv6' ? 'warn' : 'info',
+            }, [el('div', { text: state.radiusPresetApplied })])
+          );
+        }
+
+        function buildRadiusFieldSection({
+          title,
+          selectId,
+          noteId,
+          noteLabel,
+          notePlaceholder,
+          options,
+          selectedValue,
+          noteValue,
+          presets,
+          warnMessage = '',
+          onSelectChange,
+          onNoteChange,
+        }) {
+          const diffBadge = el('span', { className: 'ri-radius-diff' });
+          const selectEl = el(
+            'select',
+            { className: 'ri-select', id: selectId },
+            options.map((opt) => {
+              const o = el('option', {
+                value: String(opt.value),
+                text: opt.optionText || opt.label,
+              });
+              if (opt.disabled) o.disabled = true;
+              if (String(opt.value) === String(selectedValue)) o.selected = true;
+              return o;
+            })
+          );
+          selectEl.value = String(selectedValue);
+          selectEl.addEventListener('change', (e) => {
+            onSelectChange(e.target.value);
+            syncRadiusValidationUi();
+          });
+
+          const noteInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: noteId,
+            placeholder: notePlaceholder,
+            autocomplete: 'off',
+            value: noteValue || '',
+          });
+          noteInput.value = noteValue || '';
+
+          const stripBtn = el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Bỏ dấu',
+            title: 'Chuyển ghi chú sang tiếng Việt không dấu',
+            onClick: () => {
+              const clean = stripVietnameseDiacritics(noteInput.value);
+              noteInput.value = clean;
+              onNoteChange(clean);
+              syncRadiusValidationUi();
+            },
+          });
+
+          const errEl = el('div', { className: 'ri-radius-err' });
+
+          const chipEls = presets.map((preset) => {
+            const btn = el('button', {
+              type: 'button',
+              className: 'ri-radius-chip',
+              text: preset,
+              onClick: () => {
+                noteInput.value = preset;
+                onNoteChange(preset);
+                syncRadiusValidationUi();
+              },
+            });
+            return { preset, btn };
+          });
+
+          noteInput.addEventListener('input', (e) => {
+            onNoteChange(e.target.value);
+            syncRadiusValidationUi();
+          });
+
+          const cardChildren = [
+            el('div', { className: 'ri-radius-card-head' }, [
+              el('label', { className: 'ri-confirm-label', for: selectId, text: title }),
+              diffBadge,
+            ]),
+            selectEl,
+          ];
+          if (warnMessage) {
+            cardChildren.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', { text: warnMessage }),
+              ])
+            );
+          }
+          cardChildren.push(
+            el('label', { className: 'ri-confirm-label', for: noteId, text: noteLabel }),
+            el('div', { className: 'ri-radius-note-row' }, [noteInput, stripBtn]),
+            el(
+              'div',
+              { className: 'ri-radius-presets' },
+              chipEls.map((c) => c.btn)
+            ),
+            errEl
+          );
+
+          return {
+            card: el('div', { className: 'ri-radius-card' }, cardChildren),
+            diffBadge,
+            selectEl,
+            noteInput,
+            stripBtn,
+            errEl,
+            chipEls,
+          };
+        }
+
+        const summaryTextEl = el('div', { text: '' });
+        const summaryBox = el(
+          'div',
+          { className: 'ri-sheet-status', 'data-tone': 'info', 'aria-live': 'polite' },
+          [summaryTextEl]
+        );
+
+        const natUi = buildRadiusFieldSection({
+          title: 'Tình trạng NAT (IPNAT)',
+          selectId: 'ri-radius-nat-select',
+          noteId: 'ri-radius-nat-note',
+          noteLabel: 'Ghi chú NAT (bắt buộc không dấu)',
+          notePlaceholder: 'VD: KH yeu cau bo IPNAT',
+          options: RADIUS_NAT_OPTIONS.map((o) => ({
+            value: o.value,
+            optionText: `${o.label} (${o.value})`,
+          })),
+          selectedValue: state.radiusNatStatus,
+          noteValue: state.radiusNatNote,
+          presets: RADIUS_NAT_NOTE_PRESETS,
+          onSelectChange: (val) => {
+            state.radiusNatStatus = String(val || '1');
+          },
+          onNoteChange: (val) => {
+            state.radiusNatNote = val;
+          },
+        });
+
+        const ipv6Ui = buildRadiusFieldSection({
+          title: 'IPv6 Status',
+          selectId: 'ri-radius-ipv6-select',
+          noteId: 'ri-radius-ipv6-note',
+          noteLabel: 'Ghi chú IPv6 (bắt buộc không dấu)',
+          notePlaceholder: 'VD: Bo IPv6 cho KH',
+          options: RADIUS_IPV6_OPTIONS.map((o) => ({
+            value: o.value,
+            optionText:
+              ipv6OnlyLocked && Number(o.value) === RADIUS_IPV6_STATUS.DEACTIVATE
+                ? `${o.label} (khóa do IPv6 Only)`
+                : o.label,
+            disabled: ipv6OnlyLocked && Number(o.value) === RADIUS_IPV6_STATUS.DEACTIVATE,
+          })),
+          selectedValue: state.radiusIpv6Status,
+          noteValue: state.radiusIpv6Note,
+          presets: RADIUS_IPV6_NOTE_PRESETS,
+          warnMessage: ipv6OnlyLocked
+            ? 'Thuê bao đang bật IPv6 Only — không thể chuyển IPv6 Status về Deactivate.'
+            : '',
+          onSelectChange: (val) => {
+            state.radiusIpv6Status = Number(val);
+          },
+          onNoteChange: (val) => {
+            state.radiusIpv6Note = val;
+          },
+        });
+
+        const killYesBtn = el('button', {
+          type: 'button',
+          className: `ri-mode-btn${state.radiusKillSession ? ' is-active' : ''}`,
+          'aria-pressed': state.radiusKillSession ? 'true' : 'false',
+          text: 'Có — Ngắt phiên',
+        });
+        const killNoBtn = el('button', {
+          type: 'button',
+          className: `ri-mode-btn${!state.radiusKillSession ? ' is-active' : ''}`,
+          'aria-pressed': !state.radiusKillSession ? 'true' : 'false',
+          text: 'Không — Giữ phiên',
+        });
+
+        function updateKillButtons() {
+          killYesBtn.classList.toggle('is-active', Boolean(state.radiusKillSession));
+          killYesBtn.setAttribute('aria-pressed', state.radiusKillSession ? 'true' : 'false');
+          killNoBtn.classList.toggle('is-active', !state.radiusKillSession);
+          killNoBtn.setAttribute('aria-pressed', !state.radiusKillSession ? 'true' : 'false');
+        }
+
+        killYesBtn.addEventListener('click', () => {
+          state.radiusKillSession = true;
+          updateKillButtons();
+          syncRadiusValidationUi();
+        });
+        killNoBtn.addEventListener('click', () => {
+          state.radiusKillSession = false;
+          updateKillButtons();
+          syncRadiusValidationUi();
+        });
+
+        const killCard = el('div', { className: 'ri-radius-card' }, [
+          el('div', { className: 'ri-radius-card-head' }, [
+            el('span', { className: 'ri-confirm-label', text: 'Kill Session (Ngắt phiên kết nối)' }),
+          ]),
+          el('div', { className: 'ri-mode-row', role: 'group' }, [killYesBtn, killNoBtn]),
+        ]);
+
+        function syncRadiusValidationUi() {
+          const draft = {
+            natStatus: state.radiusNatStatus,
+            natDescription: state.radiusNatNote,
+            ipv6Status: state.radiusIpv6Status,
+            ipv6Description: state.radiusIpv6Note,
+            isKillSession: state.radiusKillSession,
+          };
+
+          const natChanged = String(draft.natStatus) !== String(rec.statusNAT);
+          natUi.diffBadge.textContent = natChanged
+            ? `Đổi -> ${getRadiusNatLabel(draft.natStatus)}`
+            : 'Giữ nguyên';
+          natUi.diffBadge.classList.toggle('is-changed', natChanged);
+          natUi.stripBtn.style.display = /[^\u0000-\u007F]/.test(state.radiusNatNote || '')
+            ? ''
+            : 'none';
+          const natNoteCheck = natChanged ? validateRadiusNote(state.radiusNatNote, 'NAT') : null;
+          natUi.errEl.textContent = natNoteCheck && !natNoteCheck.valid ? natNoteCheck.error : '';
+          natUi.errEl.style.display = natUi.errEl.textContent ? '' : 'none';
+          for (const item of natUi.chipEls) {
+            item.btn.classList.toggle(
+              'is-active',
+              String(state.radiusNatNote || '').trim() === item.preset
+            );
+          }
+
+          const ipv6StatusChanged = Number(draft.ipv6Status) !== Number(rec.statusIPv6);
+          const ipv6NoteTrim = String(state.radiusIpv6Note || '').trim();
+          const ipv6Changed =
+            ipv6StatusChanged ||
+            (ipv6NoteTrim.length > 0 && ipv6NoteTrim !== String(rec.descriptionIPv6 || '').trim());
+          ipv6Ui.diffBadge.textContent = ipv6StatusChanged
+            ? `Đổi -> ${getRadiusIpv6Label(draft.ipv6Status)}`
+            : ipv6Changed
+            ? 'Sửa ghi chú'
+            : 'Giữ nguyên';
+          ipv6Ui.diffBadge.classList.toggle('is-changed', ipv6Changed);
+          ipv6Ui.stripBtn.style.display = /[^\u0000-\u007F]/.test(state.radiusIpv6Note || '')
+            ? ''
+            : 'none';
+          let ipv6Err = '';
+          if (ipv6OnlyLocked && Number(draft.ipv6Status) === RADIUS_IPV6_STATUS.DEACTIVATE) {
+            ipv6Err = 'Thuê bao đang bật IPv6 Only — không thể chọn Deactivate IPv6.';
+          } else if (ipv6Changed) {
+            const v6NoteCheck = validateRadiusNote(state.radiusIpv6Note, 'IPv6');
+            if (!v6NoteCheck.valid) ipv6Err = v6NoteCheck.error;
+          }
+          ipv6Ui.errEl.textContent = ipv6Err;
+          ipv6Ui.errEl.style.display = ipv6Err ? '' : 'none';
+          for (const item of ipv6Ui.chipEls) {
+            item.btn.classList.toggle(
+              'is-active',
+              String(state.radiusIpv6Note || '').trim() === item.preset
+            );
+          }
+
+          const check = buildRadiusChangePayload(rec, draft);
+          if (check.ok) {
+            const parts = [];
+            if (check.changes.nat) {
+              parts.push(
+                `NAT: ${getRadiusNatLabel(rec.statusNAT)} -> ${getRadiusNatLabel(
+                  check.payload.changeNAT.natStatus
+                )}`
+              );
+            }
+            if (check.changes.ipv6) {
+              parts.push(
+                `IPv6: ${getRadiusIpv6Label(rec.statusIPv6)} -> ${getRadiusIpv6Label(
+                  check.payload.changeIpv6.ipv6Status
+                )}`
+              );
+            }
+            parts.push(
+              `Kill Session: ${check.payload.isKillSession ? 'Có (ngắt phiên)' : 'Không'}`
+            );
+            summaryBox.setAttribute('data-tone', 'info');
+            summaryTextEl.textContent = `Sẵn sàng lưu: ${parts.join(' • ')}`;
+          } else {
+            summaryBox.setAttribute('data-tone', 'warn');
+            summaryTextEl.textContent = check.error;
+          }
+          confirmBtn.disabled = !check.ok;
+        }
+
+        sheetParts.push(natUi.card, ipv6Ui.card, killCard, summaryBox);
+        syncRadiusValidationUi();
+
+        confirmBtn.addEventListener('click', () =>
+          runConfirmedAction(act, {
+            record: state.radiusRecord,
+            natStatus: state.radiusNatStatus,
+            natDescription: state.radiusNatNote,
+            ipv6Status: state.radiusIpv6Status,
+            ipv6Description: state.radiusIpv6Note,
+            isKillSession: state.radiusKillSession,
+          })
+        );
       }
     } else {
       confirmBtn.addEventListener('click', () =>

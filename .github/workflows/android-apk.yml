@@ -121,6 +121,7 @@ jobs:
             - Inside: Tra thông tin HĐ, Phiếu triển khai FOX-ERP (Tổng quan, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User/Sửa SĐT CMR, Biên bản ĐT), ByPass, Reset MAC Modem/Box (+ Lịch sử), Kill Session, Clear OSP
             - Port (FTTH NEW): Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
             - Vật tư (NextGen): Phiếu thu hồi vật tư & Báo cáo tồn nợ vật tư theo KTV
+            - Radius: Tra cứu thông số kết nối, chỉnh IPNAT (Default/Camera/ByPass), IPv6 (Deactivate/Active/Rule) & Kill Session
           EOF
 
           if gh release view "$TAG" >/dev/null 2>&1; then

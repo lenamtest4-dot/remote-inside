@@ -1783,6 +1783,101 @@
   }
 }
 
+/* Radius IPNAT & IPv6 edit controls */
+.ri-radius-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.ri-radius-card {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-canvas);
+  border: 1px solid var(--border-crisp);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-radius-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ri-radius-card-head .ri-confirm-label {
+  margin: 0;
+}
+
+.ri-radius-diff {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--bg-subtle);
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.ri-radius-diff.is-changed {
+  background: var(--accent-signal-soft);
+  color: #B44302;
+}
+
+.ri-radius-note-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.ri-radius-note-row .ri-confirm-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ri-radius-note-row > button {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+  padding: 0 12px;
+}
+
+.ri-radius-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ri-radius-chip {
+  min-height: 34px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border-crisp);
+  background: var(--bg-surface);
+  color: var(--ink-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ri-radius-chip.is-active {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+  color: #B44302;
+}
+
+.ri-radius-err {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--state-danger);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ri-spinner {
     animation: none;

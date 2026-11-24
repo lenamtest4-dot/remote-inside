@@ -372,6 +372,227 @@ export function evalAndroidPortalJs(script, { timeout = 8000 } = {}) {
   });
 }
 
+export const FOX_ERP_HOME_URL = 'https://fox-erp.fpt.net/';
+
+export const NEXTGEN_FOX_APPS = Object.freeze({
+  equipment: {
+    appCode: 'FTEL.RE',
+    host: 'https://nextgen.fpt.net',
+    path: '/resource/equipment',
+  },
+  recall: {
+    appCode: 'FTEL.REM',
+    host: 'https://nextgen.fpt.net',
+    path: '/resource/recall',
+  },
+});
+
+export function isNextGenSessionExpiredDocument(doc) {
+  if (!doc) return false;
+  const titleText = String(doc.title || '');
+  if (/phiên đăng nhập.*hết hạn/i.test(titleText)) {
+    return true;
+  }
+  const body = doc.body || null;
+  const bodyText = body ? String(body.innerText !== undefined ? body.innerText : body.textContent || '') : '';
+  return /phiên đăng nhập đã hết hạn|bắt buộc phải vào ứng dụng[\s\S]{0,60}trên fox-erp/i.test(
+    bodyText
+  );
+}
+
+function encodeBase64Utf8(str) {
+  const s = String(str || '');
+  if (typeof btoa === 'function') {
+    try {
+      return btoa(s);
+    } catch {
+      return btoa(unescape(encodeURIComponent(s)));
+    }
+  }
+  if (typeof Buffer === 'function') {
+    return Buffer.from(s, 'utf8').toString('base64');
+  }
+  return '';
+}
+
+export function buildFoxErpNextGenLaunchUrlFromStorage(appKey, storageObj = null) {
+  const app = NEXTGEN_FOX_APPS[appKey] || null;
+  if (!app) {
+    return { ok: false, error: 'Ứng dụng NextGen không hợp lệ.' };
+  }
+  let rawAuth = '';
+  try {
+    const store = storageObj || (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (store && typeof store.getItem === 'function') {
+      rawAuth = store.getItem('auth') || '';
+    }
+  } catch {
+    rawAuth = '';
+  }
+  if (!rawAuth) {
+    return { ok: false, error: 'Chưa có phiên đăng nhập Fox-ERP trong localStorage.' };
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawAuth);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'Dữ liệu phiên Fox-ERP không hợp lệ.' };
+  }
+  const sessionCode = String(parsed.sessionCode || parsed.currentSession || '').trim();
+  const userName = String(
+    (parsed.currentUser && parsed.currentUser.userName) || ''
+  ).trim();
+  const bearerToken = String(
+    parsed.currentToken ||
+      parsed.accessToken ||
+      (parsed.currentUser && parsed.currentUser.accessToken) ||
+      ''
+  ).trim();
+
+  if (!sessionCode || !userName) {
+    return { ok: false, error: 'Fox-ERP chưa sẵn sàng SessionCode hoặc UserName.' };
+  }
+
+  const encoded = encodeBase64Utf8(
+    JSON.stringify({
+      SessionCode: sessionCode,
+      AppCode: app.appCode,
+      UserName: userName,
+    })
+  );
+  if (!encoded) {
+    return { ok: false, error: 'Không mã hóa được SessionCode sang Base64.' };
+  }
+
+  return {
+    ok: true,
+    url: `${app.host}${app.path}/?SessionCode=${encoded}`,
+    appCode: app.appCode,
+    bearerToken,
+  };
+}
+
+export async function triggerFoxErpPushUserSession(appCode, bearerToken = '', fetchFn = null) {
+  const cleanCode = String(appCode || '').trim().toUpperCase();
+  if (!cleanCode) return false;
+  const doFetch =
+    typeof fetchFn === 'function'
+      ? fetchFn
+      : typeof fetch === 'function'
+      ? fetch
+      : null;
+  if (!doFetch) return false;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (bearerToken) {
+    headers.Authorization = `Bearer ${bearerToken}`;
+  }
+  try {
+    await doFetch(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify({ appCode: cleanCode }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function bootstrapNextGenViaFoxErpAndroid(
+  appKey,
+  { onProgress = null } = {}
+) {
+  const app = NEXTGEN_FOX_APPS[appKey] || null;
+  if (!app || !canControlAndroidPortal()) {
+    return { ok: false, status: 'unsupported', loginUrl: FOX_ERP_HOME_URL };
+  }
+
+  const notify = (msg) => {
+    if (typeof onProgress === 'function' && msg) {
+      onProgress(msg);
+    }
+  };
+
+  notify('Đang xin cấp phiên mới từ Fox-ERP…');
+  let foxBg = await loadAndroidPortalBackground(FOX_ERP_HOME_URL, { timeout: 18000 });
+  if (!foxBg.ok && foxBg.status === 'needs_login') {
+    notify('Đang đồng bộ IAM cho Fox-ERP…');
+    const warmRes = await warmPortalSession(FOX_ERP_HOME_URL, { timeout: 12000, force: true });
+    if (warmRes.ok) {
+      foxBg = await loadAndroidPortalBackground(FOX_ERP_HOME_URL, { timeout: 18000 });
+    }
+  }
+  if (!foxBg.ok) {
+    return {
+      ok: false,
+      status: foxBg.status === 'needs_login' ? 'needs_login' : 'error',
+      loginUrl: FOX_ERP_HOME_URL,
+      error: 'Phiên IAM trên Fox-ERP đã hết hạn.',
+    };
+  }
+
+  let launchInfo = null;
+  const deadline = Date.now() + 7000;
+  while (Date.now() < deadline) {
+    const evalRes = await evalAndroidPortalJs(`
+      var rawAuth = '';
+      try { rawAuth = localStorage.getItem('auth') || ''; } catch (e) { rawAuth = ''; }
+      if (!rawAuth) return { ready: false };
+      var a = null;
+      try { a = JSON.parse(rawAuth); } catch (e) { a = null; }
+      var sc = a && (a.sessionCode || a.currentSession) ? String(a.sessionCode || a.currentSession).trim() : '';
+      var un = a && a.currentUser && a.currentUser.userName ? String(a.currentUser.userName).trim() : '';
+      var tk = a ? String(a.currentToken || a.accessToken || (a.currentUser && a.currentUser.accessToken) || '').trim() : '';
+      if (!sc || !un) return { ready: false };
+      var payload = JSON.stringify({ SessionCode: sc, AppCode: ${JSON.stringify(app.appCode)}, UserName: un });
+      var enc = '';
+      try { enc = btoa(payload); } catch (e) { enc = btoa(unescape(encodeURIComponent(payload))); }
+      try {
+        var hdrs = { 'Content-Type': 'application/json' };
+        if (tk) hdrs.Authorization = 'Bearer ' + tk;
+        fetch(${JSON.stringify(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`)}, {
+          method: 'POST',
+          credentials: 'include',
+          headers: hdrs,
+          body: JSON.stringify({ appCode: ${JSON.stringify(app.appCode)} })
+        }).catch(function() {});
+      } catch (e) {}
+      return { ready: true, url: ${JSON.stringify(`${app.host}${app.path}/?SessionCode=`)} + enc };
+    `);
+    if (evalRes.status === 'needs_login') {
+      return {
+        ok: false,
+        status: 'needs_login',
+        loginUrl: FOX_ERP_HOME_URL,
+        error: 'Phiên IAM trên Fox-ERP đã hết hạn.',
+      };
+    }
+    if (evalRes.ok && evalRes.value && evalRes.value.ready && evalRes.value.url) {
+      launchInfo = evalRes.value;
+      break;
+    }
+    await sleep(300);
+  }
+
+  if (!launchInfo || !launchInfo.url) {
+    return {
+      ok: false,
+      status: 'needs_login',
+      loginUrl: FOX_ERP_HOME_URL,
+      error: 'Fox-ERP chưa sẵn sàng SessionCode để mở NextGen.',
+    };
+  }
+
+  notify('Đang mở lại NextGen bằng phiên vừa cấp…');
+  const nextRes = await loadAndroidPortalBackground(launchInfo.url, { timeout: 20000 });
+  return nextRes;
+}
+
 export function clearWarmSessionCache() {
   warmCacheByHost.clear();
 }

@@ -9,10 +9,18 @@
  * Luu y Single-IIFE bundle: moi ten ham/hang top-level phai doc nhat trong toan bo src/.
  */
 
-import { getEffectiveEquipmentDebtFilter } from '../core/storage.js';
 import {
+  STORAGE_KEYS,
+  getEffectiveEquipmentDebtFilter,
+  getState,
+  setState,
+} from '../core/storage.js';
+import {
+  FOX_ERP_HOME_URL,
+  bootstrapNextGenViaFoxErpAndroid,
   canControlAndroidPortal,
   evalAndroidPortalJs,
+  isNextGenSessionExpiredDocument,
   isUserscriptEnv,
   loadAndroidPortalBackground,
   sleep,
@@ -1021,6 +1029,7 @@ function buildEquipmentPortalBootstrapJs() {
     normalizeEquipmentMatchKey,
     getEquipmentElText,
     isEquipmentPortalLocation,
+    isNextGenSessionExpiredDocument,
     parseEquipmentDebtNumber,
     findEquipmentDebtGrid,
     findEquipmentTableInGrid,
@@ -1058,6 +1067,7 @@ function buildEquipmentPortalBootstrapJs() {
             return {
               href: String(location.href || ''),
               onEquipPage: isEquipmentPortalLocation(location),
+              sessionExpired: isNextGenSessionExpiredDocument(document),
               hasReportMenuBtn: Boolean(findEquipmentReportMenuBtn(document)),
               hasDebtTab: ctrls.hasDebtTab,
               isDebtTabActive: ctrls.isDebtTabActive,
@@ -1364,6 +1374,7 @@ async function loadEquipmentDebtViaAndroidPortal({
   };
 
   notifyStatus('Đang kết nối Quản lý vật tư NextGen…');
+  let didFoxBootstrap = false;
   let bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
     reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
     timeout: 18000,
@@ -1381,14 +1392,20 @@ async function loadEquipmentDebtViaAndroidPortal({
       });
     }
   }
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    didFoxBootstrap = true;
+    bgRes = await bootstrapNextGenViaFoxErpAndroid('equipment', {
+      onProgress: notifyStatus,
+    });
+  }
   if (!bgRes.ok) {
     if (bgRes.status === 'needs_login') {
       return {
         status: 'iam_expired',
         mode: 'live',
-        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        loginUrl: bgRes.loginUrl || FOX_ERP_HOME_URL,
         message:
-          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+          'Phiên đăng nhập IAM trên Fox-ERP / Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
     }
     return {
@@ -1399,17 +1416,44 @@ async function loadEquipmentDebtViaAndroidPortal({
   }
 
   let st = null;
-  const readyDeadline = Date.now() + 8500;
+  let readyDeadline = Date.now() + 8500;
   while (Date.now() < readyDeadline) {
     const r = await evalEquipDom('window.__riEquipDom.inspectState()');
     if (r.status === 'needs_login') {
       return {
         status: 'iam_expired',
         mode: 'live',
-        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        loginUrl: FOX_ERP_HOME_URL,
         message:
           'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
+    }
+    if (r.ok && r.value && r.value.sessionExpired) {
+      if (didFoxBootstrap) {
+        return {
+          status: 'iam_expired',
+          mode: 'live',
+          loginUrl: FOX_ERP_HOME_URL,
+          message:
+            'Phiên Quản lý vật tư NextGen báo hết hạn. Hãy bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      didFoxBootstrap = true;
+      const foxRes = await bootstrapNextGenViaFoxErpAndroid('equipment', {
+        onProgress: notifyStatus,
+      });
+      if (!foxRes.ok) {
+        return {
+          status: foxRes.status === 'needs_login' ? 'iam_expired' : 'error',
+          mode: 'live',
+          loginUrl: foxRes.loginUrl || FOX_ERP_HOME_URL,
+          message:
+            foxRes.error ||
+            'Phiên Quản lý vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      readyDeadline = Date.now() + 8500;
+      continue;
     }
     if (r.ok && r.value && (r.value.hasDebtTab || r.value.hasReportMenuBtn)) {
       st = r.value;
@@ -1655,6 +1699,184 @@ async function loadEquipmentDebtViaAndroidPortal({
   };
 }
 
+export async function tryLoadEquipmentDebtViaDesktopBridge(ctx = {}) {
+  const storageAdapter = ctx.storageAdapter || null;
+  const hasGmBridge =
+    typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  if (!storageAdapter && !hasGmBridge) {
+    return null;
+  }
+
+  const reqId = `eqb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const activeFilter = ctx.activeFilter || getEffectiveEquipmentDebtFilter(storageAdapter);
+  setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+  setState(
+    STORAGE_KEYS.EQUIP_BRIDGE_REQ,
+    {
+      reqId,
+      activeFilter,
+      forceApplyFilter: Boolean(ctx.forceApplyFilter),
+      ts: Date.now(),
+    },
+    storageAdapter
+  );
+
+  const ackTimeoutMs = Math.max(400, Number(ctx.bridgeAckMs) || 1600);
+  const fullTimeoutMs = Math.max(ackTimeoutMs + 1000, Number(ctx.bridgeTimeoutMs) || 32000);
+  const startedAt = Date.now();
+  let acked = false;
+
+  while (true) {
+    const elapsed = Date.now() - startedAt;
+    if (!acked && elapsed > ackTimeoutMs) {
+      setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+      return null;
+    }
+    if (elapsed > fullTimeoutMs) {
+      setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+      return null;
+    }
+
+    await sleep(180);
+    const res = getState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+    if (!res || typeof res !== 'object' || res.reqId !== reqId) {
+      continue;
+    }
+
+    acked = true;
+    if (res.status === 'working') {
+      if (typeof ctx.onProgress === 'function' && res.progress) {
+        ctx.onProgress(res.progress);
+      }
+      continue;
+    }
+
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+
+    if (res.status === 'ok' && res.dataset) {
+      return {
+        status: 'ok',
+        mode: 'live',
+        dataset: res.dataset,
+        currentFilter: res.currentFilter || activeFilter,
+        viaBridge: true,
+      };
+    }
+
+    if (res.status === 'nextgen_session_expired') {
+      return {
+        status: 'nextgen_session_expired',
+        mode: 'live',
+        foxErpUrl: FOX_ERP_HOME_URL,
+        message:
+          res.message ||
+          'Tab Quản lý vật tư đang mở đã hết phiên NextGen. Bấm nút bên dưới để cấp lại phiên qua Fox-ERP.',
+      };
+    }
+
+    return null;
+  }
+}
+
+export async function handleEquipmentDebtDesktopBridgeRequest(
+  doc,
+  req,
+  { storageAdapter = null } = {}
+) {
+  if (!doc || !req || !req.reqId) return false;
+  const writeRes = (payload) =>
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, { reqId: req.reqId, ...payload }, storageAdapter);
+
+  if (isNextGenSessionExpiredDocument(doc)) {
+    writeRes({
+      status: 'nextgen_session_expired',
+      message: 'Tab Quản lý vật tư đang mở đã hết phiên NextGen.',
+    });
+    return false;
+  }
+
+  const filterToUse = req.activeFilter || getEffectiveEquipmentDebtFilter(storageAdapter);
+  writeRes({
+    status: 'working',
+    progress: { phaseText: 'Đang đọc trên tab Quản lý vật tư đang mở…' },
+  });
+
+  try {
+    let ctrls = findEquipmentDebtPageControls(doc);
+    if (!ctrls.hasDebtTab && findEquipmentReportMenuBtn(doc)) {
+      writeRes({ status: 'working', progress: { phaseText: 'Đang tự mở Báo cáo → Báo cáo nợ…' } });
+      const mRes = await triggerEquipmentOpenDebtReportMenu(doc);
+      if (mRes.ok) {
+        await waitForEquipmentDebtTabOpen(doc, { timeoutMs: 4500 });
+        ctrls = findEquipmentDebtPageControls(doc);
+      }
+    }
+
+    if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
+      writeRes({ status: 'working', progress: { phaseText: 'Đang chuyển tab Tồn công nợ theo NV…' } });
+      triggerEquipmentDebtTab(doc);
+      await sleep(700);
+      ctrls = findEquipmentDebtPageControls(doc);
+    }
+
+    const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
+    const realRows = getEquipmentRealBodyRows(table);
+    const cols = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+    const filterState = readEquipmentFilterState(doc);
+
+    if (
+      req.forceApplyFilter ||
+      realRows.length === 0 ||
+      cols.materials.length === 0
+    ) {
+      if (req.forceApplyFilter || filterState.missingRequired) {
+        const aRes = await applyEquipmentDebtFilterToPage(doc, filterToUse, {
+          onProgress: (m) => writeRes({ status: 'working', progress: { phaseText: m } }),
+        });
+        if (!aRes.ok) {
+          writeRes({ status: 'error', message: aRes.error });
+          return false;
+        }
+      }
+      if (ctrls.viewListBtn) {
+        writeRes({
+          status: 'working',
+          progress: { phaseText: 'Đang bấm "Xem danh sách" & chờ bảng tải…' },
+        });
+        triggerEquipmentDebtViewList(doc);
+        await waitForEquipmentReportLoad(doc, { timeoutMs: 20000 });
+      }
+    }
+
+    const collected = await collectEquipmentDebtFromDocument(doc, {
+      waitMs: 6500,
+      onProgress: (p) => writeRes({ status: 'working', progress: p }),
+    });
+    if (collected.status === 'ok' && collected.dataset) {
+      const endFilter = readEquipmentFilterState(doc);
+      writeRes({
+        status: 'ok',
+        dataset: collected.dataset,
+        currentFilter: {
+          region: endFilter.region || filterToUse.region,
+          province: endFilter.province || filterToUse.province,
+          partner: endFilter.partner || filterToUse.partner,
+        },
+      });
+      return true;
+    }
+    writeRes({ status: 'error', message: collected.message || 'Chưa đọc được bảng tồn nợ.' });
+    return false;
+  } catch (err) {
+    writeRes({
+      status: 'error',
+      message: err && err.message ? err.message : 'Lỗi đọc dữ liệu qua cầu nối tab.',
+    });
+    return false;
+  }
+}
+
 export async function loadEquipmentDebtContext(ctx = {}) {
   if (!isUserscriptEnv() || ctx.forceDemo) {
     return {
@@ -1678,12 +1900,29 @@ export async function loadEquipmentDebtContext(ctx = {}) {
   }
 
   if (!isEquipmentPortalLocation(loc) || !doc) {
+    if (!ctx.skipDesktopBridge) {
+      const bridged = await tryLoadEquipmentDebtViaDesktopBridge(ctx);
+      if (bridged) {
+        return bridged;
+      }
+    }
     return {
       status: 'needs_equipment_page',
       mode: 'live',
       url: EQUIPMENT_ENDPOINTS.base,
+      foxErpUrl: FOX_ERP_HOME_URL,
       message:
-        'Tồn nợ vật tư chạy trên trang Quản lý vật tư (nextgen.fpt.net/resource/equipment/). Bấm nút bên dưới để mở trang, vào Báo cáo → Báo cáo nợ → Xem danh sách.',
+        'Chưa có tab Quản lý vật tư đang mở hợp lệ. Bấm nút bên dưới để mở qua Fox-ERP (tự cấp phiên đăng nhập và tự tải tồn nợ KTV).',
+    };
+  }
+
+  if (isNextGenSessionExpiredDocument(doc)) {
+    return {
+      status: 'nextgen_session_expired',
+      mode: 'live',
+      foxErpUrl: FOX_ERP_HOME_URL,
+      message:
+        'Phiên Quản lý vật tư (NextGen) đã hết hạn do mở link ngoài hoặc hết giờ. Bấm "Cấp lại phiên qua Fox-ERP" bên dưới để mở lại đúng luồng và tự tải tồn nợ.',
     };
   }
 

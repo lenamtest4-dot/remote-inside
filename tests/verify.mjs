@@ -16,16 +16,23 @@ import {
   STORAGE_KEYS,
   addRecentContract,
   clearRecentContracts,
+  consumeNextGenLaunchIntent,
   consumePendingRecallContract,
   getEffectiveEquipmentDebtFilter,
   getEquipmentDebtFilter,
   getRecentContracts,
   getState,
+  peekNextGenLaunchIntent,
   setEquipmentDebtFilter,
+  setNextGenLaunchIntent,
   setPendingRecallContract,
   setState,
 } from '../src/core/storage.js';
 import {
+  FOX_ERP_HOME_URL,
+  NEXTGEN_FOX_APPS,
+  bootstrapNextGenViaFoxErpAndroid,
+  buildFoxErpNextGenLaunchUrlFromStorage,
   canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
@@ -34,6 +41,7 @@ import {
   evalAndroidPortalJs,
   getRuntimeEnv,
   isAndroidAppEnv,
+  isNextGenSessionExpiredDocument,
   isUserscriptEnv,
   loadAndroidPortalBackground,
   openExternalOrPortalUrl,
@@ -174,6 +182,7 @@ import {
   findEquipmentDebtPageControls,
   formatEquipmentDebtClipboardText,
   getEquipmentRealBodyRows,
+  handleEquipmentDebtDesktopBridgeRequest,
   isEquipmentPortalLocation,
   loadEquipmentDebtContext,
   normalizeEquipmentMatchKey,
@@ -186,6 +195,7 @@ import {
   readEquipmentFilterOptions,
   readEquipmentFilterOptionsAsync,
   readEquipmentFilterState,
+  tryLoadEquipmentDebtViaDesktopBridge,
 } from '../src/adapters/equipment.js';
 import {
   RADIUS_ENDPOINTS,
@@ -4418,6 +4428,64 @@ async function runTests() {
     assert.ok(androidEquipProgress.some((p) => p && p.phaseText), 'Must emit live phase progress on Android');
     const partnerOptsAndroid = await readEquipmentFilterOptionsAsync(null, 'partner');
     assert.deepEqual(partnerOptsAndroid.options, ['Phuong Nam VTU']);
+
+    // Test Fox-ERP SessionCode auto-recovery when NextGen shows "Phiên đăng nhập hết hạn"
+    let foxLaunchSeenUrl = '';
+    const expiredNextGenDoc = {
+      title: 'Phiên đăng nhập hết hạn – Fox-ERP',
+      body: {
+        innerText:
+          'Phiên đăng nhập đã hết hạn Vui lòng thực hiện đăng xuất và đăng nhập lại Fox-ERP và truy cập lại ứng dụng Quản lý vật tư. Bắt buộc phải vào ứng dụng Quản lý vật tư trên Fox-ERP trước khi truy cập từ link ngoài.',
+      },
+      querySelectorAll: () => [],
+      querySelector: () => null,
+    };
+    const foxMockStorage = {
+      getItem: (k) =>
+        k === 'auth'
+          ? JSON.stringify({
+              sessionCode: 'sess-demo-01',
+              currentToken: 'tok-demo-01',
+              currentUser: { userName: 'demo.ktv01' },
+            })
+          : null,
+    };
+    equipSandbox.document = expiredNextGenDoc;
+    equipSandbox.fetch = () => Promise.resolve({ ok: true });
+    equipSandbox.localStorage = foxMockStorage;
+    equipSandbox.btoa = (s) => Buffer.from(String(s), 'latin1').toString('base64');
+    globalThis.window.RemoteInsideNative.loadPortalBackground = (payloadJson) => {
+      const parsed = JSON.parse(payloadJson);
+      delete equipSandbox.__riEquipDom;
+      if (parsed.url.startsWith(FOX_ERP_HOME_URL)) {
+        equipSandbox.location = {
+          href: FOX_ERP_HOME_URL,
+          hostname: 'fox-erp.fpt.net',
+          pathname: '/',
+        };
+      } else if (parsed.url.includes('SessionCode=')) {
+        foxLaunchSeenUrl = parsed.url;
+        equipSandbox.location = {
+          href: parsed.url,
+          hostname: 'nextgen.fpt.net',
+          pathname: '/resource/equipment/',
+        };
+        equipSandbox.document = vmEquipDoc;
+      }
+      queueMicrotask(() => {
+        globalThis.window.__riNativeResolve(
+          parsed.reqId,
+          JSON.stringify({ ok: true, status: 'ok', finalUrl: equipSandbox.location.href })
+        );
+      });
+    };
+    const recoveredEquipRes = await loadEquipmentDebtContext({
+      pageLocation: globalThis.window.location,
+      pageDocument: {},
+      waitMs: 1200,
+    });
+    assert.equal(recoveredEquipRes.status, 'ok', 'Expired NextGen must auto-recover via Fox-ERP SessionCode');
+    assert.ok(foxLaunchSeenUrl.includes('/resource/equipment/?SessionCode='));
   } finally {
     if (hadWin21) {
       globalThis.window = prevWin21;
@@ -4425,6 +4493,93 @@ async function runTests() {
       delete globalThis.window;
     }
   }
+
+  // Test NextGen Session Expired detection, Fox-ERP SessionCode builder, launch intent, & desktop cross-tab bridge
+  assert.equal(
+    isNextGenSessionExpiredDocument({
+      title: 'Phiên đăng nhập hết hạn – Fox-ERP',
+      body: { innerText: 'Bắt buộc phải vào ứng dụng Quản lý vật tư trên Fox-ERP' },
+    }),
+    true
+  );
+  assert.equal(
+    isNextGenSessionExpiredDocument({
+      title: 'Quản lý vật tư',
+      body: { innerText: 'Tồn công nợ theo NV' },
+    }),
+    false
+  );
+
+  const mockFoxStorage = {
+    getItem: (k) =>
+      k === 'auth'
+        ? JSON.stringify({
+            sessionCode: 'sess-demo-99',
+            accessToken: 'tok-demo-99',
+            currentUser: { userName: 'demo.ktv99' },
+          })
+        : null,
+  };
+  const equipLaunch = buildFoxErpNextGenLaunchUrlFromStorage('equipment', mockFoxStorage);
+  assert.equal(equipLaunch.ok, true);
+  assert.equal(equipLaunch.appCode, 'FTEL.RE');
+  assert.ok(equipLaunch.url.startsWith('https://nextgen.fpt.net/resource/equipment/?SessionCode='));
+  const decodedPayload = JSON.parse(
+    Buffer.from(equipLaunch.url.split('SessionCode=')[1], 'base64').toString('utf8')
+  );
+  assert.deepEqual(decodedPayload, {
+    SessionCode: 'sess-demo-99',
+    AppCode: 'FTEL.RE',
+    UserName: 'demo.ktv99',
+  });
+  const recallLaunch = buildFoxErpNextGenLaunchUrlFromStorage('recall', mockFoxStorage);
+  assert.equal(recallLaunch.ok, true);
+  assert.equal(recallLaunch.appCode, 'FTEL.REM');
+  assert.ok(recallLaunch.url.startsWith('https://nextgen.fpt.net/resource/recall/?SessionCode='));
+
+  const intentStore = new Map();
+  const intentAdapter = {
+    get: (k) => (intentStore.has(k) ? intentStore.get(k) : null),
+    set: (k, v) => intentStore.set(k, v),
+  };
+  assert.equal(
+    setNextGenLaunchIntent(
+      { appCode: 'FTEL.REM', autoAction: 'manage_recall', contractId: 'sgn123456' },
+      intentAdapter
+    ),
+    true
+  );
+  assert.equal(peekNextGenLaunchIntent(180000, intentAdapter).appCode, 'FTEL.REM');
+  assert.equal(consumeNextGenLaunchIntent('FTEL.RE', 180000, intentAdapter), null, 'Mismatched appCode must not consume intent');
+  const consumedIntent = consumeNextGenLaunchIntent('FTEL.REM', 180000, intentAdapter);
+  assert.equal(consumedIntent.contractId, 'SGN123456');
+  assert.equal(peekNextGenLaunchIntent(180000, intentAdapter), null);
+
+  // Desktop cross-tab bridge roundtrip (sender on inside.fpt.net <-> responder on nextgen.fpt.net/resource/equipment/)
+  delayedSummaryPage = 1;
+  delayedTbodyPage = 1;
+  const bridgeStore = new Map();
+  const bridgeAdapter = {
+    get: (k) => (bridgeStore.has(k) ? bridgeStore.get(k) : null),
+    set: (k, v) => bridgeStore.set(k, v),
+  };
+  let responderFired = false;
+  const responderTimer = setInterval(() => {
+    const req = getState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, bridgeAdapter);
+    if (req && !responderFired) {
+      responderFired = true;
+      handleEquipmentDebtDesktopBridgeRequest(delayedDoc, req, { storageAdapter: bridgeAdapter });
+    }
+  }, 50);
+  const desktopBridgedRes = await tryLoadEquipmentDebtViaDesktopBridge({
+    storageAdapter: bridgeAdapter,
+    bridgeAckMs: 1000,
+    bridgeTimeoutMs: 4000,
+  });
+  clearInterval(responderTimer);
+  assert.ok(desktopBridgedRes && desktopBridgedRes.status === 'ok');
+  assert.equal(desktopBridgedRes.viaBridge, true);
+  assert.equal(desktopBridgedRes.dataset.totalStaff, 4);
 
   for (const token of [
     'equipment_debt',
@@ -4441,6 +4596,13 @@ async function runTests() {
     'loadAndroidPortalBackground',
     'evalAndroidPortalJs',
     'showAndroidPortalOverlay',
+    'FOX_ERP_HOME_URL',
+    'NEXTGEN_FOX_APPS',
+    'isNextGenSessionExpiredDocument',
+    'buildFoxErpNextGenLaunchUrlFromStorage',
+    'bootstrapNextGenViaFoxErpAndroid',
+    'handleEquipmentDebtDesktopBridgeRequest',
+    'consumeNextGenLaunchIntent',
     'ri-tab-sep',
     'is-planned',
     'is-primary',

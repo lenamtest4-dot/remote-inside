@@ -8,8 +8,11 @@
 
 import { CONTRACT_REGEX, normalizeContractId, validateContractId } from '../config/portals.js';
 import {
+  FOX_ERP_HOME_URL,
+  bootstrapNextGenViaFoxErpAndroid,
   canControlAndroidPortal,
   evalAndroidPortalJs,
+  isNextGenSessionExpiredDocument,
   isUserscriptEnv,
   loadAndroidPortalBackground,
   sleep,
@@ -681,6 +684,7 @@ function buildRecallPortalBootstrapJs() {
     cleanRecallText,
     isRecallPortalLocation,
     isRecallTicketLocation,
+    isNextGenSessionExpiredDocument,
     extractRecallFieldAfterLabel,
     getRecallElementText,
     getRecallGridRows,
@@ -726,6 +730,7 @@ function buildRecallPortalBootstrapJs() {
               href: String(location.href || ''),
               onPortal: isRecallPortalLocation(location),
               onTicket: onTicket,
+              sessionExpired: isNextGenSessionExpiredDocument(document),
               hasVisibleSearchInput: isInputVisible,
               hasAnySearchInput: Boolean(inp),
               hasMenuToggle: Boolean(menuBtn),
@@ -813,7 +818,13 @@ async function loadRecallTicketViaAndroidPortal(
 
   if (!forceReload) {
     const curCheck = await evalRecallDom('window.__riRecallDom.inspectState()');
-    if (curCheck.ok && curCheck.value && curCheck.value.onTicket && curCheck.value.snapshot) {
+    if (
+      curCheck.ok &&
+      curCheck.value &&
+      !curCheck.value.sessionExpired &&
+      curCheck.value.onTicket &&
+      curCheck.value.snapshot
+    ) {
       const curSnap = curCheck.value.snapshot;
       if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
         return {
@@ -839,6 +850,7 @@ async function loadRecallTicketViaAndroidPortal(
   }
 
   notify('Đang kết nối cổng Thu hồi vật tư NextGen…');
+  let didFoxBootstrap = false;
   let bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
     timeout: 18000,
   });
@@ -854,6 +866,12 @@ async function loadRecallTicketViaAndroidPortal(
       });
     }
   }
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    didFoxBootstrap = true;
+    bgRes = await bootstrapNextGenViaFoxErpAndroid('recall', {
+      onProgress: notify,
+    });
+  }
 
   if (!bgRes.ok) {
     if (bgRes.status === 'needs_login') {
@@ -861,9 +879,9 @@ async function loadRecallTicketViaAndroidPortal(
         status: 'iam_expired',
         mode: 'live',
         contract: requestedContract,
-        loginUrl: RECALL_ENDPOINTS.base,
+        loginUrl: bgRes.loginUrl || FOX_ERP_HOME_URL,
         message:
-          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+          'Phiên đăng nhập IAM trên Fox-ERP / Vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
     }
     return {
@@ -877,7 +895,7 @@ async function loadRecallTicketViaAndroidPortal(
   notify(`Đang tìm phiếu thu hồi HĐ ${requestedContract}…`);
   let openedMobileMenu = false;
   let searchSent = false;
-  const searchDeadline = Date.now() + 8000;
+  let searchDeadline = Date.now() + 8000;
 
   while (Date.now() < searchDeadline) {
     const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
@@ -886,10 +904,40 @@ async function loadRecallTicketViaAndroidPortal(
         status: 'iam_expired',
         mode: 'live',
         contract: requestedContract,
-        loginUrl: RECALL_ENDPOINTS.base,
+        loginUrl: FOX_ERP_HOME_URL,
         message:
           'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
+    }
+    if (stRes.ok && stRes.value && stRes.value.sessionExpired) {
+      if (didFoxBootstrap) {
+        return {
+          status: 'iam_expired',
+          mode: 'live',
+          contract: requestedContract,
+          loginUrl: FOX_ERP_HOME_URL,
+          message:
+            'Phiên Thu hồi vật tư NextGen báo hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      didFoxBootstrap = true;
+      const foxRes = await bootstrapNextGenViaFoxErpAndroid('recall', {
+        onProgress: notify,
+      });
+      if (!foxRes.ok) {
+        return {
+          status: foxRes.status === 'needs_login' ? 'iam_expired' : 'error',
+          mode: 'live',
+          contract: requestedContract,
+          loginUrl: foxRes.loginUrl || FOX_ERP_HOME_URL,
+          message:
+            foxRes.error ||
+            'Phiên Thu hồi vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      openedMobileMenu = false;
+      searchDeadline = Date.now() + 8000;
+      continue;
     }
     if (stRes.ok && stRes.value) {
       const v = stRes.value;
@@ -1004,6 +1052,17 @@ export async function loadRecallTicketContext(rawContractId, ctx = {}) {
     });
   }
 
+  if (isRecallPortalLocation(loc) && doc && isNextGenSessionExpiredDocument(doc)) {
+    return {
+      status: 'nextgen_session_expired',
+      mode: 'live',
+      contract: requestedContract,
+      foxErpUrl: FOX_ERP_HOME_URL,
+      message:
+        'Phiên Thu hồi vật tư (NextGen) đã hết hạn. Bấm "Cấp lại phiên qua Fox-ERP" bên dưới để mở lại đúng luồng.',
+    };
+  }
+
   if (isRecallTicketLocation(loc) && doc) {
     const snapshot = parseRecallTicketFromDocument(doc, loc);
     const contractMismatch = Boolean(
@@ -1103,6 +1162,18 @@ export async function runRecallAction(actionId, rawContractId, ctx = {}) {
       message: `Phiếu số ${ticket.ticketNumber || '1'}: ${snap.stats.totalItems} vật tư (${snap.stats.importedCount} đã nhập kho, ${snap.stats.editableCount} sửa được).`,
       summaryFields,
       snapshot: snap,
+    };
+  }
+
+  if (res.status === 'nextgen_session_expired') {
+    return {
+      status: 'iam_expired',
+      mode: res.mode || 'live',
+      title: 'Phiên NextGen Vật tư đã hết hạn',
+      message:
+        res.message ||
+        'Phiên Thu hồi vật tư (NextGen) đã hết hạn. Hãy mở lại qua Fox-ERP rồi thử lại.',
+      loginUrl: res.foxErpUrl || FOX_ERP_HOME_URL,
     };
   }
 

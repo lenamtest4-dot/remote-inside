@@ -346,6 +346,9 @@ const STORAGE_KEYS = {
   LAST_CONTRACT: 'ri_last_contract',
   RECALL_PENDING_CONTRACT: 'ri_recall_pending_contract',
   EQUIPMENT_DEBT_FILTER: 'ri_equip_debt_filter',
+  NEXTGEN_LAUNCH_INTENT: 'ri_nextgen_launch_intent',
+  EQUIP_BRIDGE_REQ: 'ri_equip_bridge_req',
+  EQUIP_BRIDGE_RES: 'ri_equip_bridge_res',
 };
 
 const MAX_RECENT_CONTRACTS = 12;
@@ -543,6 +546,70 @@ function setEquipmentDebtFilter(filter, storageAdapter = null) {
     { region, province, partner },
     storageAdapter
   );
+}
+
+/**
+ * Luu y dinh mo ung dung NextGen qua Fox-ERP (khong luu token hay SessionCode).
+ */
+function setNextGenLaunchIntent(
+  { appCode = '', autoAction = '', contractId = '' } = {},
+  storageAdapter = null
+) {
+  const cleanCode = String(appCode || '').trim().toUpperCase();
+  if (!cleanCode) {
+    return false;
+  }
+  return setState(
+    STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT,
+    {
+      appCode: cleanCode,
+      autoAction: String(autoAction || '').trim(),
+      contractId: normalizeContractId(String(contractId || '')),
+      ts: Date.now(),
+    },
+    storageAdapter
+  );
+}
+
+/**
+ * Doc y dinh mo NextGen neu con trong thoi han hop le (khong xoa).
+ */
+function peekNextGenLaunchIntent(maxAgeMs = 180000, storageAdapter = null) {
+  const entry = getState(STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT, null, storageAdapter);
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const appCode = String(entry.appCode || '').trim().toUpperCase();
+  const ts = Number(entry.ts || 0);
+  if (!appCode || !Number.isFinite(ts) || Date.now() - ts > maxAgeMs) {
+    return null;
+  }
+  return {
+    appCode,
+    autoAction: String(entry.autoAction || '').trim(),
+    contractId: normalizeContractId(String(entry.contractId || '')),
+    ts,
+  };
+}
+
+/**
+ * Doc va xoa ngay y dinh mo NextGen khi da toi dung trang dich.
+ */
+function consumeNextGenLaunchIntent(
+  expectedAppCode = '',
+  maxAgeMs = 180000,
+  storageAdapter = null
+) {
+  const intent = peekNextGenLaunchIntent(maxAgeMs, storageAdapter);
+  if (!intent) {
+    return null;
+  }
+  const cleanExpected = String(expectedAppCode || '').trim().toUpperCase();
+  if (cleanExpected && intent.appCode !== cleanExpected) {
+    return null;
+  }
+  setState(STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT, null, storageAdapter);
+  return intent;
 }
 
 // --- core/transport.js ---
@@ -906,6 +973,221 @@ function evalAndroidPortalJs(script, { timeout = 8000 } = {}) {
       });
     }
   });
+}
+const FOX_ERP_HOME_URL = 'https://fox-erp.fpt.net/';
+const NEXTGEN_FOX_APPS = Object.freeze({
+  equipment: {
+    appCode: 'FTEL.RE',
+    host: 'https://nextgen.fpt.net',
+    path: '/resource/equipment',
+  },
+  recall: {
+    appCode: 'FTEL.REM',
+    host: 'https://nextgen.fpt.net',
+    path: '/resource/recall',
+  },
+});
+function isNextGenSessionExpiredDocument(doc) {
+  if (!doc) return false;
+  const titleText = String(doc.title || '');
+  if (/phiên đăng nhập.*hết hạn/i.test(titleText)) {
+    return true;
+  }
+  const body = doc.body || null;
+  const bodyText = body ? String(body.innerText !== undefined ? body.innerText : body.textContent || '') : '';
+  return /phiên đăng nhập đã hết hạn|bắt buộc phải vào ứng dụng[\s\S]{0,60}trên fox-erp/i.test(
+    bodyText
+  );
+}
+
+function encodeBase64Utf8(str) {
+  const s = String(str || '');
+  if (typeof btoa === 'function') {
+    try {
+      return btoa(s);
+    } catch {
+      return btoa(unescape(encodeURIComponent(s)));
+    }
+  }
+  if (typeof Buffer === 'function') {
+    return Buffer.from(s, 'utf8').toString('base64');
+  }
+  return '';
+}
+function buildFoxErpNextGenLaunchUrlFromStorage(appKey, storageObj = null) {
+  const app = NEXTGEN_FOX_APPS[appKey] || null;
+  if (!app) {
+    return { ok: false, error: 'Ứng dụng NextGen không hợp lệ.' };
+  }
+  let rawAuth = '';
+  try {
+    const store = storageObj || (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (store && typeof store.getItem === 'function') {
+      rawAuth = store.getItem('auth') || '';
+    }
+  } catch {
+    rawAuth = '';
+  }
+  if (!rawAuth) {
+    return { ok: false, error: 'Chưa có phiên đăng nhập Fox-ERP trong localStorage.' };
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawAuth);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return { ok: false, error: 'Dữ liệu phiên Fox-ERP không hợp lệ.' };
+  }
+  const sessionCode = String(parsed.sessionCode || parsed.currentSession || '').trim();
+  const userName = String(
+    (parsed.currentUser && parsed.currentUser.userName) || ''
+  ).trim();
+  const bearerToken = String(
+    parsed.currentToken ||
+      parsed.accessToken ||
+      (parsed.currentUser && parsed.currentUser.accessToken) ||
+      ''
+  ).trim();
+
+  if (!sessionCode || !userName) {
+    return { ok: false, error: 'Fox-ERP chưa sẵn sàng SessionCode hoặc UserName.' };
+  }
+
+  const encoded = encodeBase64Utf8(
+    JSON.stringify({
+      SessionCode: sessionCode,
+      AppCode: app.appCode,
+      UserName: userName,
+    })
+  );
+  if (!encoded) {
+    return { ok: false, error: 'Không mã hóa được SessionCode sang Base64.' };
+  }
+
+  return {
+    ok: true,
+    url: `${app.host}${app.path}/?SessionCode=${encoded}`,
+    appCode: app.appCode,
+    bearerToken,
+  };
+}
+async function triggerFoxErpPushUserSession(appCode, bearerToken = '', fetchFn = null) {
+  const cleanCode = String(appCode || '').trim().toUpperCase();
+  if (!cleanCode) return false;
+  const doFetch =
+    typeof fetchFn === 'function'
+      ? fetchFn
+      : typeof fetch === 'function'
+      ? fetch
+      : null;
+  if (!doFetch) return false;
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (bearerToken) {
+    headers.Authorization = `Bearer ${bearerToken}`;
+  }
+  try {
+    await doFetch(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`, {
+      method: 'POST',
+      credentials: 'include',
+      headers,
+      body: JSON.stringify({ appCode: cleanCode }),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function bootstrapNextGenViaFoxErpAndroid(
+  appKey,
+  { onProgress = null } = {}
+) {
+  const app = NEXTGEN_FOX_APPS[appKey] || null;
+  if (!app || !canControlAndroidPortal()) {
+    return { ok: false, status: 'unsupported', loginUrl: FOX_ERP_HOME_URL };
+  }
+
+  const notify = (msg) => {
+    if (typeof onProgress === 'function' && msg) {
+      onProgress(msg);
+    }
+  };
+
+  notify('Đang xin cấp phiên mới từ Fox-ERP…');
+  let foxBg = await loadAndroidPortalBackground(FOX_ERP_HOME_URL, { timeout: 18000 });
+  if (!foxBg.ok && foxBg.status === 'needs_login') {
+    notify('Đang đồng bộ IAM cho Fox-ERP…');
+    const warmRes = await warmPortalSession(FOX_ERP_HOME_URL, { timeout: 12000, force: true });
+    if (warmRes.ok) {
+      foxBg = await loadAndroidPortalBackground(FOX_ERP_HOME_URL, { timeout: 18000 });
+    }
+  }
+  if (!foxBg.ok) {
+    return {
+      ok: false,
+      status: foxBg.status === 'needs_login' ? 'needs_login' : 'error',
+      loginUrl: FOX_ERP_HOME_URL,
+      error: 'Phiên IAM trên Fox-ERP đã hết hạn.',
+    };
+  }
+
+  let launchInfo = null;
+  const deadline = Date.now() + 7000;
+  while (Date.now() < deadline) {
+    const evalRes = await evalAndroidPortalJs(`
+      var rawAuth = '';
+      try { rawAuth = localStorage.getItem('auth') || ''; } catch (e) { rawAuth = ''; }
+      if (!rawAuth) return { ready: false };
+      var a = null;
+      try { a = JSON.parse(rawAuth); } catch (e) { a = null; }
+      var sc = a && (a.sessionCode || a.currentSession) ? String(a.sessionCode || a.currentSession).trim() : '';
+      var un = a && a.currentUser && a.currentUser.userName ? String(a.currentUser.userName).trim() : '';
+      var tk = a ? String(a.currentToken || a.accessToken || (a.currentUser && a.currentUser.accessToken) || '').trim() : '';
+      if (!sc || !un) return { ready: false };
+      var payload = JSON.stringify({ SessionCode: sc, AppCode: ${JSON.stringify(app.appCode)}, UserName: un });
+      var enc = '';
+      try { enc = btoa(payload); } catch (e) { enc = btoa(unescape(encodeURIComponent(payload))); }
+      try {
+        var hdrs = { 'Content-Type': 'application/json' };
+        if (tk) hdrs.Authorization = 'Bearer ' + tk;
+        fetch(${JSON.stringify(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`)}, {
+          method: 'POST',
+          credentials: 'include',
+          headers: hdrs,
+          body: JSON.stringify({ appCode: ${JSON.stringify(app.appCode)} })
+        }).catch(function() {});
+      } catch (e) {}
+      return { ready: true, url: ${JSON.stringify(`${app.host}${app.path}/?SessionCode=`)} + enc };
+    `);
+    if (evalRes.status === 'needs_login') {
+      return {
+        ok: false,
+        status: 'needs_login',
+        loginUrl: FOX_ERP_HOME_URL,
+        error: 'Phiên IAM trên Fox-ERP đã hết hạn.',
+      };
+    }
+    if (evalRes.ok && evalRes.value && evalRes.value.ready && evalRes.value.url) {
+      launchInfo = evalRes.value;
+      break;
+    }
+    await sleep(300);
+  }
+
+  if (!launchInfo || !launchInfo.url) {
+    return {
+      ok: false,
+      status: 'needs_login',
+      loginUrl: FOX_ERP_HOME_URL,
+      error: 'Fox-ERP chưa sẵn sàng SessionCode để mở NextGen.',
+    };
+  }
+
+  notify('Đang mở lại NextGen bằng phiên vừa cấp…');
+  const nextRes = await loadAndroidPortalBackground(launchInfo.url, { timeout: 20000 });
+  return nextRes;
 }
 function clearWarmSessionCache() {
   warmCacheByHost.clear();
@@ -9991,6 +10273,7 @@ function buildRecallPortalBootstrapJs() {
     cleanRecallText,
     isRecallPortalLocation,
     isRecallTicketLocation,
+    isNextGenSessionExpiredDocument,
     extractRecallFieldAfterLabel,
     getRecallElementText,
     getRecallGridRows,
@@ -10036,6 +10319,7 @@ function buildRecallPortalBootstrapJs() {
               href: String(location.href || ''),
               onPortal: isRecallPortalLocation(location),
               onTicket: onTicket,
+              sessionExpired: isNextGenSessionExpiredDocument(document),
               hasVisibleSearchInput: isInputVisible,
               hasAnySearchInput: Boolean(inp),
               hasMenuToggle: Boolean(menuBtn),
@@ -10122,7 +10406,13 @@ async function loadRecallTicketViaAndroidPortal(
 
   if (!forceReload) {
     const curCheck = await evalRecallDom('window.__riRecallDom.inspectState()');
-    if (curCheck.ok && curCheck.value && curCheck.value.onTicket && curCheck.value.snapshot) {
+    if (
+      curCheck.ok &&
+      curCheck.value &&
+      !curCheck.value.sessionExpired &&
+      curCheck.value.onTicket &&
+      curCheck.value.snapshot
+    ) {
       const curSnap = curCheck.value.snapshot;
       if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
         return {
@@ -10148,6 +10438,7 @@ async function loadRecallTicketViaAndroidPortal(
   }
 
   notify('Đang kết nối cổng Thu hồi vật tư NextGen…');
+  let didFoxBootstrap = false;
   let bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
     timeout: 18000,
   });
@@ -10163,6 +10454,12 @@ async function loadRecallTicketViaAndroidPortal(
       });
     }
   }
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    didFoxBootstrap = true;
+    bgRes = await bootstrapNextGenViaFoxErpAndroid('recall', {
+      onProgress: notify,
+    });
+  }
 
   if (!bgRes.ok) {
     if (bgRes.status === 'needs_login') {
@@ -10170,9 +10467,9 @@ async function loadRecallTicketViaAndroidPortal(
         status: 'iam_expired',
         mode: 'live',
         contract: requestedContract,
-        loginUrl: RECALL_ENDPOINTS.base,
+        loginUrl: bgRes.loginUrl || FOX_ERP_HOME_URL,
         message:
-          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+          'Phiên đăng nhập IAM trên Fox-ERP / Vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
     }
     return {
@@ -10186,7 +10483,7 @@ async function loadRecallTicketViaAndroidPortal(
   notify(`Đang tìm phiếu thu hồi HĐ ${requestedContract}…`);
   let openedMobileMenu = false;
   let searchSent = false;
-  const searchDeadline = Date.now() + 8000;
+  let searchDeadline = Date.now() + 8000;
 
   while (Date.now() < searchDeadline) {
     const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
@@ -10195,10 +10492,40 @@ async function loadRecallTicketViaAndroidPortal(
         status: 'iam_expired',
         mode: 'live',
         contract: requestedContract,
-        loginUrl: RECALL_ENDPOINTS.base,
+        loginUrl: FOX_ERP_HOME_URL,
         message:
           'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
+    }
+    if (stRes.ok && stRes.value && stRes.value.sessionExpired) {
+      if (didFoxBootstrap) {
+        return {
+          status: 'iam_expired',
+          mode: 'live',
+          contract: requestedContract,
+          loginUrl: FOX_ERP_HOME_URL,
+          message:
+            'Phiên Thu hồi vật tư NextGen báo hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      didFoxBootstrap = true;
+      const foxRes = await bootstrapNextGenViaFoxErpAndroid('recall', {
+        onProgress: notify,
+      });
+      if (!foxRes.ok) {
+        return {
+          status: foxRes.status === 'needs_login' ? 'iam_expired' : 'error',
+          mode: 'live',
+          contract: requestedContract,
+          loginUrl: foxRes.loginUrl || FOX_ERP_HOME_URL,
+          message:
+            foxRes.error ||
+            'Phiên Thu hồi vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      openedMobileMenu = false;
+      searchDeadline = Date.now() + 8000;
+      continue;
     }
     if (stRes.ok && stRes.value) {
       const v = stRes.value;
@@ -10312,6 +10639,17 @@ async function loadRecallTicketContext(rawContractId, ctx = {}) {
     });
   }
 
+  if (isRecallPortalLocation(loc) && doc && isNextGenSessionExpiredDocument(doc)) {
+    return {
+      status: 'nextgen_session_expired',
+      mode: 'live',
+      contract: requestedContract,
+      foxErpUrl: FOX_ERP_HOME_URL,
+      message:
+        'Phiên Thu hồi vật tư (NextGen) đã hết hạn. Bấm "Cấp lại phiên qua Fox-ERP" bên dưới để mở lại đúng luồng.',
+    };
+  }
+
   if (isRecallTicketLocation(loc) && doc) {
     const snapshot = parseRecallTicketFromDocument(doc, loc);
     const contractMismatch = Boolean(
@@ -10410,6 +10748,18 @@ async function runRecallAction(actionId, rawContractId, ctx = {}) {
       message: `Phiếu số ${ticket.ticketNumber || '1'}: ${snap.stats.totalItems} vật tư (${snap.stats.importedCount} đã nhập kho, ${snap.stats.editableCount} sửa được).`,
       summaryFields,
       snapshot: snap,
+    };
+  }
+
+  if (res.status === 'nextgen_session_expired') {
+    return {
+      status: 'iam_expired',
+      mode: res.mode || 'live',
+      title: 'Phiên NextGen Vật tư đã hết hạn',
+      message:
+        res.message ||
+        'Phiên Thu hồi vật tư (NextGen) đã hết hạn. Hãy mở lại qua Fox-ERP rồi thử lại.',
+      loginUrl: res.foxErpUrl || FOX_ERP_HOME_URL,
     };
   }
 
@@ -11431,6 +11781,7 @@ function buildEquipmentPortalBootstrapJs() {
     normalizeEquipmentMatchKey,
     getEquipmentElText,
     isEquipmentPortalLocation,
+    isNextGenSessionExpiredDocument,
     parseEquipmentDebtNumber,
     findEquipmentDebtGrid,
     findEquipmentTableInGrid,
@@ -11468,6 +11819,7 @@ function buildEquipmentPortalBootstrapJs() {
             return {
               href: String(location.href || ''),
               onEquipPage: isEquipmentPortalLocation(location),
+              sessionExpired: isNextGenSessionExpiredDocument(document),
               hasReportMenuBtn: Boolean(findEquipmentReportMenuBtn(document)),
               hasDebtTab: ctrls.hasDebtTab,
               isDebtTabActive: ctrls.isDebtTabActive,
@@ -11773,6 +12125,7 @@ async function loadEquipmentDebtViaAndroidPortal({
   };
 
   notifyStatus('Đang kết nối Quản lý vật tư NextGen…');
+  let didFoxBootstrap = false;
   let bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
     reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
     timeout: 18000,
@@ -11790,14 +12143,20 @@ async function loadEquipmentDebtViaAndroidPortal({
       });
     }
   }
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    didFoxBootstrap = true;
+    bgRes = await bootstrapNextGenViaFoxErpAndroid('equipment', {
+      onProgress: notifyStatus,
+    });
+  }
   if (!bgRes.ok) {
     if (bgRes.status === 'needs_login') {
       return {
         status: 'iam_expired',
         mode: 'live',
-        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        loginUrl: bgRes.loginUrl || FOX_ERP_HOME_URL,
         message:
-          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+          'Phiên đăng nhập IAM trên Fox-ERP / Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
     }
     return {
@@ -11808,17 +12167,44 @@ async function loadEquipmentDebtViaAndroidPortal({
   }
 
   let st = null;
-  const readyDeadline = Date.now() + 8500;
+  let readyDeadline = Date.now() + 8500;
   while (Date.now() < readyDeadline) {
     const r = await evalEquipDom('window.__riEquipDom.inspectState()');
     if (r.status === 'needs_login') {
       return {
         status: 'iam_expired',
         mode: 'live',
-        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        loginUrl: FOX_ERP_HOME_URL,
         message:
           'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
       };
+    }
+    if (r.ok && r.value && r.value.sessionExpired) {
+      if (didFoxBootstrap) {
+        return {
+          status: 'iam_expired',
+          mode: 'live',
+          loginUrl: FOX_ERP_HOME_URL,
+          message:
+            'Phiên Quản lý vật tư NextGen báo hết hạn. Hãy bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      didFoxBootstrap = true;
+      const foxRes = await bootstrapNextGenViaFoxErpAndroid('equipment', {
+        onProgress: notifyStatus,
+      });
+      if (!foxRes.ok) {
+        return {
+          status: foxRes.status === 'needs_login' ? 'iam_expired' : 'error',
+          mode: 'live',
+          loginUrl: foxRes.loginUrl || FOX_ERP_HOME_URL,
+          message:
+            foxRes.error ||
+            'Phiên Quản lý vật tư NextGen đã hết hạn. Bấm "Đăng nhập IAM" trên Fox-ERP rồi thử lại.',
+        };
+      }
+      readyDeadline = Date.now() + 8500;
+      continue;
     }
     if (r.ok && r.value && (r.value.hasDebtTab || r.value.hasReportMenuBtn)) {
       st = r.value;
@@ -12063,6 +12449,182 @@ async function loadEquipmentDebtViaAndroidPortal({
     currentFilter,
   };
 }
+async function tryLoadEquipmentDebtViaDesktopBridge(ctx = {}) {
+  const storageAdapter = ctx.storageAdapter || null;
+  const hasGmBridge =
+    typeof GM_getValue === 'function' && typeof GM_setValue === 'function';
+  if (!storageAdapter && !hasGmBridge) {
+    return null;
+  }
+
+  const reqId = `eqb_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const activeFilter = ctx.activeFilter || getEffectiveEquipmentDebtFilter(storageAdapter);
+  setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+  setState(
+    STORAGE_KEYS.EQUIP_BRIDGE_REQ,
+    {
+      reqId,
+      activeFilter,
+      forceApplyFilter: Boolean(ctx.forceApplyFilter),
+      ts: Date.now(),
+    },
+    storageAdapter
+  );
+
+  const ackTimeoutMs = Math.max(400, Number(ctx.bridgeAckMs) || 1600);
+  const fullTimeoutMs = Math.max(ackTimeoutMs + 1000, Number(ctx.bridgeTimeoutMs) || 32000);
+  const startedAt = Date.now();
+  let acked = false;
+
+  while (true) {
+    const elapsed = Date.now() - startedAt;
+    if (!acked && elapsed > ackTimeoutMs) {
+      setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+      return null;
+    }
+    if (elapsed > fullTimeoutMs) {
+      setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+      return null;
+    }
+
+    await sleep(180);
+    const res = getState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+    if (!res || typeof res !== 'object' || res.reqId !== reqId) {
+      continue;
+    }
+
+    acked = true;
+    if (res.status === 'working') {
+      if (typeof ctx.onProgress === 'function' && res.progress) {
+        ctx.onProgress(res.progress);
+      }
+      continue;
+    }
+
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null, storageAdapter);
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, null, storageAdapter);
+
+    if (res.status === 'ok' && res.dataset) {
+      return {
+        status: 'ok',
+        mode: 'live',
+        dataset: res.dataset,
+        currentFilter: res.currentFilter || activeFilter,
+        viaBridge: true,
+      };
+    }
+
+    if (res.status === 'nextgen_session_expired') {
+      return {
+        status: 'nextgen_session_expired',
+        mode: 'live',
+        foxErpUrl: FOX_ERP_HOME_URL,
+        message:
+          res.message ||
+          'Tab Quản lý vật tư đang mở đã hết phiên NextGen. Bấm nút bên dưới để cấp lại phiên qua Fox-ERP.',
+      };
+    }
+
+    return null;
+  }
+}
+async function handleEquipmentDebtDesktopBridgeRequest(
+  doc,
+  req,
+  { storageAdapter = null } = {}
+) {
+  if (!doc || !req || !req.reqId) return false;
+  const writeRes = (payload) =>
+    setState(STORAGE_KEYS.EQUIP_BRIDGE_RES, { reqId: req.reqId, ...payload }, storageAdapter);
+
+  if (isNextGenSessionExpiredDocument(doc)) {
+    writeRes({
+      status: 'nextgen_session_expired',
+      message: 'Tab Quản lý vật tư đang mở đã hết phiên NextGen.',
+    });
+    return false;
+  }
+
+  const filterToUse = req.activeFilter || getEffectiveEquipmentDebtFilter(storageAdapter);
+  writeRes({
+    status: 'working',
+    progress: { phaseText: 'Đang đọc trên tab Quản lý vật tư đang mở…' },
+  });
+
+  try {
+    let ctrls = findEquipmentDebtPageControls(doc);
+    if (!ctrls.hasDebtTab && findEquipmentReportMenuBtn(doc)) {
+      writeRes({ status: 'working', progress: { phaseText: 'Đang tự mở Báo cáo → Báo cáo nợ…' } });
+      const mRes = await triggerEquipmentOpenDebtReportMenu(doc);
+      if (mRes.ok) {
+        await waitForEquipmentDebtTabOpen(doc, { timeoutMs: 4500 });
+        ctrls = findEquipmentDebtPageControls(doc);
+      }
+    }
+
+    if (ctrls.hasDebtTab && !ctrls.isDebtTabActive) {
+      writeRes({ status: 'working', progress: { phaseText: 'Đang chuyển tab Tồn công nợ theo NV…' } });
+      triggerEquipmentDebtTab(doc);
+      await sleep(700);
+      ctrls = findEquipmentDebtPageControls(doc);
+    }
+
+    const table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
+    const realRows = getEquipmentRealBodyRows(table);
+    const cols = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+    const filterState = readEquipmentFilterState(doc);
+
+    if (
+      req.forceApplyFilter ||
+      realRows.length === 0 ||
+      cols.materials.length === 0
+    ) {
+      if (req.forceApplyFilter || filterState.missingRequired) {
+        const aRes = await applyEquipmentDebtFilterToPage(doc, filterToUse, {
+          onProgress: (m) => writeRes({ status: 'working', progress: { phaseText: m } }),
+        });
+        if (!aRes.ok) {
+          writeRes({ status: 'error', message: aRes.error });
+          return false;
+        }
+      }
+      if (ctrls.viewListBtn) {
+        writeRes({
+          status: 'working',
+          progress: { phaseText: 'Đang bấm "Xem danh sách" & chờ bảng tải…' },
+        });
+        triggerEquipmentDebtViewList(doc);
+        await waitForEquipmentReportLoad(doc, { timeoutMs: 20000 });
+      }
+    }
+
+    const collected = await collectEquipmentDebtFromDocument(doc, {
+      waitMs: 6500,
+      onProgress: (p) => writeRes({ status: 'working', progress: p }),
+    });
+    if (collected.status === 'ok' && collected.dataset) {
+      const endFilter = readEquipmentFilterState(doc);
+      writeRes({
+        status: 'ok',
+        dataset: collected.dataset,
+        currentFilter: {
+          region: endFilter.region || filterToUse.region,
+          province: endFilter.province || filterToUse.province,
+          partner: endFilter.partner || filterToUse.partner,
+        },
+      });
+      return true;
+    }
+    writeRes({ status: 'error', message: collected.message || 'Chưa đọc được bảng tồn nợ.' });
+    return false;
+  } catch (err) {
+    writeRes({
+      status: 'error',
+      message: err && err.message ? err.message : 'Lỗi đọc dữ liệu qua cầu nối tab.',
+    });
+    return false;
+  }
+}
 async function loadEquipmentDebtContext(ctx = {}) {
   if (!isUserscriptEnv() || ctx.forceDemo) {
     return {
@@ -12086,12 +12648,29 @@ async function loadEquipmentDebtContext(ctx = {}) {
   }
 
   if (!isEquipmentPortalLocation(loc) || !doc) {
+    if (!ctx.skipDesktopBridge) {
+      const bridged = await tryLoadEquipmentDebtViaDesktopBridge(ctx);
+      if (bridged) {
+        return bridged;
+      }
+    }
     return {
       status: 'needs_equipment_page',
       mode: 'live',
       url: EQUIPMENT_ENDPOINTS.base,
+      foxErpUrl: FOX_ERP_HOME_URL,
       message:
-        'Tồn nợ vật tư chạy trên trang Quản lý vật tư (nextgen.fpt.net/resource/equipment/). Bấm nút bên dưới để mở trang, vào Báo cáo → Báo cáo nợ → Xem danh sách.',
+        'Chưa có tab Quản lý vật tư đang mở hợp lệ. Bấm nút bên dưới để mở qua Fox-ERP (tự cấp phiên đăng nhập và tự tải tồn nợ KTV).',
+    };
+  }
+
+  if (isNextGenSessionExpiredDocument(doc)) {
+    return {
+      status: 'nextgen_session_expired',
+      mode: 'live',
+      foxErpUrl: FOX_ERP_HOME_URL,
+      message:
+        'Phiên Quản lý vật tư (NextGen) đã hết hạn do mở link ngoài hoặc hết giờ. Bấm "Cấp lại phiên qua Fox-ERP" bên dưới để mở lại đúng luồng và tự tải tồn nợ.',
     };
   }
 
@@ -15227,22 +15806,64 @@ function mountRemoteInside({
     render();
   }
 
-  async function openRecallPortalWithContract(rawContractId) {
-    const clean = normalizeContractId(rawContractId || '');
-    if (clean) {
-      setPendingRecallContract(clean);
-      await copyTextSafe(clean);
-      state.recentContracts = addRecentContract(clean);
+  async function launchNextGenViaFoxErp(appKey, { autoAction = '', contractId = '' } = {}) {
+    const app = NEXTGEN_FOX_APPS[appKey];
+    if (!app) return false;
+    const cleanContract = normalizeContractId(contractId || '');
+    setNextGenLaunchIntent({
+      appCode: app.appCode,
+      autoAction,
+      contractId: cleanContract,
+    });
+    if (cleanContract) {
+      setPendingRecallContract(cleanContract);
+      await copyTextSafe(cleanContract);
+      state.recentContracts = addRecentContract(cleanContract);
     }
-    openExternalOrPortalUrl(RECALL_ENDPOINTS.base, {
+
+    const locHost = pageWindow && pageWindow.location ? String(pageWindow.location.hostname || '').toLowerCase() : '';
+    if (locHost === 'fox-erp.fpt.net' && pageWindow) {
+      const launch = buildFoxErpNextGenLaunchUrlFromStorage(appKey, pageWindow.localStorage);
+      if (launch.ok && launch.url) {
+        triggerFoxErpPushUserSession(launch.appCode, launch.bearerToken);
+        return openExternalOrPortalUrl(launch.url, {
+          mode: 'portal',
+          title: appKey === 'equipment' ? 'Quản lý vật tư NextGen' : 'Thu hồi vật tư NextGen',
+          pageWindow,
+        });
+      }
+    }
+
+    return openExternalOrPortalUrl(FOX_ERP_HOME_URL, {
       mode: 'portal',
-      title: 'Thu hồi vật tư NextGen',
+      title: 'Fox-ERP — Cấp phiên Vật tư',
       pageWindow,
     });
+  }
+
+  async function openRecallPortalWithContract(rawContractId) {
+    const clean = normalizeContractId(rawContractId || '');
+    if (!canControlAndroidPortal() && isUserscriptEnv()) {
+      await launchNextGenViaFoxErp('recall', {
+        autoAction: 'manage_recall',
+        contractId: clean,
+      });
+    } else {
+      if (clean) {
+        setPendingRecallContract(clean);
+        await copyTextSafe(clean);
+        state.recentContracts = addRecentContract(clean);
+      }
+      openExternalOrPortalUrl(RECALL_ENDPOINTS.base, {
+        mode: 'portal',
+        title: 'Thu hồi vật tư NextGen',
+        pageWindow,
+      });
+    }
     if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
       state.recallNotice = clean
-        ? `Đã mở NextGen và gửi lệnh tự tìm HĐ ${clean} (cũng đã chép sẵn vào bộ nhớ tạm).`
-        : 'Đã mở trang Thu hồi vật tư NextGen.';
+        ? `Đã mở Fox-ERP → NextGen để tự cấp phiên và tìm HĐ ${clean} (đã chép sẵn vào bộ nhớ tạm).`
+        : 'Đã mở Fox-ERP để cấp phiên Thu hồi vật tư NextGen.';
       state.recallNoticeTone = 'ok';
       renderConfirm();
     }
@@ -19964,6 +20585,34 @@ function mountRemoteInside({
             ]),
           ])
         );
+      } else if (state.recallStatus === 'nextgen_session_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.recallNotice ||
+                'Phiên Thu hồi vật tư (NextGen) đã hết hạn. Bấm nút bên dưới để tự cấp lại phiên qua Fox-ERP.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Cấp lại phiên qua Fox-ERP',
+                onClick: () =>
+                  launchNextGenViaFoxErp('recall', {
+                    autoAction: 'manage_recall',
+                    contractId,
+                  }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadRecallModal(contractId, { forceReload: true }),
+              }),
+            ]),
+          ])
+        );
       } else if (state.recallStatus === 'iam_expired') {
         sheetParts.push(
           el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
@@ -20848,6 +21497,33 @@ function mountRemoteInside({
             ]),
           ])
         );
+      } else if (state.equipDebtStatus === 'nextgen_session_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Phiên Quản lý vật tư (NextGen) đã hết hạn. Bấm nút bên dưới để cấp lại phiên qua Fox-ERP và tự tải tồn nợ KTV.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Cấp lại phiên qua Fox-ERP',
+                onClick: () =>
+                  launchNextGenViaFoxErp('equipment', {
+                    autoAction: 'equipment_debt',
+                  }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
+              }),
+            ]),
+          ])
+        );
       } else if (state.equipDebtStatus === 'iam_expired') {
         sheetParts.push(
           el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
@@ -20889,12 +21565,10 @@ function mountRemoteInside({
               el('button', {
                 type: 'button',
                 className: 'ri-primary-btn',
-                text: 'Mở Quản lý vật tư',
+                text: 'Mở Quản lý vật tư (qua Fox-ERP)',
                 onClick: () => {
-                  openExternalOrPortalUrl(EQUIPMENT_ENDPOINTS.base, {
-                    mode: 'portal',
-                    title: 'Quản lý vật tư NextGen',
-                    pageWindow,
+                  launchNextGenViaFoxErp('equipment', {
+                    autoAction: 'equipment_debt',
                   });
                 },
               }),
@@ -22958,8 +23632,82 @@ function mountRemoteInside({
     refreshSessionStatus();
   } else if (isUserscriptEnv() && pageWindow && pageDocument) {
     const loc = pageWindow.location;
-    if (isRecallPortalLocation(loc) && !isRecallTicketLocation(loc)) {
-      const pendingRecallContract = consumePendingRecallContract();
+    const hostLower = String(loc.hostname || '').toLowerCase();
+    const pathLower = String(loc.pathname || '').toLowerCase();
+
+    // 1. Tren Fox-ERP: neu co y dinh mo NextGen Vat tu/Thu hoi -> tu cap SessionCode va chuyen thang
+    if (hostLower === 'fox-erp.fpt.net' && !pathLower.startsWith('/app/tkbt')) {
+      const pendingLaunch = peekNextGenLaunchIntent();
+      if (pendingLaunch) {
+        const targetKey =
+          pendingLaunch.appCode === NEXTGEN_FOX_APPS.equipment.appCode
+            ? 'equipment'
+            : pendingLaunch.appCode === NEXTGEN_FOX_APPS.recall.appCode
+            ? 'recall'
+            : '';
+        if (targetKey) {
+          let foxAttempts = 0;
+          const foxTimer = setInterval(() => {
+            foxAttempts += 1;
+            const launch = buildFoxErpNextGenLaunchUrlFromStorage(
+              targetKey,
+              pageWindow.localStorage
+            );
+            if (launch.ok && launch.url) {
+              clearInterval(foxTimer);
+              triggerFoxErpPushUserSession(launch.appCode, launch.bearerToken);
+              pageWindow.location.href = launch.url;
+            } else if (foxAttempts >= 25) {
+              clearInterval(foxTimer);
+            }
+          }, 250);
+        }
+      }
+    }
+
+    // 2. Tren NextGen Quan ly vat tu: tu mo Ton no KTV & phuc vu cau noi cross-tab Desktop
+    if (isEquipmentPortalLocation(loc) && !isNextGenSessionExpiredDocument(pageDocument)) {
+      const equipIntent = consumeNextGenLaunchIntent(NEXTGEN_FOX_APPS.equipment.appCode);
+      if (equipIntent && equipIntent.autoAction === 'equipment_debt') {
+        state.activePortalId = 'recall';
+        setState(STORAGE_KEYS.ACTIVE_PORTAL, 'recall');
+        state.isOpen = true;
+        render();
+        const debtAction = PORTALS.recall.actions.find((a) => a.id === 'equipment_debt');
+        if (debtAction) {
+          triggerAction(debtAction);
+        }
+      }
+
+      let lastHandledBridgeReqId = '';
+      let isHandlingBridgeReq = false;
+      setInterval(async () => {
+        if (isHandlingBridgeReq) return;
+        const req = getState(STORAGE_KEYS.EQUIP_BRIDGE_REQ, null);
+        if (!req || typeof req !== 'object' || !req.reqId) return;
+        if (req.reqId === lastHandledBridgeReqId) return;
+        const ageMs = Date.now() - Number(req.ts || 0);
+        if (!Number.isFinite(ageMs) || ageMs > 20000) return;
+
+        lastHandledBridgeReqId = req.reqId;
+        isHandlingBridgeReq = true;
+        try {
+          await handleEquipmentDebtDesktopBridgeRequest(pageDocument, req);
+        } finally {
+          isHandlingBridgeReq = false;
+        }
+      }, 700);
+    }
+
+    // 3. Tren NextGen Thu hoi vat tu: tu tim Ma HD (ke ca qua intent Fox-ERP)
+    if (
+      isRecallPortalLocation(loc) &&
+      !isRecallTicketLocation(loc) &&
+      !isNextGenSessionExpiredDocument(pageDocument)
+    ) {
+      const recallIntent = consumeNextGenLaunchIntent(NEXTGEN_FOX_APPS.recall.appCode);
+      const pendingRecallContract =
+        (recallIntent && recallIntent.contractId) || consumePendingRecallContract();
       if (pendingRecallContract) {
         state.contractInput = pendingRecallContract;
         setState(STORAGE_KEYS.LAST_CONTRACT, pendingRecallContract);

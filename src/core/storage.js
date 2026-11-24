@@ -11,6 +11,9 @@ export const STORAGE_KEYS = {
   LAST_CONTRACT: 'ri_last_contract',
   RECALL_PENDING_CONTRACT: 'ri_recall_pending_contract',
   EQUIPMENT_DEBT_FILTER: 'ri_equip_debt_filter',
+  NEXTGEN_LAUNCH_INTENT: 'ri_nextgen_launch_intent',
+  EQUIP_BRIDGE_REQ: 'ri_equip_bridge_req',
+  EQUIP_BRIDGE_RES: 'ri_equip_bridge_res',
 };
 
 const MAX_RECENT_CONTRACTS = 12;
@@ -214,4 +217,68 @@ export function setEquipmentDebtFilter(filter, storageAdapter = null) {
     { region, province, partner },
     storageAdapter
   );
+}
+
+/**
+ * Luu y dinh mo ung dung NextGen qua Fox-ERP (khong luu token hay SessionCode).
+ */
+export function setNextGenLaunchIntent(
+  { appCode = '', autoAction = '', contractId = '' } = {},
+  storageAdapter = null
+) {
+  const cleanCode = String(appCode || '').trim().toUpperCase();
+  if (!cleanCode) {
+    return false;
+  }
+  return setState(
+    STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT,
+    {
+      appCode: cleanCode,
+      autoAction: String(autoAction || '').trim(),
+      contractId: normalizeContractId(String(contractId || '')),
+      ts: Date.now(),
+    },
+    storageAdapter
+  );
+}
+
+/**
+ * Doc y dinh mo NextGen neu con trong thoi han hop le (khong xoa).
+ */
+export function peekNextGenLaunchIntent(maxAgeMs = 180000, storageAdapter = null) {
+  const entry = getState(STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT, null, storageAdapter);
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const appCode = String(entry.appCode || '').trim().toUpperCase();
+  const ts = Number(entry.ts || 0);
+  if (!appCode || !Number.isFinite(ts) || Date.now() - ts > maxAgeMs) {
+    return null;
+  }
+  return {
+    appCode,
+    autoAction: String(entry.autoAction || '').trim(),
+    contractId: normalizeContractId(String(entry.contractId || '')),
+    ts,
+  };
+}
+
+/**
+ * Doc va xoa ngay y dinh mo NextGen khi da toi dung trang dich.
+ */
+export function consumeNextGenLaunchIntent(
+  expectedAppCode = '',
+  maxAgeMs = 180000,
+  storageAdapter = null
+) {
+  const intent = peekNextGenLaunchIntent(maxAgeMs, storageAdapter);
+  if (!intent) {
+    return null;
+  }
+  const cleanExpected = String(expectedAppCode || '').trim().toUpperCase();
+  if (cleanExpected && intent.appCode !== cleanExpected) {
+    return null;
+  }
+  setState(STORAGE_KEYS.NEXTGEN_LAUNCH_INTENT, null, storageAdapter);
+  return intent;
 }

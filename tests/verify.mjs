@@ -2247,6 +2247,31 @@ async function runTests() {
     'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/entry.js?v=123',
     'https://fox-erp.fpt.net/app/tkbt/tk/_nuxt/complete-modal.mjs',
   ]);
+
+  const radiusPerfEntries = [];
+  for (let idx = 0; idx < 45; idx += 1) {
+    radiusPerfEntries.push({ name: `http://radius-portal.fpt.net/_next/static/chunks/shared-${idx}.js` });
+  }
+  radiusPerfEntries.push({
+    name: 'http://radius-portal.fpt.net/_next/static/chunks/app/networkConnection/page-abc123.js',
+  });
+  const radiusSpaChunks = extractSpaChunkUrls(
+    '<script src="/_next/static/chunks/app/networkConnection/page-abc123.js"></script>',
+    'http://radius-portal.fpt.net/networkConnection',
+    radiusPerfEntries
+  );
+  assert.equal(
+    radiusSpaChunks[0],
+    'http://radius-portal.fpt.net/_next/static/chunks/app/networkConnection/page-abc123.js',
+    'extractSpaChunkUrls must prioritize Next.js app route chunks first'
+  );
+  assert.ok(
+    extractNextAppChunkUrls(
+      '"static/chunks/app/networkConnection/page-abc123.js"',
+      'http://radius-portal.fpt.net/networkConnection'
+    ).includes('http://radius-portal.fpt.net/_next/static/chunks/app/networkConnection/page-abc123.js'),
+    'extractNextAppChunkUrls must extract app/networkConnection/page-*.js chunks'
+  );
   console.log('   OK: FOX-ERP / Partner SPA Scanner & Recorder checks passed.');
 
   console.log('18. Testing FOX-ERP Phiếu triển khai (Deployment Ticket) adapter & live bridge...');

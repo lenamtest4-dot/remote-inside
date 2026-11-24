@@ -1653,6 +1653,8 @@ const DEFAULT_JS_CONTEXT_RE =
 
 const SPA_VENDOR_CHUNK_RE =
   /(?:jquery|kendo|bootstrap|modernizr|toastr|jszip|xlsx|moment|lodash|popper|fontawesome|select2|datatables|chart\.js|echarts|polyfill|fullcalendar|vuetify|iconify|mdi)/i;
+const SPA_ROUTE_CHUNK_RE = /(?:\/chunks\/app\/|\/page-)/i;
+const MAX_SPA_CHUNK_URLS = 60;
 
 /**
  * Trich xuat danh sach chunk JS/MJS cung origin tu HTML (<link modulepreload>, <script src>) va PerformanceResourceTiming.
@@ -1671,7 +1673,7 @@ export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
   const seen = new Set();
 
   function addCandidate(rawUrl) {
-    if (!rawUrl || typeof rawUrl !== 'string' || urls.length >= 35) {
+    if (!rawUrl || typeof rawUrl !== 'string' || urls.length >= MAX_SPA_CHUNK_URLS) {
       return;
     }
     const trimmed = rawUrl.trim();
@@ -1708,7 +1710,7 @@ export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
     );
     const linkRe = /<link\b([^>]*)>/gi;
     let lm;
-    while ((lm = linkRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+    while ((lm = linkRe.exec(cleanedHtml)) !== null && urls.length < MAX_SPA_CHUNK_URLS) {
       const attrs = lm[1] || '';
       const rel = getAttrValue(attrs, 'rel');
       if (!/\b(?:modulepreload|preload|prefetch)\b/i.test(rel)) {
@@ -1722,7 +1724,7 @@ export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
 
     const scriptTagRe = /<script\b([^>]*)>/gi;
     let sm;
-    while ((sm = scriptTagRe.exec(cleanedHtml)) !== null && urls.length < 35) {
+    while ((sm = scriptTagRe.exec(cleanedHtml)) !== null && urls.length < MAX_SPA_CHUNK_URLS) {
       const src = getAttrValue(sm[1] || '', 'src');
       if (src) {
         addCandidate(src);
@@ -1732,7 +1734,7 @@ export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
 
   if (Array.isArray(perfEntries)) {
     for (const entry of perfEntries) {
-      if (urls.length >= 35) break;
+      if (urls.length >= MAX_SPA_CHUNK_URLS) break;
       const rawName = typeof entry === 'string' ? entry : entry && entry.name;
       if (typeof rawName === 'string' && rawName) {
         addCandidate(rawName);
@@ -1740,11 +1742,20 @@ export function extractSpaChunkUrls(htmlText, baseUrl = '', perfEntries = []) {
     }
   }
 
-  return urls;
+  const routeUrls = [];
+  const otherUrls = [];
+  for (const u of urls) {
+    if (SPA_ROUTE_CHUNK_RE.test(u)) {
+      routeUrls.push(u);
+    } else {
+      otherUrls.push(u);
+    }
+  }
+  return [...routeUrls, ...otherUrls];
 }
 
 /**
- * Trich xuat URL Next.js App Router chunk (app/public/partial/.../page-*.js) tu HTML/RSC payload.
+ * Trich xuat URL Next.js App Router chunk (app/.../page-*.js) tu HTML/RSC payload.
  */
 export function extractNextAppChunkUrls(
   htmlText,
@@ -1761,21 +1772,29 @@ export function extractNextAppChunkUrls(
   }
 
   const normalized = htmlText.replace(/\\\//g, '/');
-  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/public\/partial\/[a-zA-Z0-9_\/-]+\.js/g;
-  const urls = [];
+  const chunkRe = /(?:\/_next\/)?static\/chunks\/app\/[a-zA-Z0-9_\/-]+\.js/g;
+  const routeUrls = [];
+  const otherUrls = [];
   const seen = new Set();
   let m;
 
-  while ((m = chunkRe.exec(normalized)) !== null && urls.length < 6) {
+  while ((m = chunkRe.exec(normalized)) !== null && seen.size < 20) {
     const cleanRel = m[0].replace(/^\/?_next\//, '').replace(/^\//, '');
+    if (SPA_VENDOR_CHUNK_RE.test(cleanRel)) {
+      continue;
+    }
     const fullUrl = `${origin}/_next/${cleanRel}`;
     if (!seen.has(fullUrl)) {
       seen.add(fullUrl);
-      urls.push(fullUrl);
+      if (/\/(?:public\/partial\/|page-[^/]+\.js$)/.test(fullUrl) || !/\/(?:layout|loading|not-found)-/.test(fullUrl)) {
+        routeUrls.push(fullUrl);
+      } else {
+        otherUrls.push(fullUrl);
+      }
     }
   }
 
-  return urls;
+  return [...routeUrls, ...otherUrls].slice(0, 16);
 }
 
 /**

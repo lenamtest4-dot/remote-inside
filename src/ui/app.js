@@ -2563,14 +2563,25 @@ export function mountRemoteInside({
         typeof pageWindow.performance.getEntriesByType === 'function'
           ? pageWindow.performance.getEntriesByType('resource')
           : [];
-      const candidateScriptUrls = [
+      const domScriptUrls =
+        pageDocument && pageDocument.scripts
+          ? Array.from(pageDocument.scripts)
+              .map((s) => (s && s.src ? String(s.src).trim() : ''))
+              .filter(Boolean)
+          : [];
+      const rawCandidateUrls = [
+        ...domScriptUrls,
         ...(Array.isArray(apiHints.scriptUrls) ? apiHints.scriptUrls : []),
         ...extractNextAppChunkUrls(htmlText, pageHref),
         ...extractSpaChunkUrls(htmlText, pageHref, perfEntries),
       ];
+      const sortedCandidateUrls = [
+        ...rawCandidateUrls.filter((u) => /(?:\/chunks\/app\/|\/page-)/i.test(u)),
+        ...rawCandidateUrls.filter((u) => !/(?:\/chunks\/app\/|\/page-)/i.test(u)),
+      ];
       const seenScripts = new Set();
       const customScriptUrls = [];
-      for (const rawUrl of candidateScriptUrls) {
+      for (const rawUrl of sortedCandidateUrls) {
         if (!rawUrl || seenScripts.has(rawUrl) || VENDOR_SCRIPT_RE.test(rawUrl)) {
           continue;
         }
@@ -2579,9 +2590,11 @@ export function mountRemoteInside({
           if (origin && parsed.origin !== origin) {
             continue;
           }
-          seenScripts.add(parsed.href);
-          customScriptUrls.push(parsed.href);
-          if (customScriptUrls.length >= 35) break;
+          if (!seenScripts.has(parsed.href)) {
+            seenScripts.add(parsed.href);
+            customScriptUrls.push(parsed.href);
+            if (customScriptUrls.length >= 45) break;
+          }
         } catch {
           // skip malformed script URL
         }
@@ -2611,13 +2624,16 @@ export function mountRemoteInside({
           const chunkApiHints = extractApiHintsFromJs(res.responseText, contractId);
           const codeContexts = extractCodeContextsFromJs(
             res.responseText,
-            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract)/i,
+            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract|NetworkConnection|statusNAT|statusIPv6|descriptionNAT|descriptionIPv6|ByPass\s*NAT|Default\s*NAT|killSession|isKill|ngắt\s*phiên|không\s*dấu|khong\s*dau|ActiveProfile|VerifyIPv6|coAID|spamPool|ipV6Only|accesstoken_iam_radius|ChangeNetworkConnection)/i,
             contractId,
             { maxTotal: 55000, maxContexts: 65, radius: 480 }
           );
           if (chunkApiHints.length > 0 || codeContexts.length > 0) {
+            const routeBoost = /\/chunks\/app\/(?!layout-|loading-|not-found-|login\/)/i.test(jsPath)
+              ? 50
+              : 0;
             collectedSnippets.push({
-              score: chunkApiHints.length * 3 + codeContexts.length * 2,
+              score: chunkApiHints.length * 3 + codeContexts.length * 2 + routeBoost,
               snippet: {
                 origin: jsOrigin,
                 pathname: jsPath,

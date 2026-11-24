@@ -136,6 +136,22 @@ import {
   waitForEquipmentDebtTabOpen,
   waitForEquipmentReportLoad,
 } from '../adapters/equipment.js';
+import {
+  RADIUS_ENDPOINTS,
+  RADIUS_IPV6_NOTE_PRESETS,
+  RADIUS_IPV6_OPTIONS,
+  RADIUS_IPV6_STATUS,
+  RADIUS_NAT_NOTE_PRESETS,
+  RADIUS_NAT_OPTIONS,
+  buildRadiusChangePayload,
+  fetchRadiusConnection,
+  getRadiusContractStatusLabel,
+  getRadiusIpv6Label,
+  getRadiusIpv6OnlyLabel,
+  getRadiusNatLabel,
+  stripVietnameseDiacritics,
+  validateRadiusNote,
+} from '../adapters/radius.js';
 import { executePortalAction } from '../adapters/portals.js';
 
 function formatVndAmount(amount) {
@@ -478,6 +494,16 @@ export function mountRemoteInside({
     equipDebtSelectedKey: '',
     equipDebtSort: 'qty_desc',
     equipDebtSelectedStaff: '',
+    radiusLoading: false,
+    radiusError: '',
+    radiusLoginUrl: '',
+    radiusRecord: null,
+    radiusNatStatus: '1',
+    radiusNatNote: '',
+    radiusIpv6Status: RADIUS_IPV6_STATUS.RULE,
+    radiusIpv6Note: '',
+    radiusKillSession: true,
+    radiusPresetApplied: '',
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -802,6 +828,19 @@ export function mountRemoteInside({
     state.equipDebtSelectedStaff = '';
   }
 
+  function resetRadiusModalState() {
+    state.radiusLoading = false;
+    state.radiusError = '';
+    state.radiusLoginUrl = '';
+    state.radiusRecord = null;
+    state.radiusNatStatus = '1';
+    state.radiusNatNote = '';
+    state.radiusIpv6Status = RADIUS_IPV6_STATUS.RULE;
+    state.radiusIpv6Note = '';
+    state.radiusKillSession = true;
+    state.radiusPresetApplied = '';
+  }
+
   function resetConfirmState() {
     state.confirmAction = null;
     state.confirmNewMac = '';
@@ -891,6 +930,7 @@ export function mountRemoteInside({
     resetDeployModalState();
     resetRecallModalState();
     resetEquipDebtModalState();
+    resetRadiusModalState();
   }
 
   function applyDetectedOltToModal() {
@@ -2348,6 +2388,100 @@ export function mountRemoteInside({
     renderConfirm();
   }
 
+  function applyRadiusRecordToDraft(record, actionId) {
+    state.radiusRecord = record;
+    let nextNatStatus = record.statusNAT || '1';
+    let nextNatNote = record.descriptionNAT || '';
+    let nextIpv6Status =
+      record.statusIPv6 !== undefined && record.statusIPv6 !== null
+        ? Number(record.statusIPv6)
+        : RADIUS_IPV6_STATUS.RULE;
+    let nextIpv6Note = record.descriptionIPv6 || '';
+    let presetLabel = '';
+
+    if (actionId === 'remove_ipnat' && nextNatStatus !== '5') {
+      nextNatStatus = '5';
+      if (!nextNatNote || nextNatNote === 'Default NAT') {
+        nextNatNote = 'KH yeu cau bo IPNAT';
+      }
+      presetLabel = 'Đã chọn sẵn ByPass NAT (5) và ghi chú không dấu.';
+    } else if (actionId === 'remove_ipv6') {
+      if (Number(record.ipV6Only) !== 1 && nextIpv6Status !== RADIUS_IPV6_STATUS.DEACTIVATE) {
+        nextIpv6Status = RADIUS_IPV6_STATUS.DEACTIVATE;
+        if (!nextIpv6Note) {
+          nextIpv6Note = 'Bo IPv6 cho KH';
+        }
+        presetLabel = 'Đã chọn sẵn Deactivate IPv6 và ghi chú không dấu.';
+      } else if (Number(record.ipV6Only) === 1) {
+        presetLabel = 'Thuê bao đang bật IPv6 Only — không thể chuyển về Deactivate.';
+      }
+    }
+
+    state.radiusNatStatus = nextNatStatus;
+    state.radiusNatNote = nextNatNote;
+    state.radiusIpv6Status = nextIpv6Status;
+    state.radiusIpv6Note = nextIpv6Note;
+    state.radiusKillSession = true;
+    state.radiusPresetApplied = presetLabel;
+  }
+
+  async function loadRadiusModal(rawContractId, actionId = 'edit_radius', preloadedRecord = null) {
+    const contractId = normalizeContractId(rawContractId || state.contractInput);
+    if (!contractId) return;
+
+    if (
+      preloadedRecord &&
+      preloadedRecord.objID &&
+      (!preloadedRecord.contract || preloadedRecord.contract === contractId)
+    ) {
+      state.radiusLoading = false;
+      state.radiusError = '';
+      state.radiusLoginUrl = '';
+      applyRadiusRecordToDraft(preloadedRecord, actionId);
+      renderConfirm();
+      return;
+    }
+
+    state.radiusLoading = true;
+    state.radiusError = '';
+    state.radiusLoginUrl = '';
+    state.radiusRecord = null;
+    state.radiusPresetApplied = '';
+    renderConfirm();
+
+    try {
+      const res = await fetchRadiusConnection(contractId, {
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      });
+      if (
+        !state.confirmAction ||
+        !['edit_radius', 'remove_ipnat', 'remove_ipv6'].includes(state.confirmAction.id)
+      ) {
+        return;
+      }
+      state.radiusLoading = false;
+      if (res.status === 'ok' && res.record) {
+        applyRadiusRecordToDraft(res.record, actionId);
+      } else {
+        state.radiusError = res.message || 'Không tải được thông tin kết nối Radius.';
+        state.radiusLoginUrl = res.loginUrl || RADIUS_ENDPOINTS.PORTAL_URL;
+      }
+    } catch (err) {
+      if (
+        !state.confirmAction ||
+        !['edit_radius', 'remove_ipnat', 'remove_ipv6'].includes(state.confirmAction.id)
+      ) {
+        return;
+      }
+      state.radiusLoading = false;
+      state.radiusError =
+        err && err.message ? err.message : 'Lỗi đọc dữ liệu từ Radius Portal.';
+      state.radiusLoginUrl = RADIUS_ENDPOINTS.PORTAL_URL;
+    }
+    renderConfirm();
+  }
+
   async function triggerAction(action) {
     if (state.isRunning) return;
 
@@ -2395,6 +2529,13 @@ export function mountRemoteInside({
         loadRecallModal(state.contractInput, { clearNotice: true });
       } else if (state.activePortalId === 'recall' && action.id === 'equipment_debt') {
         loadEquipmentDebtModal();
+      } else if (
+        state.activePortalId === 'radius' &&
+        (action.id === 'edit_radius' ||
+          action.id === 'remove_ipnat' ||
+          action.id === 'remove_ipv6')
+      ) {
+        loadRadiusModal(state.contractInput, action.id);
       }
       return;
     }
@@ -2421,6 +2562,11 @@ export function mountRemoteInside({
     const isKillSession = portal.id === 'inside' && action.id === 'kill_session';
     const isPortAssignLog = portal.id === 'port' && action.id === 'assign_port';
     const isPortReleaseLog = portal.id === 'port' && action.id === 'release_port';
+    const isRadiusEditLog =
+      portal.id === 'radius' &&
+      (action.id === 'edit_radius' ||
+        action.id === 'remove_ipnat' ||
+        action.id === 'remove_ipv6');
     const logActionLabel = action.label;
     let logTarget = contractId;
     if (isClearOsp && actionCtx.oltName) {
@@ -2440,6 +2586,23 @@ export function mountRemoteInside({
       logTarget = contractId ? `${contractId} • ${baseDev}` : baseDev;
     } else if (isPortReleaseLog) {
       logTarget = contractId ? `${contractId} • Thu hồi` : 'Thu hồi';
+    } else if (isRadiusEditLog && actionCtx.record) {
+      const radParts = [];
+      if (
+        actionCtx.natStatus !== undefined &&
+        String(actionCtx.natStatus) !== String(actionCtx.record.statusNAT)
+      ) {
+        radParts.push(`NAT: ${getRadiusNatLabel(actionCtx.natStatus)}`);
+      }
+      if (
+        actionCtx.ipv6Status !== undefined &&
+        Number(actionCtx.ipv6Status) !== Number(actionCtx.record.statusIPv6)
+      ) {
+        radParts.push(`IPv6: ${getRadiusIpv6Label(actionCtx.ipv6Status)}`);
+      }
+      if (radParts.length > 0) {
+        logTarget = [contractId, ...radParts].filter(Boolean).join(' • ');
+      }
     }
 
     try {
@@ -4003,6 +4166,26 @@ export function mountRemoteInside({
         })
       );
     }
+    if (state.activePortalId === 'radius' && res.status === 'ok' && res.radiusRecord) {
+      extraBtns.push(
+        el('button', {
+          type: 'button',
+          className: 'ri-primary-btn',
+          text: 'Chỉnh IPNAT / IPv6',
+          onClick: () => {
+            const editAction = PORTALS.radius.actions.find((a) => a.id === 'edit_radius');
+            if (!editAction) return;
+            resetConfirmState();
+            state.confirmAction = editAction;
+            loadRadiusModal(
+              state.contractInput || res.radiusRecord.contract,
+              editAction.id,
+              res.radiusRecord
+            );
+          },
+        })
+      );
+    }
     if (res.sourceUrl) {
       extraBtns.push(
         el('button', {
@@ -4681,6 +4864,16 @@ export function mountRemoteInside({
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
     const isEquipmentDebt = portal.id === 'recall' && act.id === 'equipment_debt';
+    const isRadiusEdit =
+      portal.id === 'radius' &&
+      (act.id === 'edit_radius' || act.id === 'remove_ipnat' || act.id === 'remove_ipv6');
+
+    const radiusSheetTitle =
+      act.id === 'remove_ipnat'
+        ? 'Bỏ IPNAT (ByPass NAT)'
+        : act.id === 'remove_ipv6'
+        ? 'Bỏ IPv6 (Deactivate)'
+        : 'Chỉnh IPNAT & IPv6 (Radius)';
 
     const sheetParts = [
       el('div', { className: 'ri-log-head' }, [
@@ -4697,6 +4890,8 @@ export function mountRemoteInside({
             ? 'Phiếu thu hồi vật tư'
             : isEquipmentDebt
             ? 'Tồn nợ vật tư theo KTV'
+            : isRadiusEdit
+            ? radiusSheetTitle
             : `Xác nhận ${act.label}?`,
         }),
         el('button', {
@@ -8624,6 +8819,424 @@ export function mountRemoteInside({
             });
           });
         }
+      }
+    } else if (isRadiusEdit) {
+      confirmBtn.textContent = 'Xác nhận lưu Radius';
+
+      if (state.radiusLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', { text: `Đang tải thông số Radius cho ${contractId}…` }),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (state.radiusError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadRadiusModal(contractId, act.id),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đăng nhập Radius (IAM)',
+            onClick: () => {
+              openExternalOrPortalUrl(state.radiusLoginUrl || RADIUS_ENDPOINTS.PORTAL_URL, {
+                mode: 'login',
+                title: 'Đăng nhập Radius (IAM)',
+                pageWindow,
+              });
+            },
+          }),
+        ];
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.radiusError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else if (!state.radiusRecord) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+            el('div', { text: `Chưa có dữ liệu kết nối Radius cho ${contractId}.` }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Tải lại',
+                onClick: () => loadRadiusModal(contractId, act.id),
+              }),
+            ]),
+          ])
+        );
+        confirmBtn.disabled = true;
+      } else {
+        const rec = state.radiusRecord;
+        const ipv6OnlyLocked = Number(rec.ipV6Only) === 1;
+        const metaLines = [
+          `ObjID: ${rec.objID || '—'}`,
+          `Tên truy nhập: ${rec.name || '—'}`,
+          `Tình trạng HĐ: ${getRadiusContractStatusLabel(rec.status)}`,
+          rec.ipAddress || rec.callerID
+            ? `IP / MAC: ${[rec.ipAddress, rec.callerID].filter(Boolean).join(' / ')}`
+            : '',
+          rec.poolListName ? `Spam Pool: ${rec.poolListName}` : '',
+          rec.locationName || rec.localTypeName
+            ? `Vùng / Gói: ${[rec.locationName, rec.localTypeName].filter(Boolean).join(' • ')}`
+            : '',
+          `Hỗ trợ IPv6: ${rec.isIpv6Support ? 'Có' : 'Không'} • IPv6 Only: ${getRadiusIpv6OnlyLabel(
+            rec.ipV6Only
+          )}`,
+        ].filter(Boolean);
+
+        sheetParts.push(
+          el('div', { className: 'ri-modem-info' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Thông số Radius hiện tại' }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                text: 'Tải lại',
+                onClick: () => loadRadiusModal(contractId, act.id, null),
+              }),
+            ]),
+            el('div', { className: 'ri-radius-badges' }, [
+              el('span', {
+                className: 'ri-recall-badge',
+                'data-tone': String(rec.statusNAT) === '5' ? 'warn' : 'ok',
+                text: `NAT: ${getRadiusNatLabel(rec.statusNAT)} (${rec.statusNAT})`,
+              }),
+              el('span', {
+                className: 'ri-recall-badge',
+                'data-tone':
+                  Number(rec.statusIPv6) === RADIUS_IPV6_STATUS.DEACTIVATE ? 'danger' : 'ok',
+                text: `IPv6: ${getRadiusIpv6Label(rec.statusIPv6)}`,
+              }),
+            ]),
+            ...metaLines.map((line) => el('div', { className: 'ri-box-sub', text: line })),
+          ])
+        );
+
+        if (state.radiusPresetApplied) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': ipv6OnlyLocked && act.id === 'remove_ipv6' ? 'warn' : 'info',
+            }, [el('div', { text: state.radiusPresetApplied })])
+          );
+        }
+
+        function buildRadiusFieldSection({
+          title,
+          selectId,
+          noteId,
+          noteLabel,
+          notePlaceholder,
+          options,
+          selectedValue,
+          noteValue,
+          presets,
+          warnMessage = '',
+          onSelectChange,
+          onNoteChange,
+        }) {
+          const diffBadge = el('span', { className: 'ri-radius-diff' });
+          const selectEl = el(
+            'select',
+            { className: 'ri-select', id: selectId },
+            options.map((opt) => {
+              const o = el('option', {
+                value: String(opt.value),
+                text: opt.optionText || opt.label,
+              });
+              if (opt.disabled) o.disabled = true;
+              if (String(opt.value) === String(selectedValue)) o.selected = true;
+              return o;
+            })
+          );
+          selectEl.value = String(selectedValue);
+          selectEl.addEventListener('change', (e) => {
+            onSelectChange(e.target.value);
+            syncRadiusValidationUi();
+          });
+
+          const noteInput = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: noteId,
+            placeholder: notePlaceholder,
+            autocomplete: 'off',
+            value: noteValue || '',
+          });
+          noteInput.value = noteValue || '';
+
+          const stripBtn = el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Bỏ dấu',
+            title: 'Chuyển ghi chú sang tiếng Việt không dấu',
+            onClick: () => {
+              const clean = stripVietnameseDiacritics(noteInput.value);
+              noteInput.value = clean;
+              onNoteChange(clean);
+              syncRadiusValidationUi();
+            },
+          });
+
+          const errEl = el('div', { className: 'ri-radius-err' });
+
+          const chipEls = presets.map((preset) => {
+            const btn = el('button', {
+              type: 'button',
+              className: 'ri-radius-chip',
+              text: preset,
+              onClick: () => {
+                noteInput.value = preset;
+                onNoteChange(preset);
+                syncRadiusValidationUi();
+              },
+            });
+            return { preset, btn };
+          });
+
+          noteInput.addEventListener('input', (e) => {
+            onNoteChange(e.target.value);
+            syncRadiusValidationUi();
+          });
+
+          const cardChildren = [
+            el('div', { className: 'ri-radius-card-head' }, [
+              el('label', { className: 'ri-confirm-label', for: selectId, text: title }),
+              diffBadge,
+            ]),
+            selectEl,
+          ];
+          if (warnMessage) {
+            cardChildren.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', { text: warnMessage }),
+              ])
+            );
+          }
+          cardChildren.push(
+            el('label', { className: 'ri-confirm-label', for: noteId, text: noteLabel }),
+            el('div', { className: 'ri-radius-note-row' }, [noteInput, stripBtn]),
+            el(
+              'div',
+              { className: 'ri-radius-presets' },
+              chipEls.map((c) => c.btn)
+            ),
+            errEl
+          );
+
+          return {
+            card: el('div', { className: 'ri-radius-card' }, cardChildren),
+            diffBadge,
+            selectEl,
+            noteInput,
+            stripBtn,
+            errEl,
+            chipEls,
+          };
+        }
+
+        const summaryTextEl = el('div', { text: '' });
+        const summaryBox = el(
+          'div',
+          { className: 'ri-sheet-status', 'data-tone': 'info', 'aria-live': 'polite' },
+          [summaryTextEl]
+        );
+
+        const natUi = buildRadiusFieldSection({
+          title: 'Tình trạng NAT (IPNAT)',
+          selectId: 'ri-radius-nat-select',
+          noteId: 'ri-radius-nat-note',
+          noteLabel: 'Ghi chú NAT (bắt buộc không dấu)',
+          notePlaceholder: 'VD: KH yeu cau bo IPNAT',
+          options: RADIUS_NAT_OPTIONS.map((o) => ({
+            value: o.value,
+            optionText: `${o.label} (${o.value})`,
+          })),
+          selectedValue: state.radiusNatStatus,
+          noteValue: state.radiusNatNote,
+          presets: RADIUS_NAT_NOTE_PRESETS,
+          onSelectChange: (val) => {
+            state.radiusNatStatus = String(val || '1');
+          },
+          onNoteChange: (val) => {
+            state.radiusNatNote = val;
+          },
+        });
+
+        const ipv6Ui = buildRadiusFieldSection({
+          title: 'IPv6 Status',
+          selectId: 'ri-radius-ipv6-select',
+          noteId: 'ri-radius-ipv6-note',
+          noteLabel: 'Ghi chú IPv6 (bắt buộc không dấu)',
+          notePlaceholder: 'VD: Bo IPv6 cho KH',
+          options: RADIUS_IPV6_OPTIONS.map((o) => ({
+            value: o.value,
+            optionText:
+              ipv6OnlyLocked && Number(o.value) === RADIUS_IPV6_STATUS.DEACTIVATE
+                ? `${o.label} (khóa do IPv6 Only)`
+                : o.label,
+            disabled: ipv6OnlyLocked && Number(o.value) === RADIUS_IPV6_STATUS.DEACTIVATE,
+          })),
+          selectedValue: state.radiusIpv6Status,
+          noteValue: state.radiusIpv6Note,
+          presets: RADIUS_IPV6_NOTE_PRESETS,
+          warnMessage: ipv6OnlyLocked
+            ? 'Thuê bao đang bật IPv6 Only — không thể chuyển IPv6 Status về Deactivate.'
+            : '',
+          onSelectChange: (val) => {
+            state.radiusIpv6Status = Number(val);
+          },
+          onNoteChange: (val) => {
+            state.radiusIpv6Note = val;
+          },
+        });
+
+        const killYesBtn = el('button', {
+          type: 'button',
+          className: `ri-mode-btn${state.radiusKillSession ? ' is-active' : ''}`,
+          'aria-pressed': state.radiusKillSession ? 'true' : 'false',
+          text: 'Có — Ngắt phiên',
+        });
+        const killNoBtn = el('button', {
+          type: 'button',
+          className: `ri-mode-btn${!state.radiusKillSession ? ' is-active' : ''}`,
+          'aria-pressed': !state.radiusKillSession ? 'true' : 'false',
+          text: 'Không — Giữ phiên',
+        });
+
+        function updateKillButtons() {
+          killYesBtn.classList.toggle('is-active', Boolean(state.radiusKillSession));
+          killYesBtn.setAttribute('aria-pressed', state.radiusKillSession ? 'true' : 'false');
+          killNoBtn.classList.toggle('is-active', !state.radiusKillSession);
+          killNoBtn.setAttribute('aria-pressed', !state.radiusKillSession ? 'true' : 'false');
+        }
+
+        killYesBtn.addEventListener('click', () => {
+          state.radiusKillSession = true;
+          updateKillButtons();
+          syncRadiusValidationUi();
+        });
+        killNoBtn.addEventListener('click', () => {
+          state.radiusKillSession = false;
+          updateKillButtons();
+          syncRadiusValidationUi();
+        });
+
+        const killCard = el('div', { className: 'ri-radius-card' }, [
+          el('div', { className: 'ri-radius-card-head' }, [
+            el('span', { className: 'ri-confirm-label', text: 'Kill Session (Ngắt phiên kết nối)' }),
+          ]),
+          el('div', { className: 'ri-mode-row', role: 'group' }, [killYesBtn, killNoBtn]),
+        ]);
+
+        function syncRadiusValidationUi() {
+          const draft = {
+            natStatus: state.radiusNatStatus,
+            natDescription: state.radiusNatNote,
+            ipv6Status: state.radiusIpv6Status,
+            ipv6Description: state.radiusIpv6Note,
+            isKillSession: state.radiusKillSession,
+          };
+
+          const natChanged = String(draft.natStatus) !== String(rec.statusNAT);
+          natUi.diffBadge.textContent = natChanged
+            ? `Đổi -> ${getRadiusNatLabel(draft.natStatus)}`
+            : 'Giữ nguyên';
+          natUi.diffBadge.classList.toggle('is-changed', natChanged);
+          natUi.stripBtn.style.display = /[^\u0000-\u007F]/.test(state.radiusNatNote || '')
+            ? ''
+            : 'none';
+          const natNoteCheck = natChanged ? validateRadiusNote(state.radiusNatNote, 'NAT') : null;
+          natUi.errEl.textContent = natNoteCheck && !natNoteCheck.valid ? natNoteCheck.error : '';
+          natUi.errEl.style.display = natUi.errEl.textContent ? '' : 'none';
+          for (const item of natUi.chipEls) {
+            item.btn.classList.toggle(
+              'is-active',
+              String(state.radiusNatNote || '').trim() === item.preset
+            );
+          }
+
+          const ipv6StatusChanged = Number(draft.ipv6Status) !== Number(rec.statusIPv6);
+          const ipv6NoteTrim = String(state.radiusIpv6Note || '').trim();
+          const ipv6Changed =
+            ipv6StatusChanged ||
+            (ipv6NoteTrim.length > 0 && ipv6NoteTrim !== String(rec.descriptionIPv6 || '').trim());
+          ipv6Ui.diffBadge.textContent = ipv6StatusChanged
+            ? `Đổi -> ${getRadiusIpv6Label(draft.ipv6Status)}`
+            : ipv6Changed
+            ? 'Sửa ghi chú'
+            : 'Giữ nguyên';
+          ipv6Ui.diffBadge.classList.toggle('is-changed', ipv6Changed);
+          ipv6Ui.stripBtn.style.display = /[^\u0000-\u007F]/.test(state.radiusIpv6Note || '')
+            ? ''
+            : 'none';
+          let ipv6Err = '';
+          if (ipv6OnlyLocked && Number(draft.ipv6Status) === RADIUS_IPV6_STATUS.DEACTIVATE) {
+            ipv6Err = 'Thuê bao đang bật IPv6 Only — không thể chọn Deactivate IPv6.';
+          } else if (ipv6Changed) {
+            const v6NoteCheck = validateRadiusNote(state.radiusIpv6Note, 'IPv6');
+            if (!v6NoteCheck.valid) ipv6Err = v6NoteCheck.error;
+          }
+          ipv6Ui.errEl.textContent = ipv6Err;
+          ipv6Ui.errEl.style.display = ipv6Err ? '' : 'none';
+          for (const item of ipv6Ui.chipEls) {
+            item.btn.classList.toggle(
+              'is-active',
+              String(state.radiusIpv6Note || '').trim() === item.preset
+            );
+          }
+
+          const check = buildRadiusChangePayload(rec, draft);
+          if (check.ok) {
+            const parts = [];
+            if (check.changes.nat) {
+              parts.push(
+                `NAT: ${getRadiusNatLabel(rec.statusNAT)} -> ${getRadiusNatLabel(
+                  check.payload.changeNAT.natStatus
+                )}`
+              );
+            }
+            if (check.changes.ipv6) {
+              parts.push(
+                `IPv6: ${getRadiusIpv6Label(rec.statusIPv6)} -> ${getRadiusIpv6Label(
+                  check.payload.changeIpv6.ipv6Status
+                )}`
+              );
+            }
+            parts.push(
+              `Kill Session: ${check.payload.isKillSession ? 'Có (ngắt phiên)' : 'Không'}`
+            );
+            summaryBox.setAttribute('data-tone', 'info');
+            summaryTextEl.textContent = `Sẵn sàng lưu: ${parts.join(' • ')}`;
+          } else {
+            summaryBox.setAttribute('data-tone', 'warn');
+            summaryTextEl.textContent = check.error;
+          }
+          confirmBtn.disabled = !check.ok;
+        }
+
+        sheetParts.push(natUi.card, ipv6Ui.card, killCard, summaryBox);
+        syncRadiusValidationUi();
+
+        confirmBtn.addEventListener('click', () =>
+          runConfirmedAction(act, {
+            record: state.radiusRecord,
+            natStatus: state.radiusNatStatus,
+            natDescription: state.radiusNatNote,
+            ipv6Status: state.radiusIpv6Status,
+            ipv6Description: state.radiusIpv6Note,
+            isKillSession: state.radiusKillSession,
+          })
+        );
       }
     } else {
       confirmBtn.addEventListener('click', () =>

@@ -421,9 +421,17 @@ class MainActivity : AppCompatActivity() {
                             val hasFrameset = meta?.optBoolean("hasFrameset", false) ?: false
                             val hasLoginTitle =
                                 !hasFrameset && SSO_LOGIN_TITLE_RE.containsMatchIn(title)
+                            val requiresRadiusToken =
+                                stillCurrent.targetHost.equals("radius-portal.fpt.net", ignoreCase = true)
+                            if (requiresRadiusToken) {
+                                runCatching { CookieManager.getInstance().flush() }
+                            }
+                            val hasRadiusToken = !requiresRadiusToken ||
+                                extractRadiusAccessToken(CookieManager.getInstance()).isNotBlank()
 
                             if (!hasPwd &&
                                 !hasLoginTitle &&
+                                hasRadiusToken &&
                                 isTargetPortalUrl(effectiveUrl, stillCurrent.targetHost)
                             ) {
                                 finishActiveSsoTask(
@@ -697,6 +705,27 @@ class MainActivity : AppCompatActivity() {
         return hostMatches && !isAuthHost(host) && !isLoginPath(uri.path)
     }
 
+    private fun extractRadiusAccessToken(cookieManager: CookieManager): String {
+        val rawCookies = listOf(
+            "http://radius-portal.fpt.net/",
+            "https://radius-portal.fpt.net/"
+        ).mapNotNull { cookieManager.getCookie(it) }
+            .joinToString("; ")
+        if (rawCookies.isBlank()) return ""
+        for (part in rawCookies.split(";")) {
+            val idx = part.indexOf('=')
+            if (idx <= 0) continue
+            val name = part.substring(0, idx).trim()
+            if (name == "accesstoken_iam_radius") {
+                val rawVal = part.substring(idx + 1).trim().trim('"')
+                if (rawVal.isNotEmpty()) {
+                    return runCatching { Uri.decode(rawVal) }.getOrDefault(rawVal).trim()
+                }
+            }
+        }
+        return ""
+    }
+
     private fun deliverBridgeResponse(reqId: String, resultJson: JSONObject) {
         pendingResponses[reqId] = resultJson.toString()
         runOnUiThread {
@@ -753,6 +782,7 @@ class MainActivity : AppCompatActivity() {
         var currentBody: String? = rawData
         val timeoutMs = payload.optInt("timeout", 15000).coerceIn(1000, 60000)
         val headerObj = payload.optJSONObject("headers")
+        val useRadiusBearer = payload.optBoolean("useRadiusBearer", false)
 
         val initialUri = runCatching { Uri.parse(initialUrl) }.getOrNull()
         val initialScheme = initialUri?.scheme?.lowercase(Locale.US).orEmpty()
@@ -821,6 +851,25 @@ class MainActivity : AppCompatActivity() {
                     val cookies = cookieManager.getCookie(currentUrl)
                     if (!cookies.isNullOrEmpty()) {
                         conn.setRequestProperty("Cookie", cookies)
+                    }
+
+                    if (useRadiusBearer && hopUri.host.equals("radius-apigateway.fpt.net", ignoreCase = true)) {
+                        val radiusToken = extractRadiusAccessToken(cookieManager)
+                        if (radiusToken.isBlank()) {
+                            deliverBridgeResponse(
+                                reqId,
+                                JSONObject().apply {
+                                    put("ok", false)
+                                    put("status", 401)
+                                    put("finalUrl", currentUrl)
+                                    put("responseText", "")
+                                    put("responseHeaders", "")
+                                    put("error", "RADIUS_TOKEN_MISSING")
+                                }
+                            )
+                            return
+                        }
+                        conn.setRequestProperty("Authorization", "Bearer $radiusToken")
                     }
 
                     val sendsBody = currentMethod == "POST" ||

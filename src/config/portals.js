@@ -2,7 +2,7 @@
  * Cau hinh 5 cong noi bo FPT va cac thao tac chuan hoa Ma Hop Dong.
  */
 
-export const PORTAL_ORDER = ['inside', 'port', 'recall', 'camera', 'radius'];
+export const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 
 export const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
@@ -204,10 +204,21 @@ export const PORTALS = {
     url: 'http://radius-portal.fpt.net/networkConnection',
     hosts: ['radius-portal.fpt.net'],
     iamSso: true,
-    status: 'planned',
-    statusLabel: 'Sắp ghép',
-    description: 'Kiểm tra kết nối và bỏ IPNAT, IPv6 cho hợp đồng.',
+    status: 'priority',
+    statusLabel: 'IPNAT & IPv6',
+    description:
+      'Radius Portal: Tra cứu thông số kết nối, chỉnh Tình trạng NAT (IPNAT), IPv6 và Kill Session.',
     actions: [
+      {
+        id: 'edit_radius',
+        label: 'Chỉnh IPNAT & IPv6',
+        description:
+          'Tra cứu hợp đồng và cập nhật Tình trạng NAT, IPv6 Status cùng tùy chọn Kill Session.',
+        kind: 'primary',
+        requiresConfirm: true,
+        confirmNote:
+          'Chỉnh Tình trạng NAT, IPv6 Status và Kill Session trực tiếp trên Radius Portal.',
+      },
       {
         id: 'check_radius',
         label: 'Kiểm tra kết nối',
@@ -217,19 +228,21 @@ export const PORTALS = {
       },
       {
         id: 'remove_ipnat',
-        label: 'Bỏ IPNAT',
-        description: 'Gỡ cấu hình IPNAT đang áp trên thuê bao.',
+        label: 'Bỏ IPNAT (ByPass)',
+        description: 'Mở nhanh chế độ ByPass NAT (5) và điền sẵn ghi chú không dấu.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Thao tác này sẽ bỏ IPNAT cho hợp đồng trên Radius Portal.',
+        confirmNote:
+          'Mở sẵn chế độ ByPass NAT để kiểm tra ghi chú không dấu và xác nhận lưu trên Radius.',
       },
       {
         id: 'remove_ipv6',
-        label: 'Bỏ IPv6',
-        description: 'Tắt cấp phát IPv6 cho kết nối của hợp đồng.',
+        label: 'Bỏ IPv6 (Deactivate)',
+        description: 'Mở nhanh chế độ tắt IPv6 (Deactivate) và điền sẵn ghi chú không dấu.',
         kind: 'danger',
         requiresConfirm: true,
-        confirmNote: 'Thao tác này sẽ bỏ IPv6 cho hợp đồng trên Radius Portal.',
+        confirmNote:
+          'Mở sẵn chế độ Deactivate IPv6 để kiểm tra ghi chú không dấu và xác nhận lưu trên Radius.',
       },
     ],
   },

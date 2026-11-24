@@ -6,6 +6,7 @@ import { PORTALS, validateContractId } from '../config/portals.js';
 import { checkPortalSession, isUserscriptEnv, sleep } from '../core/transport.js';
 import { runInsideAction } from './inside.js';
 import { runPortAction } from './port.js';
+import { runRadiusAction } from './radius.js';
 import { runRecallAction } from './recall.js';
 
 function buildPlannedDemoResult(portal, action, contractId) {
@@ -52,6 +53,9 @@ export async function executePortalAction(portalId, actionId, rawContractId, ctx
   }
   if (portalId === 'recall') {
     return runRecallAction(actionId, rawContractId, ctx);
+  }
+  if (portalId === 'radius') {
+    return runRadiusAction(actionId, rawContractId, ctx);
   }
 
   const check = validateContractId(rawContractId);

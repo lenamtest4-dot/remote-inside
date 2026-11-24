@@ -181,6 +181,27 @@ import {
   readEquipmentFilterOptions,
   readEquipmentFilterState,
 } from '../src/adapters/equipment.js';
+import {
+  RADIUS_ENDPOINTS,
+  RADIUS_IPV6_OPTIONS,
+  RADIUS_IPV6_STATUS,
+  RADIUS_NAT_OPTIONS,
+  buildRadiusChangePayload,
+  buildRadiusSummaryFields,
+  fetchRadiusConnection,
+  getRadiusContractStatusLabel,
+  getRadiusIpv6Label,
+  getRadiusIpv6OnlyLabel,
+  getRadiusNatLabel,
+  normalizeRadiusRecord,
+  parseRadiusChangeResponse,
+  parseRadiusLookupResponse,
+  parseRadiusTokenFromCookieString,
+  runRadiusAction,
+  stripVietnameseDiacritics,
+  submitRadiusConnectionChange,
+  validateRadiusNote,
+} from '../src/adapters/radius.js';
 import { executePortalAction } from '../src/adapters/portals.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -294,7 +315,7 @@ async function runTests() {
   console.log('   OK: Bundle syntax & Userscript headers valid.');
 
   console.log('2. Testing portals & contract ID normalization/validation...');
-  assert.deepEqual(PORTAL_ORDER, ['inside', 'port', 'recall', 'camera', 'radius']);
+  assert.deepEqual(PORTAL_ORDER, ['inside', 'port', 'recall', 'radius', 'camera']);
   let seenPlannedPortal = false;
   for (const pid of PORTAL_ORDER) {
     const isPlanned = PORTALS[pid].status === 'planned';
@@ -3909,6 +3930,368 @@ async function runTests() {
     'Built equipment debt bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: Quản lý vật tư — Tồn công nợ theo NV tests passed.');
+
+  console.log('22. Testing Radius Portal IPNAT & IPv6 adapter, validators, and Android Bearer bridge...');
+  assert.equal(PORTALS.radius.status, 'priority');
+  assert.deepEqual(
+    PORTALS.radius.actions.map((a) => a.id),
+    ['edit_radius', 'check_radius', 'remove_ipnat', 'remove_ipv6']
+  );
+  assert.equal(getRadiusNatLabel('1'), 'Default NAT');
+  assert.equal(getRadiusNatLabel('3'), 'Khách hàng dùng Camera');
+  assert.equal(getRadiusNatLabel('5'), 'ByPass NAT');
+  assert.equal(getRadiusIpv6Label(3), 'Deactivate');
+  assert.equal(getRadiusIpv6Label(2), 'Active');
+  assert.equal(getRadiusIpv6Label(0), 'Rule');
+  assert.equal(getRadiusContractStatusLabel(1), 'Bình thường');
+  assert.equal(getRadiusIpv6OnlyLabel(0), 'Deactivate');
+  assert.equal(getRadiusIpv6OnlyLabel(1), 'Active');
+
+  assert.equal(
+    stripVietnameseDiacritics('  Khách hàng yêu cầu bỏ IPNAT Đặng  '),
+    'Khach hang yeu cau bo IPNAT Dang'
+  );
+  assert.equal(validateRadiusNote('', 'NAT').valid, false);
+  assert.equal(validateRadiusNote('Bỏ IPNAT cho khách', 'NAT').valid, false);
+  assert.deepEqual(validateRadiusNote('  KH yeu cau bo IPNAT  ', 'NAT'), {
+    valid: true,
+    value: 'KH yeu cau bo IPNAT',
+    error: '',
+  });
+
+  assert.equal(
+    parseRadiusTokenFromCookieString('foo=bar; accesstoken_iam_radius=tok%20demo%2B1; baz=qux'),
+    'tok demo+1'
+  );
+  assert.equal(parseRadiusTokenFromCookieString('foo=bar'), '');
+
+  const baseRadRec = normalizeRadiusRecord({
+    objID: 9012345,
+    contract: 'SGN123456',
+    name: 'sgn123456-demo',
+    status: 1,
+    statusNAT: '1',
+    descriptionNAT: 'Default NAT',
+    statusIPv6: 2,
+    descriptionIPv6: 'Bat IPv6 cho KH',
+    ipV6Only: 0,
+    isIpv6Support: true,
+    poolListName: 'DEFAULT_POOL',
+    ipAddress: '100.64.20.10',
+    callerID: 'AA:BB:CC:DD:EE:01',
+    locationName: 'Khu vuc Demo',
+    localTypeName: 'Giga',
+  });
+  assert.equal(baseRadRec.objID, 9012345);
+  assert.equal(baseRadRec.statusNAT, '1');
+  assert.equal(baseRadRec.statusIPv6, 2);
+  assert.ok(buildRadiusSummaryFields(baseRadRec).some((f) => f.label === 'Tình trạng NAT'));
+
+  // Reject no-op when neither NAT nor IPv6 changed
+  assert.equal(
+    buildRadiusChangePayload(baseRadRec, {
+      natStatus: '1',
+      natDescription: 'Default NAT',
+      ipv6Status: 2,
+      ipv6Description: 'Bat IPv6 cho KH',
+      isKillSession: true,
+    }).ok,
+    false
+  );
+  // Reject accented note
+  assert.equal(
+    buildRadiusChangePayload(baseRadRec, {
+      natStatus: '5',
+      natDescription: 'Khách hàng bỏ NAT',
+      ipv6Status: 2,
+      ipv6Description: 'Bat IPv6 cho KH',
+    }).ok,
+    false
+  );
+  // NAT-only change -> omit changeIpv6
+  const natOnlyBuilt = buildRadiusChangePayload(baseRadRec, {
+    natStatus: '5',
+    natDescription: 'KH yeu cau bo IPNAT',
+    ipv6Status: 2,
+    ipv6Description: 'Bat IPv6 cho KH',
+    isKillSession: true,
+  });
+  assert.deepEqual(natOnlyBuilt.payload, {
+    objID: 9012345,
+    isKillSession: true,
+    changeNAT: {
+      natStatus: '5',
+      natDescription: 'KH yeu cau bo IPNAT',
+    },
+  });
+  assert.deepEqual(natOnlyBuilt.changes, { nat: true, ipv6: false });
+
+  // IPv6-only change + KillSession false -> omit changeNAT
+  const ipv6OnlyBuilt = buildRadiusChangePayload(baseRadRec, {
+    natStatus: '1',
+    natDescription: 'Default NAT',
+    ipv6Status: RADIUS_IPV6_STATUS.DEACTIVATE,
+    ipv6Description: 'Bo IPv6 cho KH',
+    isKillSession: false,
+  });
+  assert.deepEqual(ipv6OnlyBuilt.payload, {
+    objID: 9012345,
+    isKillSession: false,
+    changeIpv6: {
+      ipv6Status: 3,
+      ipv6Description: 'Bo IPv6 cho KH',
+    },
+  });
+  assert.deepEqual(ipv6OnlyBuilt.changes, { nat: false, ipv6: true });
+
+  // Combined NAT + IPv6 change -> exact casing & types
+  const combinedBuilt = buildRadiusChangePayload(baseRadRec, {
+    natStatus: '3',
+    natDescription: 'KH su dung Camera',
+    ipv6Status: RADIUS_IPV6_STATUS.RULE,
+    ipv6Description: 'Chuyen IPv6 ve Rule',
+    isKillSession: true,
+  });
+  assert.deepEqual(combinedBuilt.payload, {
+    objID: 9012345,
+    isKillSession: true,
+    changeNAT: {
+      natStatus: '3',
+      natDescription: 'KH su dung Camera',
+    },
+    changeIpv6: {
+      ipv6Status: 0,
+      ipv6Description: 'Chuyen IPv6 ve Rule',
+    },
+  });
+
+  // Guard: ipV6Only === 1 must block Deactivate IPv6 (3)
+  assert.equal(
+    buildRadiusChangePayload(
+      { ...baseRadRec, ipV6Only: 1 },
+      {
+        natStatus: '1',
+        natDescription: 'Default NAT',
+        ipv6Status: 3,
+        ipv6Description: 'Bo IPv6 cho KH',
+      }
+    ).ok,
+    false
+  );
+
+  // Response parsers
+  assert.equal(parseRadiusLookupResponse('', 401, 'SGN123456').authRequired, true);
+  assert.equal(parseRadiusLookupResponse('', 403, 'SGN123456').forbidden, true);
+  assert.equal(
+    parseRadiusLookupResponse(
+      JSON.stringify({ error_code: 0, status: 'Success', data: [] }),
+      200,
+      'SGN123456'
+    ).notFound,
+    true
+  );
+  const parsedChangeArr = parseRadiusChangeResponse(
+    JSON.stringify({ error_code: 0, status: 'Success', message: ['NAT updated', { message: 'IPv6 updated' }] }),
+    200
+  );
+  assert.equal(parsedChangeArr.ok, true);
+  assert.equal(parsedChangeArr.message, 'NAT updated • IPv6 updated');
+  assert.equal(parseRadiusChangeResponse('', 401).authRequired, true);
+
+  // Demo end-to-end persistence
+  const demoCheck1 = await executePortalAction('radius', 'check_radius', 'SGN998877', {
+    forceDemo: true,
+  });
+  assert.equal(demoCheck1.status, 'ok');
+  assert.equal(demoCheck1.mode, 'demo');
+  assert.equal(demoCheck1.radiusRecord.statusNAT, '1');
+  const demoEditRes = await executePortalAction('radius', 'edit_radius', 'SGN998877', {
+    forceDemo: true,
+    record: demoCheck1.radiusRecord,
+    natStatus: '5',
+    natDescription: 'KH yeu cau bo IPNAT',
+    ipv6Status: 3,
+    ipv6Description: 'Bo IPv6 cho KH',
+    isKillSession: true,
+  });
+  assert.equal(demoEditRes.status, 'ok');
+  assert.equal(demoEditRes.radiusRecord.statusNAT, '5');
+  assert.equal(demoEditRes.radiusRecord.statusIPv6, 3);
+  const demoCheck2 = await executePortalAction('radius', 'check_radius', 'SGN998877', {
+    forceDemo: true,
+  });
+  assert.equal(demoCheck2.radiusRecord.statusNAT, '5');
+  assert.equal(demoCheck2.radiusRecord.statusIPv6, 3);
+
+  // Mocked Android Native Bridge live flow: useRadiusBearer + 401 warmPortalSession retry + Change
+  const prevWin22 = globalThis.window;
+  const prevGm22 = globalThis.GM_xmlhttpRequest;
+  const prevDoc22 = globalThis.document;
+  try {
+    clearWarmSessionCache();
+    delete globalThis.GM_xmlhttpRequest;
+    globalThis.document = undefined;
+
+    let tokenReady = false;
+    let currentNat = '1';
+    let currentIpv6 = 2;
+    let currentNatNote = 'Default NAT';
+    let currentIpv6Note = 'Bat IPv6 cho KH';
+    const seenPayloads22 = [];
+    const warmUrls22 = [];
+
+    globalThis.window = {
+      RemoteInsideNative: {
+        openPortal: () => {},
+        warmPortalSession: (raw) => {
+          const { reqId, url } = JSON.parse(raw);
+          warmUrls22.push(url);
+          queueMicrotask(() => {
+            tokenReady = true;
+            globalThis.window.__riNativeResolve(
+              reqId,
+              JSON.stringify({ ok: true, status: 'ok', finalUrl: url, sawAuth: true })
+            );
+          });
+        },
+        httpRequest: (raw) => {
+          const req = JSON.parse(raw);
+          seenPayloads22.push(req);
+          queueMicrotask(() => {
+            if (!req.useRadiusBearer || !tokenReady) {
+              globalThis.window.__riNativeResolve(
+                req.reqId,
+                JSON.stringify({
+                  ok: false,
+                  status: 401,
+                  finalUrl: req.url,
+                  responseText: '',
+                  responseHeaders: '',
+                  error: 'RADIUS_TOKEN_MISSING',
+                })
+              );
+              return;
+            }
+            if (req.url === RADIUS_ENDPOINTS.GET_BY_OBJ_ID) {
+              globalThis.window.__riNativeResolve(
+                req.reqId,
+                JSON.stringify({
+                  ok: true,
+                  status: 200,
+                  finalUrl: req.url,
+                  responseText: JSON.stringify({
+                    error_code: 0,
+                    error_message: '',
+                    status: 'Success',
+                    data: [
+                      {
+                        objID: 9012345,
+                        contract: 'SGN123456',
+                        name: 'sgn123456-demo',
+                        macAddress: 'AA:BB:CC:DD:EE:01',
+                        status: 1,
+                        statusNAT: currentNat,
+                        descriptionNAT: currentNatNote,
+                        statusIPv6: currentIpv6,
+                        descriptionIPv6: currentIpv6Note,
+                        ipV6Only: 0,
+                        isIpv6Support: true,
+                      },
+                    ],
+                  }),
+                  responseHeaders: '',
+                })
+              );
+              return;
+            }
+            if (req.url === RADIUS_ENDPOINTS.CHANGE) {
+              const bodyObj = JSON.parse(req.data || '{}');
+              if (bodyObj.changeNAT) {
+                currentNat = bodyObj.changeNAT.natStatus;
+                currentNatNote = bodyObj.changeNAT.natDescription;
+              }
+              if (bodyObj.changeIpv6) {
+                currentIpv6 = bodyObj.changeIpv6.ipv6Status;
+                currentIpv6Note = bodyObj.changeIpv6.ipv6Description;
+              }
+              globalThis.window.__riNativeResolve(
+                req.reqId,
+                JSON.stringify({
+                  ok: true,
+                  status: 200,
+                  finalUrl: req.url,
+                  responseText: JSON.stringify({
+                    error_code: 0,
+                    status: 'Success',
+                    message: ['Cap nhat thanh cong'],
+                  }),
+                  responseHeaders: '',
+                })
+              );
+            }
+          });
+        },
+      },
+    };
+
+    const liveLookup = await fetchRadiusConnection('SGN123456');
+    assert.equal(liveLookup.status, 'ok');
+    assert.equal(liveLookup.mode, 'live');
+    assert.equal(liveLookup.record.objID, 9012345);
+    assert.deepEqual(warmUrls22, [RADIUS_ENDPOINTS.PORTAL_URL]);
+    assert.equal(seenPayloads22.every((p) => p.useRadiusBearer === true), true);
+
+    const liveChange = await submitRadiusConnectionChange(liveLookup.record, {
+      natStatus: '5',
+      natDescription: 'KH yeu cau bo IPNAT',
+      ipv6Status: 3,
+      ipv6Description: 'Bo IPv6 cho KH',
+      isKillSession: true,
+    });
+    assert.equal(liveChange.status, 'ok');
+    assert.equal(liveChange.mode, 'live');
+    assert.equal(liveChange.record.statusNAT, '5');
+    assert.equal(liveChange.record.statusIPv6, 3);
+    const changeReq = seenPayloads22.find((p) => p.url === RADIUS_ENDPOINTS.CHANGE);
+    assert.ok(changeReq && changeReq.useRadiusBearer === true);
+    assert.deepEqual(JSON.parse(changeReq.data), {
+      objID: 9012345,
+      isKillSession: true,
+      changeNAT: { natStatus: '5', natDescription: 'KH yeu cau bo IPNAT' },
+      changeIpv6: { ipv6Status: 3, ipv6Description: 'Bo IPv6 cho KH' },
+    });
+
+    const quickCheck = await runRadiusAction('check_radius', 'SGN123456');
+    assert.equal(quickCheck.status, 'ok');
+    assert.equal(quickCheck.radiusRecord.statusNAT, '5');
+  } finally {
+    clearWarmSessionCache();
+    globalThis.window = prevWin22;
+    globalThis.GM_xmlhttpRequest = prevGm22;
+    globalThis.document = prevDoc22;
+  }
+
+  for (const ktToken of [
+    'extractRadiusAccessToken',
+    'accesstoken_iam_radius',
+    'useRadiusBearer',
+    'radius-apigateway.fpt.net',
+    'RADIUS_TOKEN_MISSING',
+  ]) {
+    assert.ok(mainActivitySrc.includes(ktToken), `MainActivity.kt must include ${ktToken}`);
+  }
+  for (const bundleToken of [
+    RADIUS_ENDPOINTS.GET_BY_OBJ_ID,
+    RADIUS_ENDPOINTS.CHANGE,
+    'buildRadiusChangePayload',
+    'stripVietnameseDiacritics',
+    'ri-radius-card',
+    'useRadiusBearer',
+  ]) {
+    assert.ok(userscriptContent.includes(bundleToken), `Userscript must include ${bundleToken}`);
+    assert.ok(androidAssetContent.includes(bundleToken), `Android bundle must include ${bundleToken}`);
+  }
+  console.log('   OK: Radius Portal IPNAT & IPv6 tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

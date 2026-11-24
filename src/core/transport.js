@@ -151,6 +151,7 @@ function requestViaAndroidNative({
   headers = {},
   data = null,
   timeout = 15000,
+  useRadiusBearer = false,
 } = {}) {
   if (typeof window === 'undefined' || !isAndroidAppEnv()) {
     return Promise.resolve({
@@ -200,6 +201,7 @@ function requestViaAndroidNative({
           headers: headers || {},
           data: data === null || data === undefined ? null : String(data),
           timeout: numericTimeout,
+          useRadiusBearer: Boolean(useRadiusBearer),
         })
       );
     } catch (err) {
@@ -449,9 +451,10 @@ export function requestPortal({
   headers = {},
   data = null,
   timeout = 15000,
+  useRadiusBearer = false,
 } = {}) {
   if (isAndroidAppEnv()) {
-    return requestViaAndroidNative({ url, method, headers, data, timeout });
+    return requestViaAndroidNative({ url, method, headers, data, timeout, useRadiusBearer });
   }
 
   if (typeof GM_xmlhttpRequest !== 'function') {

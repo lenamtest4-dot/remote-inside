@@ -2272,6 +2272,46 @@ async function runTests() {
     ).includes('http://radius-portal.fpt.net/_next/static/chunks/app/networkConnection/page-abc123.js'),
     'extractNextAppChunkUrls must extract app/networkConnection/page-*.js chunks'
   );
+
+  const largeRadiusPerfEntries = [];
+  for (let idx = 1; idx <= 114; idx += 1) {
+    largeRadiusPerfEntries.push({
+      name: `http://radius-portal.fpt.net/_next/static/chunks/shared-${idx}.js`,
+    });
+  }
+  largeRadiusPerfEntries.push({
+    name: 'http://radius-portal.fpt.net/_next/static/chunks/app/(page)/networkConnection/page-1099c0cd1f45b478.js',
+  });
+  const largeRadiusSpaChunks = extractSpaChunkUrls(
+    '',
+    'http://radius-portal.fpt.net/networkConnection',
+    largeRadiusPerfEntries
+  );
+  assert.equal(largeRadiusPerfEntries.length, 115);
+  assert.equal(
+    largeRadiusSpaChunks[0],
+    'http://radius-portal.fpt.net/_next/static/chunks/app/(page)/networkConnection/page-1099c0cd1f45b478.js',
+    'extractSpaChunkUrls must keep route chunk at index 0 even with 115 perfEntries'
+  );
+  assert.ok(
+    largeRadiusSpaChunks.includes('http://radius-portal.fpt.net/_next/static/chunks/shared-114.js'),
+    'extractSpaChunkUrls must retain tail chunks from 115 perfEntries'
+  );
+
+  const groupedNextUrls = extractNextAppChunkUrls(
+    '"static/chunks/app/(page)/error-abc.js","static/chunks/app/(page)/layout-def.js","static/chunks/app/(page)/networkConnection/page-1099c0cd1f45b478.js"',
+    'http://radius-portal.fpt.net/networkConnection'
+  );
+  const rawPageUrl =
+    'http://radius-portal.fpt.net/_next/static/chunks/app/(page)/networkConnection/page-1099c0cd1f45b478.js';
+  const encodedPageUrl =
+    'http://radius-portal.fpt.net/_next/static/chunks/app/%28page%29/networkConnection/page-1099c0cd1f45b478.js';
+  const layoutUrlIdx = groupedNextUrls.findIndex((u) => u.includes('layout-def.js'));
+  const errorUrlIdx = groupedNextUrls.findIndex((u) => u.includes('error-abc.js'));
+  assert.ok(groupedNextUrls.includes(rawPageUrl), 'Must extract raw (page) route chunk URL');
+  assert.ok(groupedNextUrls.includes(encodedPageUrl), 'Must extract %28page%29 encoded route chunk URL');
+  assert.ok(layoutUrlIdx > groupedNextUrls.indexOf(encodedPageUrl), 'page chunk must come before layout chunk');
+  assert.ok(errorUrlIdx > groupedNextUrls.indexOf(encodedPageUrl), 'page chunk must come before error chunk');
   console.log('   OK: FOX-ERP / Partner SPA Scanner & Recorder checks passed.');
 
   console.log('18. Testing FOX-ERP Phiếu triển khai (Deployment Ticket) adapter & live bridge...');

@@ -2575,9 +2575,22 @@ export function mountRemoteInside({
         ...extractNextAppChunkUrls(htmlText, pageHref),
         ...extractSpaChunkUrls(htmlText, pageHref, perfEntries),
       ];
+      const pageRouteCandidates = [];
+      const appChunkCandidates = [];
+      const otherCandidates = [];
+      for (const u of rawCandidateUrls) {
+        if (/\/page-[^/]+\.js$/i.test(u)) {
+          pageRouteCandidates.push(u);
+        } else if (/\/chunks\/app\//i.test(u)) {
+          appChunkCandidates.push(u);
+        } else {
+          otherCandidates.push(u);
+        }
+      }
       const sortedCandidateUrls = [
-        ...rawCandidateUrls.filter((u) => /(?:\/chunks\/app\/|\/page-)/i.test(u)),
-        ...rawCandidateUrls.filter((u) => !/(?:\/chunks\/app\/|\/page-)/i.test(u)),
+        ...pageRouteCandidates,
+        ...appChunkCandidates,
+        ...otherCandidates,
       ];
       const seenScripts = new Set();
       const customScriptUrls = [];
@@ -2593,7 +2606,7 @@ export function mountRemoteInside({
           if (!seenScripts.has(parsed.href)) {
             seenScripts.add(parsed.href);
             customScriptUrls.push(parsed.href);
-            if (customScriptUrls.length >= 45) break;
+            if (customScriptUrls.length >= 70) break;
           }
         } catch {
           // skip malformed script URL
@@ -2601,6 +2614,7 @@ export function mountRemoteInside({
       }
 
       const collectedSnippets = [];
+      const seenSnippetPaths = new Set();
       if (isUserscriptEnv() && customScriptUrls.length > 0) {
         const settled = await Promise.allSettled(
           customScriptUrls.map((url) => requestPortal({ url, method: 'GET', timeout: 10000 }))
@@ -2621,17 +2635,32 @@ export function mountRemoteInside({
           } catch {
             // keep defaults
           }
+          let normPath = jsPath;
+          try {
+            normPath = decodeURIComponent(jsPath);
+          } catch {
+            normPath = jsPath;
+          }
+          if (seenSnippetPaths.has(normPath)) {
+            continue;
+          }
+          seenSnippetPaths.add(normPath);
+          const isPageRouteChunk = /\/page-[^/]+\.js$/i.test(normPath);
           const chunkApiHints = extractApiHintsFromJs(res.responseText, contractId);
           const codeContexts = extractCodeContextsFromJs(
             res.responseText,
-            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract|NetworkConnection|statusNAT|statusIPv6|descriptionNAT|descriptionIPv6|ByPass\s*NAT|Default\s*NAT|killSession|isKill|ngắt\s*phiên|không\s*dấu|khong\s*dau|ActiveProfile|VerifyIPv6|coAID|spamPool|ipV6Only|accesstoken_iam_radius|ChangeNetworkConnection)/i,
+            /(?:\$fetch\s*\(|\/api\/|x-resource-grant|setGrant|GET_TICKET_INFO|get-ticket-info|GET_CONFIG_BY_PARENT|get-config-by-parent|GET_EQUIPMENT_ON_DEP|get-equipment-on-dep|CLEAR_EQUIPMENT|clear-equipment|ClearMac|CHANGE_EQUIPMENT|change-equipment|UPDATE_EQUIPMENT_IMPORT|update-equipment-import|UPDATE_EQUIPMENT_REVOKE|update-equipment-revoke|SYNC_ONLINE|sync-online|\/status\/completed|OutDoorReUsed|ReasonDelay|NotComplete|HiFPT|CapLan|reveal-phone|get-contract-phone|get-e-contract-record|sign-econtract|getContract|NetworkConnection|statusNAT|statusIPv6|descriptionNAT|descriptionIPv6|ByPass\s*NAT|Default\s*NAT|killSession|isKill|ngắt\s*phiên|không\s*dấu|khong\s*dau|ActiveProfile|VerifyIPv6|coAID|spamPool|ipV6Only|accesstoken_iam_radius|ChangeNetworkConnection|Deactivate|Tình\s*trạng\s*NAT|IPv6\s*Status|Ghi\s*chú|Kill\s*Session|Cập\s*nhật\s*thông\s*tin|changeNetworkConnection|NetworkConnection\/Change|isIpv6Support|statusCGNAT|SetIpv6Status)/i,
             contractId,
-            { maxTotal: 55000, maxContexts: 65, radius: 480 }
+            isPageRouteChunk
+              ? { maxTotal: 75000, maxContexts: 90, radius: 600 }
+              : { maxTotal: 55000, maxContexts: 65, radius: 480 }
           );
           if (chunkApiHints.length > 0 || codeContexts.length > 0) {
-            const routeBoost = /\/chunks\/app\/(?!layout-|loading-|not-found-|login\/)/i.test(jsPath)
-              ? 50
-              : 0;
+            const routeBoost = isPageRouteChunk
+              ? 500
+              : /\/chunks\/app\/(?!layout-|loading-|not-found-|error-|login\/)/i.test(normPath)
+                ? 100
+                : 0;
             collectedSnippets.push({
               score: chunkApiHints.length * 3 + codeContexts.length * 2 + routeBoost,
               snippet: {

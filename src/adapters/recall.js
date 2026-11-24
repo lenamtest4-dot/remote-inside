@@ -6,8 +6,15 @@
  * Luu y Single-IIFE bundle: moi ten ham/hang top-level phai doc nhat trong toan bo src/.
  */
 
-import { normalizeContractId, validateContractId } from '../config/portals.js';
-import { isUserscriptEnv } from '../core/transport.js';
+import { CONTRACT_REGEX, normalizeContractId, validateContractId } from '../config/portals.js';
+import {
+  canControlAndroidPortal,
+  evalAndroidPortalJs,
+  isUserscriptEnv,
+  loadAndroidPortalBackground,
+  sleep,
+  warmPortalSession,
+} from '../core/transport.js';
 
 export const RECALL_ENDPOINTS = {
   base: 'https://nextgen.fpt.net/resource/recall/',
@@ -184,6 +191,21 @@ export function findRecallSearchControls(doc) {
   return { input, button };
 }
 
+export function findRecallMobileMenuToggle(doc) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  const candidates = Array.from(
+    doc.querySelectorAll('.mud-appbar button.mud-icon-button, header button.mud-icon-button')
+  );
+  return (
+    candidates.find((b) => {
+      if (!b || b.disabled) return false;
+      const txt = getRecallElementText(b).toLowerCase();
+      if (/help|send|arrow|close/i.test(txt)) return false;
+      return true;
+    }) || null
+  );
+}
+
 export function findRecallCreateTicketButton(doc) {
   if (!doc || typeof doc.querySelector !== 'function') return null;
   const split = doc.querySelector('.rz-splitbutton');
@@ -246,6 +268,7 @@ export function parseRecallTicketFromDocument(doc, loc = null) {
       activeTicket: null,
       items: [],
       stats: { totalItems: 0, importedCount: 0, editableCount: 0, pendingCount: 0 },
+      hasEmptyNotice: false,
       canCreateTicket: false,
       canAddEquipment: false,
       canAddNote: false,
@@ -254,6 +277,7 @@ export function parseRecallTicketFromDocument(doc, loc = null) {
   }
 
   const bodyText = getRecallElementText(doc.body);
+  const hasEmptyNotice = /chưa có phiếu thu hồi/i.test(bodyText);
   let contract = '';
   const bannerMatch = bodyText.match(
     /DANH SÁCH PHIẾU THU HỒI\s*[-–:]\s*([A-Z0-9._-]{3,32})/i
@@ -311,7 +335,12 @@ export function parseRecallTicketFromDocument(doc, loc = null) {
 
   return {
     onRecallTicketPage:
-      isRecallTicketLocation(loc) || tickets.length > 0 || items.length > 0 || Boolean(activeTicketTitle),
+      isRecallTicketLocation(loc) ||
+      hasEmptyNotice ||
+      Boolean(bannerMatch) ||
+      tickets.length > 0 ||
+      items.length > 0 ||
+      Boolean(activeTicketTitle),
     contract,
     activeTicketTitle,
     tickets,
@@ -323,6 +352,7 @@ export function parseRecallTicketFromDocument(doc, loc = null) {
       editableCount,
       pendingCount,
     },
+    hasEmptyNotice,
     canCreateTicket: Boolean(findRecallCreateTicketButton(doc)),
     canAddEquipment: Boolean(findRecallAddEquipmentButton(doc)),
     canAddNote: Boolean(findRecallNoteControls(doc).input),
@@ -636,10 +666,319 @@ export function buildDemoRecallSnapshot(rawContractId = 'SGN123456') {
       editableCount: 3,
       pendingCount: 3,
     },
+    hasEmptyNotice: false,
     canCreateTicket: true,
     canAddEquipment: true,
     canAddNote: true,
     openDialogTitle: '',
+  };
+}
+
+function buildRecallPortalBootstrapJs() {
+  const fnSource = [
+    normalizeContractId,
+    validateContractId,
+    cleanRecallText,
+    isRecallPortalLocation,
+    isRecallTicketLocation,
+    extractRecallFieldAfterLabel,
+    getRecallElementText,
+    getRecallGridRows,
+    parseRecallTicketCardElement,
+    parseRecallEquipmentRow,
+    findRecallSearchControls,
+    findRecallMobileMenuToggle,
+    findRecallCreateTicketButton,
+    findRecallAddEquipmentButton,
+    findRecallNoteControls,
+    parseRecallTicketFromDocument,
+    setRecallNativeInputValue,
+    triggerRecallSearchOnPage,
+    triggerRecallCreateTicket,
+    triggerRecallSelectTicket,
+    triggerRecallAddEquipment,
+    triggerRecallAddAccessory,
+    triggerRecallEditEquipment,
+    triggerRecallSubmitNote,
+  ]
+    .map((fn) => fn.toString())
+    .join('\n');
+
+  return `
+    if (!window.__riRecallDom) {
+      window.__riRecallDom = (function() {
+        var CONTRACT_REGEX = ${CONTRACT_REGEX.toString()};
+        var RECALL_ENDPOINTS = ${JSON.stringify(RECALL_ENDPOINTS)};
+        var RECALL_GENERIC_TITLES_RE = ${RECALL_GENERIC_TITLES_RE.toString()};
+        ${fnSource}
+        return {
+          inspectState: function() {
+            var ctrls = findRecallSearchControls(document);
+            var inp = ctrls.input;
+            var isInputVisible = Boolean(inp && (inp.offsetParent === undefined || inp.offsetParent !== null));
+            var menuBtn = findRecallMobileMenuToggle(document);
+            var snackEl = typeof document.querySelector === 'function'
+              ? document.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
+              : null;
+            var onTicket = isRecallTicketLocation(location);
+            var snap = onTicket ? parseRecallTicketFromDocument(document, location) : null;
+            return {
+              href: String(location.href || ''),
+              onPortal: isRecallPortalLocation(location),
+              onTicket: onTicket,
+              hasVisibleSearchInput: isInputVisible,
+              hasAnySearchInput: Boolean(inp),
+              hasMenuToggle: Boolean(menuBtn),
+              snackbarText: getRecallElementText(snackEl),
+              snapshot: snap
+            };
+          },
+          openMobileMenu: function() {
+            var btn = findRecallMobileMenuToggle(document);
+            if (!btn || typeof btn.click !== 'function') return { ok: false };
+            btn.click();
+            return { ok: true };
+          },
+          searchContract: function(contractId) {
+            return triggerRecallSearchOnPage(document, contractId);
+          },
+          readSnapshot: function() {
+            return parseRecallTicketFromDocument(document, location);
+          },
+          runAction: function(actionType, payload) {
+            var p = payload || {};
+            if (actionType === 'create_ticket') return triggerRecallCreateTicket(document);
+            if (actionType === 'select_ticket') return triggerRecallSelectTicket(document, p.ticketIndex || 0);
+            if (actionType === 'add_equipment') return triggerRecallAddEquipment(document);
+            if (actionType === 'edit_equipment') return triggerRecallEditEquipment(document, p.rowIndex || 0);
+            if (actionType === 'add_accessory') return triggerRecallAddAccessory(document, p.rowIndex || 0);
+            if (actionType === 'submit_note') return triggerRecallSubmitNote(document, p.note || '');
+            return { ok: false, error: 'Thao tác phiếu thu hồi không xác định.' };
+          }
+        };
+      })();
+    }
+  `;
+}
+
+async function evalRecallDom(expr) {
+  const boot = buildRecallPortalBootstrapJs();
+  return evalAndroidPortalJs(`${boot}\nreturn (${expr});`);
+}
+
+export async function triggerRecallPortalAction(actionType, payload = {}, doc = null) {
+  const useLocalDoc =
+    !canControlAndroidPortal() ||
+    Boolean(doc && doc.location && isRecallTicketLocation(doc.location));
+
+  if (useLocalDoc) {
+    if (actionType === 'create_ticket') return triggerRecallCreateTicket(doc);
+    if (actionType === 'select_ticket') {
+      return triggerRecallSelectTicket(doc, payload.ticketIndex || 0);
+    }
+    if (actionType === 'add_equipment') return triggerRecallAddEquipment(doc);
+    if (actionType === 'edit_equipment') {
+      return triggerRecallEditEquipment(doc, payload.rowIndex || 0);
+    }
+    if (actionType === 'add_accessory') {
+      return triggerRecallAddAccessory(doc, payload.rowIndex || 0);
+    }
+    if (actionType === 'submit_note') {
+      return triggerRecallSubmitNote(doc, payload.note || '');
+    }
+    return { ok: false, error: 'Thao tác phiếu thu hồi không xác định.' };
+  }
+
+  const res = await evalRecallDom(
+    `window.__riRecallDom.runAction(${JSON.stringify(actionType)}, ${JSON.stringify(payload || {})})`
+  );
+  if (!res.ok || !res.value) {
+    return {
+      ok: false,
+      error: res.error || 'Không gửi được thao tác vào trang Phiếu thu hồi NextGen.',
+    };
+  }
+  return res.value;
+}
+
+async function loadRecallTicketViaAndroidPortal(
+  requestedContract,
+  { onProgress = null, forceReload = false } = {}
+) {
+  const notify = (msg) => {
+    if (typeof onProgress === 'function' && msg) {
+      onProgress(msg);
+    }
+  };
+
+  if (!forceReload) {
+    const curCheck = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (curCheck.ok && curCheck.value && curCheck.value.onTicket && curCheck.value.snapshot) {
+      const curSnap = curCheck.value.snapshot;
+      if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
+        return {
+          status: 'ok',
+          mode: 'live',
+          snapshot: curSnap,
+          requestedContract,
+          contractMismatch: false,
+        };
+      }
+    }
+  }
+
+  if (!requestedContract) {
+    return {
+      status: 'needs_contract_android',
+      mode: 'live',
+      contract: '',
+      url: RECALL_ENDPOINTS.base,
+      message:
+        'Vui lòng nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.',
+    };
+  }
+
+  notify('Đang kết nối cổng Thu hồi vật tư NextGen…');
+  let bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
+    timeout: 18000,
+  });
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    notify('Đang đồng bộ phiên IAM cho cổng Vật tư…');
+    const warmRes = await warmPortalSession(RECALL_ENDPOINTS.base, {
+      timeout: 12000,
+      force: true,
+    });
+    if (warmRes.ok) {
+      bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
+        timeout: 18000,
+      });
+    }
+  }
+
+  if (!bgRes.ok) {
+    if (bgRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        contract: requestedContract,
+        loginUrl: RECALL_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      contract: requestedContract,
+      message: 'Không kết nối được cổng Thu hồi vật tư NextGen (kiểm tra VPN / mạng nội bộ).',
+    };
+  }
+
+  notify(`Đang tìm phiếu thu hồi HĐ ${requestedContract}…`);
+  let openedMobileMenu = false;
+  let searchSent = false;
+  const searchDeadline = Date.now() + 8000;
+
+  while (Date.now() < searchDeadline) {
+    const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (stRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        contract: requestedContract,
+        loginUrl: RECALL_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    if (stRes.ok && stRes.value) {
+      const v = stRes.value;
+      if (v.onTicket && v.snapshot && (!v.snapshot.contract || v.snapshot.contract === requestedContract)) {
+        return {
+          status: 'ok',
+          mode: 'live',
+          snapshot: v.snapshot,
+          requestedContract,
+          contractMismatch: false,
+        };
+      }
+      if (!v.hasVisibleSearchInput && v.hasMenuToggle && !openedMobileMenu) {
+        openedMobileMenu = true;
+        await evalRecallDom('window.__riRecallDom.openMobileMenu()');
+        await sleep(320);
+        continue;
+      }
+      if (v.hasVisibleSearchInput || (openedMobileMenu && v.hasAnySearchInput)) {
+        const sCall = await evalRecallDom(
+          `window.__riRecallDom.searchContract(${JSON.stringify(requestedContract)})`
+        );
+        if (sCall.ok && sCall.value && sCall.value.ok) {
+          searchSent = true;
+          break;
+        }
+      }
+    }
+    await sleep(280);
+  }
+
+  if (!searchSent) {
+    return {
+      status: 'error',
+      mode: 'live',
+      contract: requestedContract,
+      message: 'Chưa thấy ô "Nhập số hợp đồng" trên cổng Thu hồi vật tư. Bấm Thử lại sau vài giây.',
+    };
+  }
+
+  notify(`Đang mở chi tiết phiếu thu hồi HĐ ${requestedContract}…`);
+  const ticketDeadline = Date.now() + 14000;
+  while (Date.now() < ticketDeadline) {
+    await sleep(350);
+    const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (!stRes.ok || !stRes.value) continue;
+    const v = stRes.value;
+    if (
+      v.onTicket &&
+      v.snapshot &&
+      (v.snapshot.contract ||
+        v.snapshot.hasEmptyNotice ||
+        v.snapshot.tickets.length > 0 ||
+        v.snapshot.items.length > 0)
+    ) {
+      await sleep(250);
+      const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+      const finalSnap =
+        (freshSnapRes.ok && freshSnapRes.value) || v.snapshot;
+      if (!finalSnap.contract) {
+        finalSnap.contract = requestedContract;
+      }
+      return {
+        status: 'ok',
+        mode: 'live',
+        snapshot: finalSnap,
+        requestedContract,
+        contractMismatch: false,
+      };
+    }
+    if (
+      !v.onTicket &&
+      v.snackbarText &&
+      /không tìm thấy|không tồn tại|không có hợp đồng|không hợp lệ/i.test(v.snackbarText)
+    ) {
+      return {
+        status: 'error',
+        mode: 'live',
+        contract: requestedContract,
+        message: v.snackbarText,
+      };
+    }
+  }
+
+  return {
+    status: 'error',
+    mode: 'live',
+    contract: requestedContract,
+    message: `Chưa nhận được phản hồi chi tiết phiếu thu hồi cho HĐ ${requestedContract}. Kiểm tra lại Mã HĐ rồi bấm Thử lại.`,
   };
 }
 
@@ -657,6 +996,13 @@ export async function loadRecallTicketContext(rawContractId, ctx = {}) {
 
   const loc = ctx.pageLocation || null;
   const doc = ctx.pageDocument || null;
+
+  if ((!isRecallPortalLocation(loc) || !doc) && canControlAndroidPortal()) {
+    return loadRecallTicketViaAndroidPortal(requestedContract, {
+      onProgress: ctx.onProgress || null,
+      forceReload: Boolean(ctx.forceReload),
+    });
+  }
 
   if (isRecallTicketLocation(loc) && doc) {
     const snapshot = parseRecallTicketFromDocument(doc, loc);
@@ -717,6 +1063,22 @@ export async function runRecallAction(actionId, rawContractId, ctx = {}) {
     const snap = res.snapshot;
     const ticket = snap.activeTicket || {};
     const contractLabel = snap.contract || normalizeContractId(rawTrimmed) || 'Phiếu đang mở';
+    const hasNoTickets = snap.tickets.length === 0 && snap.items.length === 0;
+
+    if (hasNoTickets) {
+      return {
+        status: 'ok',
+        mode: res.mode,
+        title: `Vật tư thu hồi — ${contractLabel}`,
+        message: `Hợp đồng ${contractLabel} hiện chưa có phiếu thu hồi trên hệ thống NextGen.`,
+        summaryFields: [
+          { label: 'Mã hợp đồng', value: contractLabel },
+          { label: 'Trạng thái phiếu', value: 'Chưa có phiếu thu hồi' },
+        ],
+        snapshot: snap,
+      };
+    }
+
     const summaryFields = [
       { label: 'Mã hợp đồng', value: contractLabel },
       { label: 'Phiếu đang chọn', value: snap.activeTicketTitle || `Phiếu số ${ticket.ticketNumber || '1'}` },
@@ -741,6 +1103,27 @@ export async function runRecallAction(actionId, rawContractId, ctx = {}) {
       message: `Phiếu số ${ticket.ticketNumber || '1'}: ${snap.stats.totalItems} vật tư (${snap.stats.importedCount} đã nhập kho, ${snap.stats.editableCount} sửa được).`,
       summaryFields,
       snapshot: snap,
+    };
+  }
+
+  if (res.status === 'iam_expired') {
+    return {
+      status: 'iam_expired',
+      mode: res.mode || 'live',
+      title: 'Cần đăng nhập IAM cổng Vật tư',
+      message:
+        res.message ||
+        'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Hãy bấm Đăng nhập IAM rồi thử lại.',
+      loginUrl: res.loginUrl || RECALL_ENDPOINTS.base,
+    };
+  }
+
+  if (res.status === 'error' || res.status === 'needs_contract_android') {
+    return {
+      status: res.status === 'needs_contract_android' ? 'validation_error' : 'error',
+      mode: res.mode || 'live',
+      title: 'Không đọc được Phiếu thu hồi',
+      message: res.message || 'Lỗi kết nối cổng Thu hồi vật tư NextGen.',
     };
   }
 

@@ -9,7 +9,15 @@
  * Luu y Single-IIFE bundle: moi ten ham/hang top-level phai doc nhat trong toan bo src/.
  */
 
-import { isUserscriptEnv, sleep } from '../core/transport.js';
+import { getEffectiveEquipmentDebtFilter } from '../core/storage.js';
+import {
+  canControlAndroidPortal,
+  evalAndroidPortalJs,
+  isUserscriptEnv,
+  loadAndroidPortalBackground,
+  sleep,
+  warmPortalSession,
+} from '../core/transport.js';
 
 export const EQUIPMENT_ENDPOINTS = {
   base: 'https://nextgen.fpt.net/resource/equipment/',
@@ -224,6 +232,12 @@ export async function selectEquipmentFilterOption(
   }
 
   const { dd, panel: initialPanel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd && canControlAndroidPortal()) {
+    return selectAndroidEquipmentFilterOption(fieldKind, targetText, {
+      waitNextKind,
+      waitTimeoutMs,
+    });
+  }
   if (!dd) {
     return { ok: false, error: `Không tìm thấy ô chọn "${fieldKind}" trên trang Báo cáo nợ.` };
   }
@@ -1001,6 +1015,646 @@ export function buildDemoEquipmentDebtDataset() {
   });
 }
 
+function buildEquipmentPortalBootstrapJs() {
+  const fnSource = [
+    cleanEquipmentText,
+    normalizeEquipmentMatchKey,
+    getEquipmentElText,
+    isEquipmentPortalLocation,
+    parseEquipmentDebtNumber,
+    findEquipmentDebtGrid,
+    findEquipmentTableInGrid,
+    getEquipmentRealBodyRows,
+    findEquipmentReportMenuBtn,
+    findEquipmentFilterField,
+    findEquipmentFilterDropdownAndPanel,
+    readEquipmentFilterState,
+    readEquipmentFilterOptions,
+    parseEquipmentDebtPagerInfo,
+    findEquipmentDebtPageControls,
+    parseEquipmentDebtColumns,
+    parseEquipmentDebtPageRows,
+    isEquipmentPagerDisabled,
+    readEquipmentGridSnapshotState,
+    triggerEquipmentDebtTab,
+    triggerEquipmentDebtViewList,
+  ]
+    .map((fn) => fn.toString())
+    .join('\n');
+
+  return `
+    if (!window.__riEquipDom) {
+      window.__riEquipDom = (function() {
+        var EQUIPMENT_ENDPOINTS = ${JSON.stringify(EQUIPMENT_ENDPOINTS)};
+        ${fnSource}
+        return {
+          inspectState: function() {
+            var ctrls = findEquipmentDebtPageControls(document);
+            var table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
+            var realRows = getEquipmentRealBodyRows(table);
+            var cols = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+            var filterState = readEquipmentFilterState(document);
+            var gridSnap = ctrls.grid ? readEquipmentGridSnapshotState(ctrls.grid) : null;
+            return {
+              href: String(location.href || ''),
+              onEquipPage: isEquipmentPortalLocation(location),
+              hasReportMenuBtn: Boolean(findEquipmentReportMenuBtn(document)),
+              hasDebtTab: ctrls.hasDebtTab,
+              isDebtTabActive: ctrls.isDebtTabActive,
+              hasViewListBtn: Boolean(ctrls.viewListBtn),
+              hasGrid: Boolean(ctrls.grid),
+              realRowCount: realRows.length,
+              materialCount: cols.materials.length,
+              filterState: filterState,
+              gridSnap: gridSnap
+            };
+          },
+          clickReportMenuBtn: function() {
+            var btn = findEquipmentReportMenuBtn(document);
+            if (!btn || typeof btn.click !== 'function') return { ok: false };
+            btn.click();
+            return { ok: true };
+          },
+          clickDebtReportItem: function() {
+            var items = Array.from(document.querySelectorAll('.mud-popover-open .mud-list-item, .mud-list-item, .mud-menu-item'));
+            var item = items.find(function(el) { return /^báo cáo nợ$/i.test(getEquipmentElText(el)); }) || null;
+            if (!item || typeof item.click !== 'function') return { ok: false };
+            item.click();
+            return { ok: true };
+          },
+          clickDebtTab: function() {
+            return triggerEquipmentDebtTab(document);
+          },
+          clickViewList: function() {
+            return triggerEquipmentDebtViewList(document);
+          },
+          readFilterOptions: function(fieldKind) {
+            return readEquipmentFilterOptions(document, fieldKind);
+          },
+          openFilterDropdown: function(fieldKind, clearFirst) {
+            var found = findEquipmentFilterDropdownAndPanel(document, fieldKind);
+            var dd = found.dd;
+            if (!dd) return { ok: false, error: 'Không tìm thấy ô chọn "' + fieldKind + '" trên trang Báo cáo nợ.' };
+            var ddCls = String(dd.className || '');
+            var curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
+            if (clearFirst && curText) {
+              var clearBtn = typeof dd.querySelector === 'function' ? dd.querySelector('.rz-dropdown-clear-icon') : null;
+              if (clearBtn && typeof clearBtn.click !== 'undefined') clearBtn.click();
+            }
+            if (typeof dd.click === 'function') dd.click();
+            return { ok: true, curText: curText };
+          },
+          pickFilterDropdownItem: function(fieldKind, targetText) {
+            var targetNorm = normalizeEquipmentMatchKey(targetText);
+            var found = findEquipmentFilterDropdownAndPanel(document, fieldKind);
+            var dd = found.dd;
+            var panel = found.panel;
+            if (!panel || typeof panel.querySelectorAll !== 'function') {
+              return { ok: false, itemCount: 0 };
+            }
+            var items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+            if (items.length === 0) return { ok: false, itemCount: 0 };
+            var match = items.find(function(el) { return normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm; });
+            if (!match) {
+              match = items.find(function(el) { return normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm); });
+            }
+            if (!match || typeof match.click !== 'function') {
+              return { ok: false, itemCount: items.length, notFound: true };
+            }
+            var picked = getEquipmentElText(match);
+            match.click();
+            try {
+              if (typeof getComputedStyle === 'function' && panel.offsetParent !== null && getComputedStyle(panel).display !== 'none' && dd && typeof dd.click === 'function') {
+                dd.click();
+              }
+            } catch (e) {}
+            return { ok: true, picked: picked, itemCount: items.length };
+          },
+          bumpMaxPageSize: function() {
+            var grid = findEquipmentDebtGrid(document);
+            if (!grid) return { changed: false, targetSize: 0 };
+            var pagerEl = grid.querySelector('.rz-pager');
+            var dd = pagerEl ? pagerEl.querySelector('.rz-dropdown') : null;
+            if (!dd) return { changed: false, targetSize: 0 };
+            var currentSize = parseEquipmentDebtNumber(getEquipmentElText(dd));
+            var ddId = dd.id || '';
+            var panel = ddId ? (document.getElementById('popup-' + ddId) || document.getElementById('popup' + ddId)) : null;
+            if (!panel) {
+              panel = Array.from(document.querySelectorAll('.rz-dropdown-panel')).find(function(p) {
+                var texts = Array.from(p.querySelectorAll('.rz-dropdown-item')).map(function(x) { return getEquipmentElText(x); });
+                return texts.indexOf('100') >= 0 || texts.indexOf('50') >= 0 || texts.indexOf('25') >= 0;
+              }) || null;
+            }
+            if (!panel) return { changed: false, targetSize: currentSize };
+            var numericItems = Array.from(panel.querySelectorAll('.rz-dropdown-item')).map(function(item) {
+              return { el: item, size: parseEquipmentDebtNumber(getEquipmentElText(item)) };
+            }).filter(function(x) { return x.size > 0; });
+            numericItems.sort(function(a, b) { return b.size - a.size; });
+            var best = numericItems[0];
+            if (!best || best.size <= currentSize || typeof best.el.click !== 'function') {
+              return { changed: false, targetSize: currentSize };
+            }
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            if (typeof dd.click === 'function') dd.click();
+            best.el.click();
+            return { changed: true, targetSize: best.size, prevSnap: prevSnap };
+          },
+          clickFirstPage: function() {
+            var grid = findEquipmentDebtGrid(document);
+            var pagerEl = grid ? grid.querySelector('.rz-pager') : null;
+            var firstBtn = pagerEl ? pagerEl.querySelector('.rz-pager-first') : null;
+            if (!firstBtn || isEquipmentPagerDisabled(firstBtn) || typeof firstBtn.click !== 'function') return { ok: false };
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            firstBtn.click();
+            return { ok: true, prevSnap: prevSnap };
+          },
+          clickNextPage: function() {
+            var grid = findEquipmentDebtGrid(document);
+            var pagerEl = grid ? grid.querySelector('.rz-pager') : null;
+            var nextBtn = pagerEl ? pagerEl.querySelector('.rz-pager-next') : null;
+            if (!nextBtn || isEquipmentPagerDisabled(nextBtn) || typeof nextBtn.click !== 'function') return { ok: false };
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            nextBtn.click();
+            return { ok: true, prevSnap: prevSnap };
+          },
+          readCurrentPage: function(needColumns) {
+            var grid = findEquipmentDebtGrid(document);
+            if (!grid) return null;
+            var table = findEquipmentTableInGrid(grid);
+            if (!table) return null;
+            var pagerInfo = parseEquipmentDebtPagerInfo(grid);
+            var columnsInfo = parseEquipmentDebtColumns(table);
+            var pageRows = parseEquipmentDebtPageRows(table, columnsInfo);
+            return {
+              pagerInfo: pagerInfo,
+              columnsInfo: needColumns ? columnsInfo : null,
+              pageRows: pageRows
+            };
+          }
+        };
+      })();
+    }
+  `;
+}
+
+async function evalEquipDom(expr) {
+  const boot = buildEquipmentPortalBootstrapJs();
+  return evalAndroidPortalJs(`${boot}\nreturn (${expr});`);
+}
+
+export async function readEquipmentFilterOptionsAsync(doc, fieldKind) {
+  if (doc && findEquipmentFilterDropdownAndPanel(doc, fieldKind).dd) {
+    return readEquipmentFilterOptions(doc, fieldKind);
+  }
+  if (canControlAndroidPortal()) {
+    const r = await evalEquipDom(
+      `window.__riEquipDom.readFilterOptions(${JSON.stringify(fieldKind)})`
+    );
+    if (r.ok && r.value) {
+      return r.value;
+    }
+  }
+  return { current: '', options: [] };
+}
+
+async function selectAndroidEquipmentFilterOption(
+  fieldKind,
+  targetText,
+  { waitNextKind = '', waitTimeoutMs = 5000 } = {}
+) {
+  const targetNorm = normalizeEquipmentMatchKey(targetText);
+  if (!targetNorm) {
+    return { ok: false, error: 'Giá trị bộ lọc cần chọn đang trống.' };
+  }
+
+  const curRes = await evalEquipDom(
+    `window.__riEquipDom.readFilterOptions(${JSON.stringify(fieldKind)})`
+  );
+  const curText = (curRes.ok && curRes.value && curRes.value.current) || '';
+
+  if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
+    if (!waitNextKind) {
+      return { ok: true, skipped: true, picked: curText };
+    }
+    const checkNextDeadline = Date.now() + 1200;
+    while (Date.now() < checkNextDeadline) {
+      const nextRes = await evalEquipDom(
+        `window.__riEquipDom.readFilterOptions(${JSON.stringify(waitNextKind)})`
+      );
+      if (nextRes.ok && nextRes.value && Array.isArray(nextRes.value.options) && nextRes.value.options.length > 0) {
+        return { ok: true, skipped: true, picked: curText };
+      }
+      await sleep(160);
+    }
+  }
+
+  const openRes = await evalEquipDom(
+    `window.__riEquipDom.openFilterDropdown(${JSON.stringify(fieldKind)}, true)`
+  );
+  if (!openRes.ok || !openRes.value || !openRes.value.ok) {
+    return {
+      ok: false,
+      error: (openRes.value && openRes.value.error) || `Không mở được danh sách chọn "${fieldKind}".`,
+    };
+  }
+  await sleep(180);
+
+  let picked = '';
+  const pickDeadline = Date.now() + 3000;
+  while (Date.now() < pickDeadline) {
+    const pRes = await evalEquipDom(
+      `window.__riEquipDom.pickFilterDropdownItem(${JSON.stringify(fieldKind)}, ${JSON.stringify(
+        targetText
+      )})`
+    );
+    if (pRes.ok && pRes.value) {
+      if (pRes.value.ok) {
+        picked = pRes.value.picked || targetText;
+        break;
+      }
+      if (pRes.value.notFound && pRes.value.itemCount > 0) {
+        return {
+          ok: false,
+          error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".`,
+        };
+      }
+    }
+    await sleep(160);
+  }
+  if (!picked) {
+    return {
+      ok: false,
+      error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".`,
+    };
+  }
+
+  if (waitNextKind) {
+    const nextDeadline = Date.now() + waitTimeoutMs;
+    while (Date.now() < nextDeadline) {
+      await sleep(180);
+      const nextRes = await evalEquipDom(
+        `window.__riEquipDom.readFilterOptions(${JSON.stringify(waitNextKind)})`
+      );
+      if (nextRes.ok && nextRes.value && Array.isArray(nextRes.value.options) && nextRes.value.options.length > 0) {
+        await sleep(150);
+        break;
+      }
+    }
+  }
+
+  return { ok: true, picked };
+}
+
+async function waitForAndroidEquipmentGridChange(
+  prevSnap,
+  { mode = 'page', targetPageSize = 0, timeoutMs = 6500 } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(180);
+    const stRes = await evalEquipDom('window.__riEquipDom.inspectState()');
+    const next = stRes.ok && stRes.value ? stRes.value.gridSnap : null;
+    if (!next || next.rowCount === 0) continue;
+
+    const isTransientSummary =
+      prevSnap.totalItems > 1 && next.totalItems > 0 && next.totalItems < prevSnap.totalItems;
+    if (isTransientSummary) continue;
+
+    if (mode === 'pagesize') {
+      const expectedRows =
+        targetPageSize > 0 && prevSnap.totalItems > 0
+          ? Math.min(targetPageSize, prevSnap.totalItems)
+          : 0;
+      const pageSizeChanged =
+        expectedRows > prevSnap.rowCount
+          ? next.rowCount >= expectedRows
+          : prevSnap.rowCount === 0
+          ? next.rowCount !== prevSnap.rowCount
+          : next.rowCount > prevSnap.rowCount;
+      if (pageSizeChanged) {
+        await sleep(220);
+        return true;
+      }
+      continue;
+    }
+
+    const contentChanged =
+      next.firstStaff !== prevSnap.firstStaff ||
+      next.lastStaff !== prevSnap.lastStaff ||
+      next.rowCount !== prevSnap.rowCount;
+    if (contentChanged) {
+      await sleep(180);
+      return true;
+    }
+  }
+  return false;
+}
+
+async function loadEquipmentDebtViaAndroidPortal({
+  activeFilter,
+  forceApplyFilter = false,
+  onProgress = null,
+  maxPages = 30,
+  waitMs = 6500,
+} = {}) {
+  const notifyStatus = (text) => {
+    if (typeof onProgress === 'function') {
+      onProgress({ phaseText: text });
+    }
+  };
+
+  notifyStatus('Đang kết nối Quản lý vật tư NextGen…');
+  let bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
+    reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
+    timeout: 18000,
+  });
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    notifyStatus('Đang đồng bộ phiên IAM cho Quản lý vật tư…');
+    const warmRes = await warmPortalSession(EQUIPMENT_ENDPOINTS.base, {
+      timeout: 12000,
+      force: true,
+    });
+    if (warmRes.ok) {
+      bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
+        reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
+        timeout: 18000,
+      });
+    }
+  }
+  if (!bgRes.ok) {
+    if (bgRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Không kết nối được Quản lý vật tư NextGen (kiểm tra VPN / mạng nội bộ).',
+    };
+  }
+
+  let st = null;
+  const readyDeadline = Date.now() + 8500;
+  while (Date.now() < readyDeadline) {
+    const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+    if (r.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    if (r.ok && r.value && (r.value.hasDebtTab || r.value.hasReportMenuBtn)) {
+      st = r.value;
+      break;
+    }
+    await sleep(280);
+  }
+  if (!st) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Trang Quản lý vật tư chưa tải xong menu Blazor. Bấm Thử lại sau vài giây.',
+    };
+  }
+
+  if (!st.hasDebtTab) {
+    notifyStatus('Đang tự mở Báo cáo → Báo cáo nợ…');
+    const mBtn = await evalEquipDom('window.__riEquipDom.clickReportMenuBtn()');
+    if (!mBtn.ok || !mBtn.value || !mBtn.value.ok) {
+      return {
+        status: 'error',
+        mode: 'live',
+        message: 'Không tìm thấy menu "Báo cáo" trên Quản lý vật tư.',
+      };
+    }
+    let clickedDebtItem = false;
+    const menuDeadline = Date.now() + 2500;
+    while (Date.now() < menuDeadline) {
+      await sleep(220);
+      const dItem = await evalEquipDom('window.__riEquipDom.clickDebtReportItem()');
+      if (dItem.ok && dItem.value && dItem.value.ok) {
+        clickedDebtItem = true;
+        break;
+      }
+    }
+    if (!clickedDebtItem) {
+      return {
+        status: 'error',
+        mode: 'live',
+        message: 'Không mở được mục "Báo cáo nợ" trong menu Báo cáo.',
+      };
+    }
+
+    const tabOpenDeadline = Date.now() + 6500;
+    while (Date.now() < tabOpenDeadline) {
+      await sleep(250);
+      const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+      if (r.ok && r.value && r.value.hasDebtTab) {
+        st = r.value;
+        break;
+      }
+    }
+  }
+
+  if (!st.hasDebtTab) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Chưa mở được trang Báo cáo nợ trên NextGen.',
+    };
+  }
+
+  if (!st.isDebtTabActive) {
+    notifyStatus('Đang chuyển sang tab Tồn công nợ theo NV…');
+    await evalEquipDom('window.__riEquipDom.clickDebtTab()');
+    await sleep(700);
+    const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+    if (r.ok && r.value) st = r.value;
+  }
+
+  const filterToUse = activeFilter || getEffectiveEquipmentDebtFilter();
+  if (forceApplyFilter || st.realRowCount === 0 || st.materialCount === 0) {
+    const fs = st.filterState || {};
+    if (forceApplyFilter || fs.missingRequired) {
+      notifyStatus('Đang chọn Vùng cố định…');
+      const r1 = await selectAndroidEquipmentFilterOption('region', filterToUse.region, {
+        waitNextKind: 'province',
+      });
+      if (!r1.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r1.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+
+      notifyStatus('Đang chọn Tỉnh thành cố định…');
+      const r2 = await selectAndroidEquipmentFilterOption('province', filterToUse.province, {
+        waitNextKind: 'partner',
+      });
+      if (!r2.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r2.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+
+      notifyStatus('Đang chọn Đối tác cố định…');
+      const r3 = await selectAndroidEquipmentFilterOption('partner', filterToUse.partner);
+      if (!r3.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r3.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+    }
+
+    notifyStatus('Đang bấm "Xem danh sách" & chờ bảng tải…');
+    await evalEquipDom('window.__riEquipDom.clickViewList()');
+    let loaded = false;
+    const loadDeadline = Date.now() + 22000;
+    while (Date.now() < loadDeadline) {
+      await sleep(350);
+      const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+      if (r.ok && r.value && r.value.realRowCount > 0 && r.value.materialCount > 0) {
+        st = r.value;
+        loaded = true;
+        await sleep(200);
+        break;
+      }
+    }
+    if (!loaded) {
+      return {
+        status: 'needs_report_loaded',
+        mode: 'live',
+        hasDebtTab: true,
+        isDebtTabActive: true,
+        hasViewListBtn: true,
+        filterMissing: false,
+        message:
+          'Đã bấm "Xem danh sách" nhưng bảng chưa trả dữ liệu kịp. Bấm Đọc lại dữ liệu để thử tiếp.',
+      };
+    }
+  }
+
+  if (st.gridSnap && st.gridSnap.totalPages > 1) {
+    const bumpRes = await evalEquipDom('window.__riEquipDom.bumpMaxPageSize()');
+    if (bumpRes.ok && bumpRes.value && bumpRes.value.changed && bumpRes.value.prevSnap) {
+      notifyStatus('Đang mở rộng 100 KTV/trang để gom nhanh…');
+      await waitForAndroidEquipmentGridChange(bumpRes.value.prevSnap, {
+        mode: 'pagesize',
+        targetPageSize: bumpRes.value.targetSize || 100,
+        timeoutMs: Math.max(waitMs, 6500),
+      });
+    }
+  }
+
+  const postBump = await evalEquipDom('window.__riEquipDom.inspectState()');
+  if (postBump.ok && postBump.value && postBump.value.gridSnap && postBump.value.gridSnap.currentPage > 1) {
+    const firstRes = await evalEquipDom('window.__riEquipDom.clickFirstPage()');
+    if (firstRes.ok && firstRes.value && firstRes.value.ok && firstRes.value.prevSnap) {
+      await waitForAndroidEquipmentGridChange(firstRes.value.prevSnap, {
+        mode: 'page',
+        timeoutMs: waitMs,
+      });
+    }
+  }
+
+  let columnsInfo = null;
+  let lastPager = { currentPage: 1, totalPages: 1, totalItems: 0 };
+  const staffMap = new Map();
+  let pagesScanned = 0;
+
+  for (let step = 0; step < maxPages; step += 1) {
+    const pageRes = await evalEquipDom(
+      `window.__riEquipDom.readCurrentPage(${columnsInfo ? 'false' : 'true'})`
+    );
+    if (!pageRes.ok || !pageRes.value) break;
+    const { pagerInfo, columnsInfo: cols, pageRows } = pageRes.value;
+    if (!columnsInfo && cols) {
+      columnsInfo = cols;
+    }
+    if (pagerInfo) {
+      lastPager = pagerInfo;
+    }
+    for (const row of pageRows || []) {
+      if (row && row.staff) {
+        staffMap.set(row.staff, row);
+      }
+    }
+    pagesScanned += 1;
+
+    if (typeof onProgress === 'function') {
+      onProgress({
+        currentPage: lastPager.currentPage,
+        totalPages: lastPager.totalPages,
+        collectedStaff: staffMap.size,
+        totalItems: lastPager.totalItems,
+      });
+    }
+
+    if (lastPager.currentPage >= lastPager.totalPages) {
+      break;
+    }
+
+    const nextClick = await evalEquipDom('window.__riEquipDom.clickNextPage()');
+    if (!nextClick.ok || !nextClick.value || !nextClick.value.ok || !nextClick.value.prevSnap) {
+      break;
+    }
+    const changed = await waitForAndroidEquipmentGridChange(nextClick.value.prevSnap, {
+      mode: 'page',
+      timeoutMs: waitMs,
+    });
+    if (!changed) {
+      break;
+    }
+  }
+
+  const finalInspect = await evalEquipDom('window.__riEquipDom.inspectState()');
+  const fsEnd = (finalInspect.ok && finalInspect.value && finalInspect.value.filterState) || {};
+  const currentFilter = {
+    region: fsEnd.region || filterToUse.region,
+    province: fsEnd.province || filterToUse.province,
+    partner: fsEnd.partner || filterToUse.partner,
+  };
+
+  const finalMaterials = (columnsInfo && columnsInfo.materials) || [];
+  const dataset = buildEquipmentDebtDataset(finalMaterials, Array.from(staffMap.values()), {
+    pagesScanned,
+    totalPages: lastPager.totalPages,
+    expectedItems: lastPager.totalItems,
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    dataset,
+    currentFilter,
+  };
+}
+
 export async function loadEquipmentDebtContext(ctx = {}) {
   if (!isUserscriptEnv() || ctx.forceDemo) {
     return {
@@ -1012,6 +1666,16 @@ export async function loadEquipmentDebtContext(ctx = {}) {
 
   const loc = ctx.pageLocation || null;
   const doc = ctx.pageDocument || null;
+
+  if ((!isEquipmentPortalLocation(loc) || !doc) && canControlAndroidPortal()) {
+    return loadEquipmentDebtViaAndroidPortal({
+      activeFilter: ctx.activeFilter || getEffectiveEquipmentDebtFilter(),
+      forceApplyFilter: Boolean(ctx.forceApplyFilter),
+      onProgress: ctx.onProgress || null,
+      maxPages: ctx.maxPages || 30,
+      waitMs: ctx.waitMs || 6500,
+    });
+  }
 
   if (!isEquipmentPortalLocation(loc) || !doc) {
     return {

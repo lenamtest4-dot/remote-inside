@@ -25,6 +25,7 @@ import {
   setState,
 } from '../core/storage.js';
 import {
+  canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
   clearWarmSessionCache,
@@ -33,6 +34,7 @@ import {
   isUserscriptEnv,
   openExternalOrPortalUrl,
   requestPortal,
+  showAndroidPortalOverlay,
   syncIamSsoSessions,
 } from '../core/transport.js';
 import {
@@ -107,6 +109,7 @@ import {
 } from '../adapters/deployment.js';
 import {
   RECALL_ENDPOINTS,
+  findRecallMobileMenuToggle,
   findRecallSearchControls,
   isRecallPortalLocation,
   isRecallTicketLocation,
@@ -116,6 +119,7 @@ import {
   triggerRecallAddEquipment,
   triggerRecallCreateTicket,
   triggerRecallEditEquipment,
+  triggerRecallPortalAction,
   triggerRecallSearchOnPage,
   triggerRecallSelectTicket,
   triggerRecallSubmitNote,
@@ -129,6 +133,7 @@ import {
   queryEquipmentDebtByStaff,
   queryEquipmentDebtHolders,
   readEquipmentFilterOptions,
+  readEquipmentFilterOptionsAsync,
   selectEquipmentFilterOption,
   triggerEquipmentDebtTab,
   triggerEquipmentDebtViewList,
@@ -438,7 +443,9 @@ export function mountRemoteInside({
     deployBusyAction: '',
     deployArmedAction: '',
     recallLoading: false,
+    recallProgress: '',
     recallError: '',
+    recallLoginUrl: '',
     recallStatus: '',
     recallMode: '',
     recallNotice: '',
@@ -452,6 +459,7 @@ export function mountRemoteInside({
     equipDebtLoading: false,
     equipDebtProgress: '',
     equipDebtError: '',
+    equipDebtLoginUrl: '',
     equipDebtStatus: '',
     equipDebtMode: '',
     equipDebtNotice: '',
@@ -757,7 +765,9 @@ export function mountRemoteInside({
 
   function resetRecallModalState() {
     state.recallLoading = false;
+    state.recallProgress = '';
     state.recallError = '';
+    state.recallLoginUrl = '';
     state.recallStatus = '';
     state.recallMode = '';
     state.recallNotice = '';
@@ -774,6 +784,7 @@ export function mountRemoteInside({
     state.equipDebtLoading = false;
     state.equipDebtProgress = '';
     state.equipDebtError = '';
+    state.equipDebtLoginUrl = '';
     state.equipDebtStatus = '';
     state.equipDebtMode = '';
     state.equipDebtNotice = '';
@@ -2089,9 +2100,14 @@ export function mountRemoteInside({
     renderConfirm();
   }
 
-  async function loadRecallModal(rawContractId = state.contractInput, { clearNotice = false } = {}) {
+  async function loadRecallModal(
+    rawContractId = state.contractInput,
+    { clearNotice = false, forceReload = false } = {}
+  ) {
     state.recallLoading = true;
+    state.recallProgress = 'Đang đọc danh sách vật tư thu hồi…';
     state.recallError = '';
+    state.recallLoginUrl = '';
     if (clearNotice) {
       state.recallNotice = '';
       state.recallNoticeTone = 'info';
@@ -2103,16 +2119,38 @@ export function mountRemoteInside({
       const res = await loadRecallTicketContext(cleanId, {
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
+        forceReload,
+        onProgress: (msg) => {
+          if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') return;
+          if (msg && msg !== state.recallProgress) {
+            state.recallProgress = msg;
+            renderConfirm();
+          }
+        },
       });
       if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') {
         return;
       }
       state.recallLoading = false;
+      state.recallProgress = '';
       state.recallStatus = res.status || 'needs_recall_page';
       state.recallMode = res.mode || 'live';
       state.recallSnapshot = res.snapshot || null;
       state.recallContractMismatch = Boolean(res.contractMismatch);
-      if (res.status === 'ok' && res.snapshot && res.snapshot.contract && !state.contractInput) {
+      if (res.status === 'error') {
+        state.recallError = res.message || 'Không đọc được dữ liệu phiếu thu hồi.';
+      } else if (res.status === 'iam_expired') {
+        state.recallLoginUrl = res.loginUrl || RECALL_ENDPOINTS.base;
+        state.recallNotice =
+          res.message ||
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" rồi thử lại.';
+        state.recallNoticeTone = 'warn';
+      } else if (res.status === 'needs_contract_android') {
+        state.recallNotice =
+          res.message ||
+          'Vui lòng nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.';
+        state.recallNoticeTone = 'warn';
+      } else if (res.status === 'ok' && res.snapshot && res.snapshot.contract && !state.contractInput) {
         state.contractInput = res.snapshot.contract;
         setState(STORAGE_KEYS.LAST_CONTRACT, res.snapshot.contract);
         renderMain();
@@ -2122,15 +2160,22 @@ export function mountRemoteInside({
         return;
       }
       state.recallLoading = false;
+      state.recallProgress = '';
       state.recallError = err && err.message ? err.message : 'Lỗi đọc dữ liệu phiếu thu hồi.';
     }
     renderConfirm();
   }
 
   function collapseForRecallDialog(actionLabel) {
+    state.recallArmedCreate = false;
+    if (canControlAndroidPortal() && showAndroidPortalOverlay(actionLabel)) {
+      state.recallNotice = `Đã mở "${actionLabel}" trên trang NextGen. Lưu xong bạn bấm nút "Xong" ở góc phải trên để quay lại & tự làm mới.`;
+      state.recallNoticeTone = 'info';
+      renderConfirm();
+      return;
+    }
     state.recallReturnPending = true;
     state.recallReturnLabel = actionLabel;
-    state.recallArmedCreate = false;
     state.recallNotice = `Đã mở "${actionLabel}" trên trang gốc. Xong việc bấm nút nổi để quay lại & làm mới.`;
     state.recallNoticeTone = 'info';
     state.isOpen = false;
@@ -2174,11 +2219,10 @@ export function mountRemoteInside({
     );
   }
 
-  function syncEquipDebtDraftFromPage() {
-    if (!pageDocument) return;
-    const rInfo = readEquipmentFilterOptions(pageDocument, 'region');
-    const pInfo = readEquipmentFilterOptions(pageDocument, 'province');
-    const prInfo = readEquipmentFilterOptions(pageDocument, 'partner');
+  async function syncEquipDebtDraftFromPage() {
+    const rInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'region');
+    const pInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'province');
+    const prInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'partner');
     const activeFilter = getEffectiveEquipmentDebtFilter();
     state.equipDebtSavedFilter = activeFilter;
     state.equipDebtRegionOpts = rInfo.options || [];
@@ -2198,13 +2242,18 @@ export function mountRemoteInside({
     );
   }
 
-  async function loadEquipmentDebtModal({ allowAutoSetup = true, autoDepth = 0 } = {}) {
+  async function loadEquipmentDebtModal({
+    allowAutoSetup = true,
+    autoDepth = 0,
+    forceApplyFilter = false,
+  } = {}) {
     const customSavedFilter = getEquipmentDebtFilter();
     const activeFilter = getEffectiveEquipmentDebtFilter();
     state.equipDebtSavedFilter = activeFilter;
     state.equipDebtLoading = true;
     state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
     state.equipDebtError = '';
+    state.equipDebtLoginUrl = '';
     state.equipDebtNotice = '';
     renderConfirm();
 
@@ -2220,7 +2269,13 @@ export function mountRemoteInside({
       const res = await loadEquipmentDebtContext({
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
+        activeFilter,
+        forceApplyFilter,
         onProgress: (p) => {
+          if (p && p.phaseText) {
+            setModalProgress(p.phaseText);
+            return;
+          }
           const nextMsg = `Đang gom trang ${p.currentPage}/${p.totalPages} (${p.collectedStaff}${
             p.totalItems ? `/${p.totalItems}` : ''
           } KTV)…`;
@@ -2237,8 +2292,16 @@ export function mountRemoteInside({
       state.equipDebtHasReportMenu = Boolean(res.hasReportMenuBtn);
       state.equipDebtFilterMissing = Boolean(res.filterMissing);
 
+      const useInPageAutoSetup = !canControlAndroidPortal();
+
       // Tu dong dieu huong & nap du lieu theo bo loc co dinh (neu chua bi chan boi depth)
-      if (res.status === 'needs_report_loaded' && allowAutoSetup && autoDepth < 3 && pageDocument) {
+      if (
+        res.status === 'needs_report_loaded' &&
+        useInPageAutoSetup &&
+        allowAutoSetup &&
+        autoDepth < 3 &&
+        pageDocument
+      ) {
         if (!res.hasDebtTab && res.hasReportMenuBtn) {
           setModalProgress('Đang tự mở Báo cáo → Báo cáo nợ…');
           const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
@@ -2268,7 +2331,7 @@ export function mountRemoteInside({
               state.equipDebtStatus = 'needs_report_loaded';
               state.equipDebtNotice = `${applyRes.error} Hãy chọn lại bộ lọc cố định bên dưới.`;
               state.equipDebtNoticeTone = 'warn';
-              syncEquipDebtDraftFromPage();
+              await syncEquipDebtDraftFromPage();
               state.equipDebtFilterEditOpen = true;
               renderConfirm();
               return;
@@ -2291,7 +2354,8 @@ export function mountRemoteInside({
       state.equipDebtProgress = '';
       state.equipDebtStatus = res.status || 'needs_equipment_page';
       state.equipDebtMode = res.mode || 'live';
-      state.equipDebtError = '';
+      state.equipDebtError = res.status === 'error' ? res.message || 'Lỗi đọc báo cáo tồn nợ.' : '';
+      state.equipDebtLoginUrl = res.loginUrl || '';
 
       if (res.status === 'ok' && res.dataset) {
         if (
@@ -2330,9 +2394,9 @@ export function mountRemoteInside({
       } else {
         state.equipDebtDataset = null;
         if (res.status === 'needs_report_loaded' && res.hasDebtTab) {
-          syncEquipDebtDraftFromPage();
+          await syncEquipDebtDraftFromPage();
         }
-        if (res.status !== 'ok' && res.message) {
+        if (res.status !== 'ok' && res.status !== 'error' && res.message) {
           state.equipDebtNotice = res.message;
           state.equipDebtNoticeTone = 'warn';
         }
@@ -6632,7 +6696,7 @@ export function mountRemoteInside({
         sheetParts.push(
           el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
             el('span', { className: 'ri-spinner' }),
-            el('span', { text: 'Đang đọc danh sách vật tư thu hồi…' }),
+            el('span', { text: state.recallProgress || 'Đang đọc danh sách vật tư thu hồi…' }),
           ])
         );
       } else if (state.recallError) {
@@ -6642,9 +6706,62 @@ export function mountRemoteInside({
             el('div', { className: 'ri-result-actions' }, [
               el('button', {
                 type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Thử lại',
+                onClick: () => loadRecallModal(contractId, { forceReload: true }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Mở trang Thu hồi gốc',
+                onClick: () => openRecallPortalWithContract(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus === 'iam_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.recallNotice ||
+                'Phiên đăng nhập IAM trên cổng Vật tư NextGen đã hết hạn. Bấm Đăng nhập IAM bên dưới rồi thử lại.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Đăng nhập IAM',
+                onClick: () =>
+                  openExternalOrPortalUrl(state.recallLoginUrl || RECALL_ENDPOINTS.base, {
+                    mode: 'login',
+                    title: 'Đăng nhập Vật tư NextGen',
+                    pageWindow,
+                  }),
+              }),
+              el('button', {
+                type: 'button',
                 className: 'ri-secondary-btn',
                 text: 'Thử lại',
-                onClick: () => loadRecallModal(contractId),
+                onClick: () => loadRecallModal(contractId, { forceReload: true }),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus === 'needs_contract_android') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.recallNotice ||
+                'Hãy nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Mở trang Thu hồi NextGen',
+                onClick: () => openRecallPortalWithContract(''),
               }),
             ]),
           ])
@@ -6760,7 +6877,37 @@ export function mountRemoteInside({
                   type: 'button',
                   className: 'ri-primary-btn',
                   text: `Tìm ${contractId} trên NextGen`,
-                  onClick: () => openRecallPortalWithContract(contractId),
+                  onClick: () => {
+                    if (canControlAndroidPortal()) {
+                      loadRecallModal(contractId, { clearNotice: true, forceReload: true });
+                      return;
+                    }
+                    openRecallPortalWithContract(contractId);
+                  },
+                }),
+              ]),
+            ])
+          );
+        }
+
+        if (tickets.length === 0 && items.length === 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+              el('div', {
+                text: `Hợp đồng ${snap.contract || contractId || ''} hiện chưa có phiếu thu hồi trên hệ thống NextGen.`,
+              }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: 'Xem trên trang NextGen',
+                  onClick: () => {
+                    if (canControlAndroidPortal()) {
+                      showAndroidPortalOverlay(`Phiếu thu hồi ${snap.contract || contractId || ''}`);
+                      return;
+                    }
+                    openRecallPortalWithContract(contractId);
+                  },
                 }),
               ]),
             ])
@@ -6791,7 +6938,7 @@ export function mountRemoteInside({
                 type: 'button',
                 className: 'ri-danger-btn',
                 text: 'Xác nhận tạo phiếu (+)',
-                onClick: () => {
+                onClick: async () => {
                   state.recallArmedCreate = false;
                   if (isDemo) {
                     const nextNum = String(tickets.length + 1);
@@ -6817,7 +6964,7 @@ export function mountRemoteInside({
                     renderConfirm();
                     return;
                   }
-                  const cRes = triggerRecallCreateTicket(pageDocument);
+                  const cRes = await triggerRecallPortalAction('create_ticket', {}, pageDocument);
                   if (!cRes.ok) {
                     state.recallNotice = cRes.error;
                     state.recallNoticeTone = 'error';
@@ -6855,14 +7002,14 @@ export function mountRemoteInside({
                 className: 'ri-primary-btn',
                 disabled: !isDemo && !snap.canAddEquipment,
                 text: '+ Thêm thiết bị',
-                onClick: () => {
+                onClick: async () => {
                   if (isDemo) {
                     state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
                     state.recallNoticeTone = 'ok';
                     renderConfirm();
                     return;
                   }
-                  const aRes = triggerRecallAddEquipment(pageDocument);
+                  const aRes = await triggerRecallPortalAction('add_equipment', {}, pageDocument);
                   if (!aRes.ok) {
                     state.recallNotice = aRes.error;
                     state.recallNoticeTone = 'error';
@@ -6910,7 +7057,7 @@ export function mountRemoteInside({
                     {
                       type: 'button',
                       className: `ri-box-item${t.isSelected ? ' is-selected' : ''}`,
-                      onClick: () => {
+                      onClick: async () => {
                         if (t.isSelected) return;
                         if (isDemo) {
                           snap.tickets = tickets.map((item) => ({
@@ -6924,7 +7071,11 @@ export function mountRemoteInside({
                           renderConfirm();
                           return;
                         }
-                        const swRes = triggerRecallSelectTicket(pageDocument, t.index);
+                        const swRes = await triggerRecallPortalAction(
+                          'select_ticket',
+                          { ticketIndex: t.index },
+                          pageDocument
+                        );
                         if (!swRes.ok) {
                           state.recallNotice = swRes.error;
                           state.recallNoticeTone = 'error';
@@ -7013,14 +7164,18 @@ export function mountRemoteInside({
                           type: 'button',
                           className: 'ri-primary-btn',
                           text: 'Sửa vật tư',
-                          onClick: () => {
+                          onClick: async () => {
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
                               state.recallNoticeTone = 'ok';
                               renderConfirm();
                               return;
                             }
-                            const eRes = triggerRecallEditEquipment(pageDocument, item.rowIndex);
+                            const eRes = await triggerRecallPortalAction(
+                              'edit_equipment',
+                              { rowIndex: item.rowIndex },
+                              pageDocument
+                            );
                             if (!eRes.ok) {
                               state.recallNotice = eRes.error;
                               state.recallNoticeTone = 'error';
@@ -7039,14 +7194,18 @@ export function mountRemoteInside({
                           type: 'button',
                           className: 'ri-secondary-btn',
                           text: '+ TB phụ',
-                          onClick: () => {
+                          onClick: async () => {
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm "+ Thêm thiết bị phụ" cho "${item.name}".`;
                               state.recallNoticeTone = 'ok';
                               renderConfirm();
                               return;
                             }
-                            const subRes = triggerRecallAddAccessory(pageDocument, item.rowIndex);
+                            const subRes = await triggerRecallPortalAction(
+                              'add_accessory',
+                              { rowIndex: item.rowIndex },
+                              pageDocument
+                            );
                             if (!subRes.ok) {
                               state.recallNotice = subRes.error;
                               state.recallNoticeTone = 'error';
@@ -7138,7 +7297,7 @@ export function mountRemoteInside({
                 className: 'ri-primary-btn',
                 disabled: !isDemo && !snap.canAddNote,
                 text: 'Gửi ghi chú',
-                onClick: () => {
+                onClick: async () => {
                   const text = String(state.recallNoteInput || '').trim();
                   if (!text) {
                     state.recallNotice = 'Vui lòng nhập nội dung ghi chú trước khi gửi.';
@@ -7154,7 +7313,11 @@ export function mountRemoteInside({
                     renderConfirm();
                     return;
                   }
-                  const nRes = triggerRecallSubmitNote(pageDocument, text);
+                  const nRes = await triggerRecallPortalAction(
+                    'submit_note',
+                    { note: text },
+                    pageDocument
+                  );
                   if (!nRes.ok) {
                     state.recallNotice = nRes.error;
                     state.recallNoticeTone = 'error';
@@ -7214,7 +7377,7 @@ export function mountRemoteInside({
           state.equipDebtDraftPartner = '';
           state.equipDebtProvinceOpts = [];
           state.equipDebtPartnerOpts = [];
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -7224,7 +7387,9 @@ export function mountRemoteInside({
             waitNextKind: 'province',
           });
           if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-          state.equipDebtProvinceOpts = readEquipmentFilterOptions(pageDocument, 'province').options;
+          state.equipDebtProvinceOpts = (
+            await readEquipmentFilterOptionsAsync(pageDocument, 'province')
+          ).options;
           state.equipDebtFilterBusy = false;
           renderConfirm();
         });
@@ -7258,7 +7423,7 @@ export function mountRemoteInside({
           state.equipDebtDraftProvince = val;
           state.equipDebtDraftPartner = '';
           state.equipDebtPartnerOpts = [];
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -7268,7 +7433,9 @@ export function mountRemoteInside({
             waitNextKind: 'partner',
           });
           if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-          state.equipDebtPartnerOpts = readEquipmentFilterOptions(pageDocument, 'partner').options;
+          state.equipDebtPartnerOpts = (
+            await readEquipmentFilterOptionsAsync(pageDocument, 'partner')
+          ).options;
           state.equipDebtFilterBusy = false;
           renderConfirm();
         });
@@ -7300,7 +7467,7 @@ export function mountRemoteInside({
         partnerSel.addEventListener('change', async (e) => {
           const val = e.target.value;
           state.equipDebtDraftPartner = val;
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -7331,6 +7498,10 @@ export function mountRemoteInside({
               setEquipmentDebtFilter(nextFilter);
               state.equipDebtSavedFilter = nextFilter;
               state.equipDebtFilterEditOpen = false;
+              if (canControlAndroidPortal()) {
+                loadEquipmentDebtModal({ allowAutoSetup: true, forceApplyFilter: true });
+                return;
+              }
               state.equipDebtLoading = true;
               state.equipDebtProgress = 'Đang áp dụng bộ lọc cố định & tải dữ liệu…';
               renderConfirm();
@@ -7428,6 +7599,35 @@ export function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Thử lại',
                 onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'iam_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm Đăng nhập IAM bên dưới rồi thử lại.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Đăng nhập IAM',
+                onClick: () =>
+                  openExternalOrPortalUrl(state.equipDebtLoginUrl || EQUIPMENT_ENDPOINTS.base, {
+                    mode: 'login',
+                    title: 'Đăng nhập Quản lý vật tư',
+                    pageWindow,
+                  }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
               }),
             ]),
           ])
@@ -7630,12 +7830,16 @@ export function mountRemoteInside({
               title: state.equipDebtSavedFilter
                 ? `Đang cố định: ${state.equipDebtSavedFilter.region} • ${state.equipDebtSavedFilter.partner}`
                 : 'Chọn hoặc đổi bộ lọc cố định',
-              onClick: () => {
-                if (!state.equipDebtFilterEditOpen) {
-                  syncEquipDebtDraftFromPage();
-                }
-                state.equipDebtFilterEditOpen = !state.equipDebtFilterEditOpen;
+              onClick: async () => {
+                const opening = !state.equipDebtFilterEditOpen;
+                state.equipDebtFilterEditOpen = opening;
                 renderConfirm();
+                if (opening) {
+                  await syncEquipDebtDraftFromPage();
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    renderConfirm();
+                  }
+                }
               },
             })
           );
@@ -9100,11 +9304,19 @@ export function mountRemoteInside({
         const recallSearchTimer = setInterval(() => {
           recallSearchAttempts += 1;
           const ctrls = findRecallSearchControls(pageDocument);
-          if (ctrls.input) {
+          const inputVisible =
+            ctrls.input &&
+            (ctrls.input.offsetParent === undefined || ctrls.input.offsetParent !== null);
+          if (inputVisible || (ctrls.input && recallSearchAttempts >= 4)) {
             clearInterval(recallSearchTimer);
             const sRes = triggerRecallSearchOnPage(pageDocument, pendingRecallContract);
             if (sRes.ok) {
               addLog('Vật tư', 'Tự tìm phiếu thu hồi', pendingRecallContract, 'ok');
+            }
+          } else if (recallSearchAttempts === 2) {
+            const toggleBtn = findRecallMobileMenuToggle(pageDocument);
+            if (toggleBtn && typeof toggleBtn.click === 'function') {
+              toggleBtn.click();
             }
           } else if (recallSearchAttempts >= 20) {
             clearInterval(recallSearchTimer);
@@ -9123,6 +9335,11 @@ export function mountRemoteInside({
         return;
       }
       refreshSessionStatus();
+      if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+        loadRecallModal(state.contractInput);
+      } else if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+        loadEquipmentDebtModal({ allowAutoSetup: true });
+      }
     };
     window.__riHandleBack = () => {
       if (state.confirmAction) {

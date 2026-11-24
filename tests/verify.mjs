@@ -26,15 +26,19 @@ import {
   setState,
 } from '../src/core/storage.js';
 import {
+  canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
   clearWarmSessionCache,
   detectIamRedirect,
+  evalAndroidPortalJs,
   getRuntimeEnv,
   isAndroidAppEnv,
   isUserscriptEnv,
+  loadAndroidPortalBackground,
   openExternalOrPortalUrl,
   requestPortal,
+  showAndroidPortalOverlay,
   syncIamSsoSessions,
   warmPortalSession,
 } from '../src/core/transport.js';
@@ -155,6 +159,7 @@ import {
   triggerRecallAddEquipment,
   triggerRecallCreateTicket,
   triggerRecallEditEquipment,
+  triggerRecallPortalAction,
   triggerRecallSearchOnPage,
   triggerRecallSelectTicket,
   triggerRecallSubmitNote,
@@ -179,6 +184,7 @@ import {
   queryEquipmentDebtByStaff,
   queryEquipmentDebtHolders,
   readEquipmentFilterOptions,
+  readEquipmentFilterOptionsAsync,
   readEquipmentFilterState,
 } from '../src/adapters/equipment.js';
 import { executePortalAction } from '../src/adapters/portals.js';
@@ -2826,6 +2832,10 @@ async function runTests() {
   for (const token of [
     'ssoWebView',
     'fun warmPortalSession',
+    'fun loadPortalBackground',
+    'fun evalPortalJs',
+    'fun showPortalOverlay',
+    '(portalLoginActive || portalLoginSawAuthHost)',
     'private fun isAuthHost',
     'private fun isLoginPath',
     'window.__riOnPortalBrowserClosed',
@@ -2833,6 +2843,10 @@ async function runTests() {
     assert.ok(mainActivitySrc.includes(token), `MainActivity.kt must contain ${token}`);
   }
   assert.ok(layoutXmlSrc.includes('android:id="@+id/ssoWebView"'), 'activity_main.xml must include ssoWebView');
+  assert.ok(
+    /android:id="@\+id\/portalOverlay"[\s\S]{0,260}android:visibility="invisible"/.test(layoutXmlSrc),
+    'portalOverlay in activity_main.xml must use android:visibility="invisible" to preserve WebView layout dimensions'
+  );
   for (const bundleToken of ['warmPortalSession', 'syncIamSsoSessions', 'Đăng nhập IAM (1 lần cho tất cả)']) {
     assert.ok(androidAssetContent.includes(bundleToken), `Android bundle must include ${bundleToken}`);
     assert.ok(userscriptContent.includes(bundleToken), `Userscript bundle must include ${bundleToken}`);
@@ -3172,6 +3186,226 @@ async function runTests() {
   const badRecallRes = await runRecallAction('lookup_recall', 'ab', { forceDemo: true });
   assert.equal(badRecallRes.status, 'validation_error');
 
+  // Empty-ticket contract check ("Hợp đồng chưa có phiếu thu hồi.") + Android isolated VM bridge test
+  const emptyTicketDoc = {
+    title: 'SGN999999',
+    body: { innerText: 'DANH SÁCH PHIẾU THU HỒI - SGN999999 Hợp đồng chưa có phiếu thu hồi.' },
+    querySelectorAll: () => [],
+    querySelector: () => null,
+  };
+  const emptySnap = parseRecallTicketFromDocument(emptyTicketDoc, {
+    hostname: 'nextgen.fpt.net',
+    pathname: '/resource/recall/recall-ticket',
+  });
+  assert.equal(emptySnap.contract, 'SGN999999');
+  assert.equal(emptySnap.hasEmptyNotice, true);
+  assert.equal(emptySnap.tickets.length, 0);
+
+  const prevWin20 = globalThis.window;
+  const hadWin20 = 'window' in globalThis;
+  try {
+    let mobileDrawerOpened = false;
+    let searchedValue = '';
+    let overlayShownTitle = '';
+    let editClickedInVm = false;
+
+    const vmRecallTicketDoc = {
+      title: 'SGN123456',
+      body: { innerText: 'DANH SÁCH PHIẾU THU HỒI - SGN123456 Phiếu số 1' },
+      querySelector: (sel) => {
+        if (sel === '.rz-data-grid') {
+          return {
+            querySelectorAll: (s) =>
+              s === 'tbody tr'
+                ? [
+                    {
+                      querySelectorAll: (q) =>
+                        q === 'td'
+                          ? [
+                              { innerText: 'Modem AX3000' },
+                              { innerText: '' },
+                              { innerText: 'Modem' },
+                              { innerText: 'AABBCCDDEEFF' },
+                              { innerText: '1' },
+                              { innerText: 'Thu hồi không thành công' },
+                            ]
+                          : [],
+                      querySelector: (q) =>
+                        q.includes('equipmentname')
+                          ? {
+                              innerText: 'Modem AX3000',
+                              click: () => {
+                                editClickedInVm = true;
+                              },
+                            }
+                          : null,
+                    },
+                  ]
+                : [],
+          };
+        }
+        return null;
+      },
+      querySelectorAll: (sel) => {
+        if (sel === 'h1,h2,h3,h4') return [{ innerText: 'Phiếu số 1' }];
+        if (sel === '.ticketinf') {
+          return [
+            {
+              id: '5001',
+              className: 'ticketinf Card-Ticket-Selected',
+              innerText: '1 TIN/PNC Ngày tạo phiếu: 24/11/2026',
+              querySelector: () => null,
+            },
+          ];
+        }
+        return [];
+      },
+    };
+
+    const vmSearchInput = {
+      value: '',
+      get offsetParent() {
+        return mobileDrawerOpened ? {} : null;
+      },
+      dispatchEvent: () => {},
+      parentElement: {
+        querySelectorAll: () => [
+          {
+            innerText: 'search',
+            className: 'rz-button',
+            click: () => {
+              searchedValue = vmSearchInput.value;
+              setTimeout(() => {
+                recallSandbox.location = {
+                  href: 'https://nextgen.fpt.net/resource/recall/recall-ticket?q=vm1',
+                  hostname: 'nextgen.fpt.net',
+                  pathname: '/resource/recall/recall-ticket',
+                };
+                recallSandbox.document = vmRecallTicketDoc;
+              }, 30);
+            },
+          },
+        ],
+      },
+    };
+
+    const vmRecallHomeDoc = {
+      title: 'Quản lý vật tư thu hồi',
+      body: { innerText: 'Quản lý vật tư thu hồi' },
+      querySelector: (sel) => {
+        if (sel.includes('hợp đồng')) return vmSearchInput;
+        return null;
+      },
+      querySelectorAll: (sel) => {
+        if (sel.includes('mud-icon-button')) {
+          return [
+            {
+              innerText: 'menu',
+              disabled: false,
+              click: () => {
+                mobileDrawerOpened = true;
+              },
+            },
+          ];
+        }
+        return [];
+      },
+    };
+
+    const recallSandbox = vm.createContext({
+      location: {
+        href: 'https://nextgen.fpt.net/resource/recall/',
+        hostname: 'nextgen.fpt.net',
+        pathname: '/resource/recall/',
+      },
+      document: vmRecallHomeDoc,
+    });
+    recallSandbox.window = recallSandbox;
+
+    globalThis.window = {
+      location: { hostname: 'appassets.androidplatform.net', pathname: '/assets/remote-inside.html' },
+      __riNativePending: new Map(),
+      RemoteInsideNative: {
+        httpRequest() {},
+        showPortalOverlay(title) {
+          overlayShownTitle = title;
+        },
+        loadPortalBackground(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          recallSandbox.location = {
+            href: 'https://nextgen.fpt.net/resource/recall/',
+            hostname: 'nextgen.fpt.net',
+            pathname: '/resource/recall/',
+          };
+          recallSandbox.document = vmRecallHomeDoc;
+          delete recallSandbox.__riRecallDom;
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', finalUrl: parsed.url })
+            );
+          });
+        },
+        evalPortalJs(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          const wrapped =
+            '(function(){try{var __fn=function(){\n' +
+            parsed.script +
+            '\n};var __val=__fn();return JSON.stringify({ok:true,status:"ok",finalUrl:String(location.href||""),value:__val===undefined?null:__val});}catch(__err){return JSON.stringify({ok:false,status:"js_error",finalUrl:String(location.href||""),error:String(__err&&__err.message?__err.message:__err)});}})();';
+          const outJson = vm.runInContext(wrapped, recallSandbox);
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(parsed.reqId, outJson);
+          });
+        },
+      },
+    };
+
+    assert.equal(canControlAndroidPortal(), true);
+    const androidRecallCtx = await loadRecallTicketContext('SGN123456', {
+      pageLocation: globalThis.window.location,
+      pageDocument: {},
+    });
+    assert.equal(mobileDrawerOpened, true, 'Android recall bridge must expand collapsed mobile search bar');
+    assert.equal(searchedValue, 'SGN123456');
+    assert.equal(androidRecallCtx.status, 'ok');
+    assert.equal(androidRecallCtx.mode, 'live');
+    assert.equal(androidRecallCtx.snapshot.contract, 'SGN123456');
+    assert.equal(androidRecallCtx.snapshot.items.length, 1);
+
+    const editPortalRes = await triggerRecallPortalAction(
+      'edit_equipment',
+      { rowIndex: 0 },
+      { location: globalThis.window.location }
+    );
+    assert.equal(editPortalRes.ok, true);
+    assert.equal(editClickedInVm, true);
+    assert.equal(showAndroidPortalOverlay('Sửa vật tư'), true);
+    assert.equal(overlayShownTitle, 'Sửa vật tư');
+
+    // Also verify 0-ticket lookup_recall summary via live DOM
+    recallSandbox.document = emptyTicketDoc;
+    recallSandbox.location = {
+      href: 'https://nextgen.fpt.net/resource/recall/recall-ticket?q=empty',
+      hostname: 'nextgen.fpt.net',
+      pathname: '/resource/recall/recall-ticket',
+    };
+    const emptyLookupRes = await runRecallAction('lookup_recall', 'SGN999999', {
+      pageLocation: globalThis.window.location,
+      pageDocument: {},
+    });
+    assert.equal(emptyLookupRes.status, 'ok');
+    assert.ok(
+      emptyLookupRes.message.includes('chưa có phiếu thu hồi'),
+      '0-ticket contract summary must clearly report no recall tickets'
+    );
+  } finally {
+    if (hadWin20) {
+      globalThis.window = prevWin20;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
   // Verify recall adapter & UI tokens in built bundles + 0 forbiddenDemoDataRe matches
   for (const token of [
     'RECALL_PENDING_CONTRACT',
@@ -3180,6 +3414,8 @@ async function runTests() {
     'triggerRecallCreateTicket',
     'triggerRecallAddEquipment',
     'triggerRecallSubmitNote',
+    'triggerRecallPortalAction',
+    'findRecallMobileMenuToggle',
     'equipmentname',
     RECALL_ENDPOINTS.base,
   ]) {
@@ -3818,6 +4054,292 @@ async function runTests() {
     'src/ui/app.js must not reference misspelled state.equipDebtHasDebtTab'
   );
 
+  // Android isolated VM bridge end-to-end test for Equipment Debt (Danh muc -> Bao cao no -> Fixed Filter -> 2-page scan)
+  const prevWin21 = globalThis.window;
+  const hadWin21 = 'window' in globalThis;
+  try {
+    let debtTabOpenVm = false;
+    let regValVm = '';
+    let provValVm = '';
+    let partValVm = '';
+    let provReadyVm = false;
+    let partReadyVm = false;
+    let reportLoadedVm = false;
+    let vmPageSize = 2;
+    let vmPageIdx = 1;
+    let vmSummaryText = 'Page 1 of 1 (0 items)';
+
+    const vmDebtRowsAll = [
+      ['KTV.MAU01', '500', '0', '2', '0', '0'],
+      ['KTV.MAU02', '0', '10', '5', '0', '3'],
+      ['KTV.MAU03', '250', '0', '0', '0', '1'],
+      ['KTV.MAU04', '0', '0', '4', '0', '0'],
+    ];
+
+    const makeVmFilterField = (lbl, ddId, getVal) => ({
+      querySelector: (s) => {
+        if (s.includes('label')) return { innerText: lbl };
+        if (s.includes('rz-dropdown')) {
+          return {
+            id: ddId,
+            get className() {
+              return getVal() ? 'rz-dropdown rz-clear' : 'rz-dropdown rz-state-empty rz-clear';
+            },
+            get innerText() {
+              return getVal();
+            },
+            querySelector: () => null,
+            click: () => {},
+          };
+        }
+        return null;
+      },
+    });
+
+    const vmPagerDd = {
+      id: 'vmpdd',
+      get innerText() {
+        return String(vmPageSize);
+      },
+      click: () => {},
+    };
+    const vmPagerNext = {
+      get className() {
+        return vmPageIdx >= 2 ? 'rz-pager-next rz-state-disabled' : 'rz-pager-next';
+      },
+      getAttribute: () => (vmPageIdx >= 2 ? '' : null),
+      click: () => {
+        if (vmPageIdx < 2) {
+          vmPageIdx += 1;
+          vmSummaryText = 'Page 2 of 2 (4 items)';
+        }
+      },
+    };
+    const vmDebtTable = {
+      className: 'rz-grid-table',
+      querySelectorAll: (sel) => {
+        if (sel === 'thead tr') {
+          return reportLoadedVm ? [equipTheadRow0, equipTheadRow1] : [{ querySelectorAll: () => [makeEquipCell('Nhân viên')] }];
+        }
+        if (sel === 'tbody tr') {
+          if (!reportLoadedVm) return [emptyPlaceholderTr];
+          const start = (vmPageIdx - 1) * vmPageSize;
+          return vmDebtRowsAll.slice(start, start + vmPageSize).map(makeEquipBodyTr);
+        }
+        return [];
+      },
+    };
+    const vmDebtGrid = {
+      querySelectorAll: (sel) =>
+        sel === 'thead th, thead td' ? [makeEquipCell('Nhân viên')] : [],
+      querySelector: (sel) => {
+        if (sel === 'table.rz-grid-table') return vmDebtTable;
+        if (sel === '.rz-pager') {
+          return {
+            querySelector: (s) => {
+              if (s === '.rz-dropdown') return vmPagerDd;
+              if (s === '.rz-pager-next') return vmPagerNext;
+              return null;
+            },
+          };
+        }
+        if (sel === '.rz-pager-summary') {
+          return { innerText: vmSummaryText };
+        }
+        return null;
+      },
+    };
+
+    let reportMenuPopoverOpenVm = false;
+    const vmEquipDoc = {
+      getElementById: (id) => {
+        if (id === 'popup-vmReg') {
+          return {
+            querySelectorAll: () => [
+              {
+                innerText: '10.Vu\u0303ng Ta\u0300u',
+                click: () => {
+                  regValVm = '10.Vu\u0303ng Ta\u0300u';
+                  provValVm = 'Hồ Chí Minh - Bà Rịa - Vũng Tàu';
+                  setTimeout(() => {
+                    provReadyVm = true;
+                    partReadyVm = true;
+                  }, 30);
+                },
+              },
+            ],
+          };
+        }
+        if (id === 'popup-vmProv') {
+          return {
+            querySelectorAll: () =>
+              provReadyVm
+                ? [
+                    {
+                      innerText: 'Hồ Chí Minh - Bà Rịa - Vũng Tàu',
+                      click: () => {
+                        provValVm = 'Hồ Chí Minh - Bà Rịa - Vũng Tàu';
+                        partReadyVm = true;
+                      },
+                    },
+                  ]
+                : [],
+          };
+        }
+        if (id === 'popup-vmPart') {
+          return {
+            querySelectorAll: () =>
+              partReadyVm
+                ? [
+                    {
+                      innerText: 'Phuong Nam VTU',
+                      click: () => {
+                        partValVm = 'Phuong Nam VTU';
+                      },
+                    },
+                  ]
+                : [],
+          };
+        }
+        if (id === 'popup-vmpdd') {
+          return {
+            querySelectorAll: () => [
+              { innerText: '2', click: () => {} },
+              {
+                innerText: '3',
+                click: () => {
+                  vmSummaryText = 'Page 1 of 1 (1 items)';
+                  setTimeout(() => {
+                    vmPageSize = 3;
+                    vmPageIdx = 1;
+                    vmSummaryText = 'Page 1 of 2 (4 items)';
+                  }, 80);
+                },
+              },
+            ],
+          };
+        }
+        return null;
+      },
+      querySelectorAll: (sel) => {
+        if (sel === '.rz-data-grid') return debtTabOpenVm ? [vmDebtGrid] : [catalogGrid];
+        if (sel.includes('rz-tabview-nav')) {
+          return debtTabOpenVm
+            ? [{ innerText: 'Tồn công nợ theo NV', className: 'rz-tabview-selected' }]
+            : [];
+        }
+        if (sel === 'button') {
+          const btns = [
+            {
+              innerText: 'Báo cáo',
+              click: () => {
+                reportMenuPopoverOpenVm = true;
+              },
+            },
+          ];
+          if (debtTabOpenVm) {
+            btns.push({
+              innerText: 'Xem danh sách',
+              click: () => {
+                if (regValVm && provValVm && partValVm) {
+                  setTimeout(() => {
+                    reportLoadedVm = true;
+                    vmPageSize = 2;
+                    vmPageIdx = 1;
+                    vmSummaryText = 'Page 1 of 2 (4 items)';
+                  }, 60);
+                }
+              },
+            });
+          }
+          return btns;
+        }
+        if (sel.includes('mud-list-item')) {
+          return reportMenuPopoverOpenVm
+            ? [
+                {
+                  innerText: 'Báo cáo nợ',
+                  click: () => {
+                    reportMenuPopoverOpenVm = false;
+                    debtTabOpenVm = true;
+                  },
+                },
+              ]
+            : [];
+        }
+        if (sel === '.rz-form-field') {
+          return debtTabOpenVm
+            ? [
+                makeVmFilterField('Vùng', 'vmReg', () => regValVm),
+                makeVmFilterField('Tỉnh thành', 'vmProv', () => provValVm),
+                makeVmFilterField('Đối tác', 'vmPart', () => partValVm),
+              ]
+            : [];
+        }
+        return [];
+      },
+    };
+
+    const equipSandbox = vm.createContext({
+      location: {
+        href: 'https://nextgen.fpt.net/resource/equipment/',
+        hostname: 'nextgen.fpt.net',
+        pathname: '/resource/equipment/',
+      },
+      document: vmEquipDoc,
+    });
+    equipSandbox.window = equipSandbox;
+
+    globalThis.window = {
+      location: { hostname: 'appassets.androidplatform.net', pathname: '/assets/remote-inside.html' },
+      __riNativePending: new Map(),
+      RemoteInsideNative: {
+        httpRequest() {},
+        loadPortalBackground(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', finalUrl: parsed.url })
+            );
+          });
+        },
+        evalPortalJs(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          const wrapped =
+            '(function(){try{var __fn=function(){\n' +
+            parsed.script +
+            '\n};var __val=__fn();return JSON.stringify({ok:true,status:"ok",finalUrl:String(location.href||""),value:__val===undefined?null:__val});}catch(__err){return JSON.stringify({ok:false,status:"js_error",finalUrl:String(location.href||""),error:String(__err&&__err.message?__err.message:__err)});}})();';
+          const outJson = vm.runInContext(wrapped, equipSandbox);
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(parsed.reqId, outJson);
+          });
+        },
+      },
+    };
+
+    const androidEquipProgress = [];
+    const androidEquipRes = await loadEquipmentDebtContext({
+      pageLocation: globalThis.window.location,
+      pageDocument: {},
+      onProgress: (p) => androidEquipProgress.push(p),
+      waitMs: 1200,
+    });
+    assert.equal(androidEquipRes.status, 'ok', 'Android equipment debt bridge must auto-load report end-to-end');
+    assert.equal(androidEquipRes.mode, 'live');
+    assert.equal(androidEquipRes.dataset.totalStaff, 4, 'Android bridge must collect all 4 KTV across 2 pages');
+    assert.equal(androidEquipRes.dataset.meta.pagesScanned, 2);
+    assert.ok(androidEquipProgress.some((p) => p && p.phaseText), 'Must emit live phase progress on Android');
+    const partnerOptsAndroid = await readEquipmentFilterOptionsAsync(null, 'partner');
+    assert.deepEqual(partnerOptsAndroid.options, ['Phuong Nam VTU']);
+  } finally {
+    if (hadWin21) {
+      globalThis.window = prevWin21;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
   for (const token of [
     'equipment_debt',
     'collectEquipmentDebtFromDocument',
@@ -3829,6 +4351,10 @@ async function runTests() {
     'DEFAULT_EQUIPMENT_DEBT_FILTER',
     'getEffectiveEquipmentDebtFilter',
     'applyEquipmentDebtFilterToPage',
+    'canControlAndroidPortal',
+    'loadAndroidPortalBackground',
+    'evalAndroidPortalJs',
+    'showAndroidPortalOverlay',
     'ri-tab-sep',
     'is-planned',
     'is-primary',

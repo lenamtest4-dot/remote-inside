@@ -18,7 +18,7 @@
   <script>
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.13.1";
+  const __REMOTE_INSIDE_VERSION__ = "0.13.2";
   const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
@@ -620,13 +620,20 @@ function ensureNativePendingBridge() {
         return;
       }
 
-      if (entry.kind === 'warm' || typeof parsed.status === 'string') {
+      if (
+        entry.kind === 'warm' ||
+        entry.kind === 'portal_bg' ||
+        entry.kind === 'portal_eval' ||
+        typeof parsed.status === 'string'
+      ) {
         entry.resolve({
           ok: Boolean(parsed.ok),
           mode: 'android',
           status: typeof parsed.status === 'string' ? parsed.status : parsed.ok ? 'ok' : 'error',
           finalUrl: String(parsed.finalUrl || entry.url || ''),
           sawAuth: Boolean(parsed.sawAuth),
+          reused: Boolean(parsed.reused),
+          value: parsed.value !== undefined ? parsed.value : null,
           error: parsed.error ? String(parsed.error) : undefined,
         });
         return;
@@ -729,6 +736,132 @@ function canWarmPortalSession() {
     Boolean(window.RemoteInsideNative) &&
     typeof window.RemoteInsideNative.warmPortalSession === 'function'
   );
+}
+function canControlAndroidPortal() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window !== 'undefined' &&
+    Boolean(window.RemoteInsideNative) &&
+    typeof window.RemoteInsideNative.loadPortalBackground === 'function' &&
+    typeof window.RemoteInsideNative.evalPortalJs === 'function'
+  );
+}
+function showAndroidPortalOverlay(title = '') {
+  if (
+    !isAndroidAppEnv() ||
+    typeof window === 'undefined' ||
+    !window.RemoteInsideNative ||
+    typeof window.RemoteInsideNative.showPortalOverlay !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    window.RemoteInsideNative.showPortalOverlay(String(title || ''));
+    return true;
+  } catch {
+    return false;
+  }
+}
+function loadAndroidPortalBackground(
+  url,
+  { reusePrefix = '', timeout = 18000 } = {}
+) {
+  if (!url || typeof url !== 'string') {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: '' });
+  }
+  if (!canControlAndroidPortal()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', finalUrl: url });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_pbg_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(3000, Math.min(30000, Number(timeout) || 18000));
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      resolve({ ok: false, status: 'timeout', finalUrl: url });
+    }, numericTimeout + 4000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'portal_bg',
+      resolve,
+      timer,
+      url,
+    });
+
+    try {
+      window.RemoteInsideNative.loadPortalBackground(
+        JSON.stringify({
+          reqId,
+          url,
+          reusePrefix: String(reusePrefix || ''),
+          timeout: numericTimeout,
+        })
+      );
+    } catch (err) {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        status: 'error',
+        finalUrl: url,
+        error: err && err.message ? err.message : 'PORTAL_BG_FAILED',
+      });
+    }
+  });
+}
+function evalAndroidPortalJs(script, { timeout = 8000 } = {}) {
+  if (!script || typeof script !== 'string') {
+    return Promise.resolve({ ok: false, status: 'empty_script', value: null });
+  }
+  if (!canControlAndroidPortal()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', value: null });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_peval_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1000, Math.min(20000, Number(timeout) || 8000));
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      resolve({ ok: false, status: 'timeout', value: null });
+    }, numericTimeout + 2000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'portal_eval',
+      resolve,
+      timer,
+      url: '',
+    });
+
+    try {
+      window.RemoteInsideNative.evalPortalJs(
+        JSON.stringify({
+          reqId,
+          script,
+        })
+      );
+    } catch (err) {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        status: 'error',
+        value: null,
+        error: err && err.message ? err.message : 'PORTAL_EVAL_FAILED',
+      });
+    }
+  });
 }
 function clearWarmSessionCache() {
   warmCacheByHost.clear();
@@ -9289,6 +9422,20 @@ function findRecallSearchControls(doc) {
 
   return { input, button };
 }
+function findRecallMobileMenuToggle(doc) {
+  if (!doc || typeof doc.querySelectorAll !== 'function') return null;
+  const candidates = Array.from(
+    doc.querySelectorAll('.mud-appbar button.mud-icon-button, header button.mud-icon-button')
+  );
+  return (
+    candidates.find((b) => {
+      if (!b || b.disabled) return false;
+      const txt = getRecallElementText(b).toLowerCase();
+      if (/help|send|arrow|close/i.test(txt)) return false;
+      return true;
+    }) || null
+  );
+}
 function findRecallCreateTicketButton(doc) {
   if (!doc || typeof doc.querySelector !== 'function') return null;
   const split = doc.querySelector('.rz-splitbutton');
@@ -9348,6 +9495,7 @@ function parseRecallTicketFromDocument(doc, loc = null) {
       activeTicket: null,
       items: [],
       stats: { totalItems: 0, importedCount: 0, editableCount: 0, pendingCount: 0 },
+      hasEmptyNotice: false,
       canCreateTicket: false,
       canAddEquipment: false,
       canAddNote: false,
@@ -9356,6 +9504,7 @@ function parseRecallTicketFromDocument(doc, loc = null) {
   }
 
   const bodyText = getRecallElementText(doc.body);
+  const hasEmptyNotice = /chưa có phiếu thu hồi/i.test(bodyText);
   let contract = '';
   const bannerMatch = bodyText.match(
     /DANH SÁCH PHIẾU THU HỒI\s*[-–:]\s*([A-Z0-9._-]{3,32})/i
@@ -9413,7 +9562,12 @@ function parseRecallTicketFromDocument(doc, loc = null) {
 
   return {
     onRecallTicketPage:
-      isRecallTicketLocation(loc) || tickets.length > 0 || items.length > 0 || Boolean(activeTicketTitle),
+      isRecallTicketLocation(loc) ||
+      hasEmptyNotice ||
+      Boolean(bannerMatch) ||
+      tickets.length > 0 ||
+      items.length > 0 ||
+      Boolean(activeTicketTitle),
     contract,
     activeTicketTitle,
     tickets,
@@ -9425,6 +9579,7 @@ function parseRecallTicketFromDocument(doc, loc = null) {
       editableCount,
       pendingCount,
     },
+    hasEmptyNotice,
     canCreateTicket: Boolean(findRecallCreateTicketButton(doc)),
     canAddEquipment: Boolean(findRecallAddEquipmentButton(doc)),
     canAddNote: Boolean(findRecallNoteControls(doc).input),
@@ -9730,10 +9885,318 @@ function buildDemoRecallSnapshot(rawContractId = 'SGN123456') {
       editableCount: 3,
       pendingCount: 3,
     },
+    hasEmptyNotice: false,
     canCreateTicket: true,
     canAddEquipment: true,
     canAddNote: true,
     openDialogTitle: '',
+  };
+}
+
+function buildRecallPortalBootstrapJs() {
+  const fnSource = [
+    normalizeContractId,
+    validateContractId,
+    cleanRecallText,
+    isRecallPortalLocation,
+    isRecallTicketLocation,
+    extractRecallFieldAfterLabel,
+    getRecallElementText,
+    getRecallGridRows,
+    parseRecallTicketCardElement,
+    parseRecallEquipmentRow,
+    findRecallSearchControls,
+    findRecallMobileMenuToggle,
+    findRecallCreateTicketButton,
+    findRecallAddEquipmentButton,
+    findRecallNoteControls,
+    parseRecallTicketFromDocument,
+    setRecallNativeInputValue,
+    triggerRecallSearchOnPage,
+    triggerRecallCreateTicket,
+    triggerRecallSelectTicket,
+    triggerRecallAddEquipment,
+    triggerRecallAddAccessory,
+    triggerRecallEditEquipment,
+    triggerRecallSubmitNote,
+  ]
+    .map((fn) => fn.toString())
+    .join('\n');
+
+  return `
+    if (!window.__riRecallDom) {
+      window.__riRecallDom = (function() {
+        var CONTRACT_REGEX = ${CONTRACT_REGEX.toString()};
+        var RECALL_ENDPOINTS = ${JSON.stringify(RECALL_ENDPOINTS)};
+        var RECALL_GENERIC_TITLES_RE = ${RECALL_GENERIC_TITLES_RE.toString()};
+        ${fnSource}
+        return {
+          inspectState: function() {
+            var ctrls = findRecallSearchControls(document);
+            var inp = ctrls.input;
+            var isInputVisible = Boolean(inp && (inp.offsetParent === undefined || inp.offsetParent !== null));
+            var menuBtn = findRecallMobileMenuToggle(document);
+            var snackEl = typeof document.querySelector === 'function'
+              ? document.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
+              : null;
+            var onTicket = isRecallTicketLocation(location);
+            var snap = onTicket ? parseRecallTicketFromDocument(document, location) : null;
+            return {
+              href: String(location.href || ''),
+              onPortal: isRecallPortalLocation(location),
+              onTicket: onTicket,
+              hasVisibleSearchInput: isInputVisible,
+              hasAnySearchInput: Boolean(inp),
+              hasMenuToggle: Boolean(menuBtn),
+              snackbarText: getRecallElementText(snackEl),
+              snapshot: snap
+            };
+          },
+          openMobileMenu: function() {
+            var btn = findRecallMobileMenuToggle(document);
+            if (!btn || typeof btn.click !== 'function') return { ok: false };
+            btn.click();
+            return { ok: true };
+          },
+          searchContract: function(contractId) {
+            return triggerRecallSearchOnPage(document, contractId);
+          },
+          readSnapshot: function() {
+            return parseRecallTicketFromDocument(document, location);
+          },
+          runAction: function(actionType, payload) {
+            var p = payload || {};
+            if (actionType === 'create_ticket') return triggerRecallCreateTicket(document);
+            if (actionType === 'select_ticket') return triggerRecallSelectTicket(document, p.ticketIndex || 0);
+            if (actionType === 'add_equipment') return triggerRecallAddEquipment(document);
+            if (actionType === 'edit_equipment') return triggerRecallEditEquipment(document, p.rowIndex || 0);
+            if (actionType === 'add_accessory') return triggerRecallAddAccessory(document, p.rowIndex || 0);
+            if (actionType === 'submit_note') return triggerRecallSubmitNote(document, p.note || '');
+            return { ok: false, error: 'Thao tác phiếu thu hồi không xác định.' };
+          }
+        };
+      })();
+    }
+  `;
+}
+
+async function evalRecallDom(expr) {
+  const boot = buildRecallPortalBootstrapJs();
+  return evalAndroidPortalJs(`${boot}\nreturn (${expr});`);
+}
+async function triggerRecallPortalAction(actionType, payload = {}, doc = null) {
+  const useLocalDoc =
+    !canControlAndroidPortal() ||
+    Boolean(doc && doc.location && isRecallTicketLocation(doc.location));
+
+  if (useLocalDoc) {
+    if (actionType === 'create_ticket') return triggerRecallCreateTicket(doc);
+    if (actionType === 'select_ticket') {
+      return triggerRecallSelectTicket(doc, payload.ticketIndex || 0);
+    }
+    if (actionType === 'add_equipment') return triggerRecallAddEquipment(doc);
+    if (actionType === 'edit_equipment') {
+      return triggerRecallEditEquipment(doc, payload.rowIndex || 0);
+    }
+    if (actionType === 'add_accessory') {
+      return triggerRecallAddAccessory(doc, payload.rowIndex || 0);
+    }
+    if (actionType === 'submit_note') {
+      return triggerRecallSubmitNote(doc, payload.note || '');
+    }
+    return { ok: false, error: 'Thao tác phiếu thu hồi không xác định.' };
+  }
+
+  const res = await evalRecallDom(
+    `window.__riRecallDom.runAction(${JSON.stringify(actionType)}, ${JSON.stringify(payload || {})})`
+  );
+  if (!res.ok || !res.value) {
+    return {
+      ok: false,
+      error: res.error || 'Không gửi được thao tác vào trang Phiếu thu hồi NextGen.',
+    };
+  }
+  return res.value;
+}
+
+async function loadRecallTicketViaAndroidPortal(
+  requestedContract,
+  { onProgress = null, forceReload = false } = {}
+) {
+  const notify = (msg) => {
+    if (typeof onProgress === 'function' && msg) {
+      onProgress(msg);
+    }
+  };
+
+  if (!forceReload) {
+    const curCheck = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (curCheck.ok && curCheck.value && curCheck.value.onTicket && curCheck.value.snapshot) {
+      const curSnap = curCheck.value.snapshot;
+      if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
+        return {
+          status: 'ok',
+          mode: 'live',
+          snapshot: curSnap,
+          requestedContract,
+          contractMismatch: false,
+        };
+      }
+    }
+  }
+
+  if (!requestedContract) {
+    return {
+      status: 'needs_contract_android',
+      mode: 'live',
+      contract: '',
+      url: RECALL_ENDPOINTS.base,
+      message:
+        'Vui lòng nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.',
+    };
+  }
+
+  notify('Đang kết nối cổng Thu hồi vật tư NextGen…');
+  let bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
+    timeout: 18000,
+  });
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    notify('Đang đồng bộ phiên IAM cho cổng Vật tư…');
+    const warmRes = await warmPortalSession(RECALL_ENDPOINTS.base, {
+      timeout: 12000,
+      force: true,
+    });
+    if (warmRes.ok) {
+      bgRes = await loadAndroidPortalBackground(RECALL_ENDPOINTS.base, {
+        timeout: 18000,
+      });
+    }
+  }
+
+  if (!bgRes.ok) {
+    if (bgRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        contract: requestedContract,
+        loginUrl: RECALL_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      contract: requestedContract,
+      message: 'Không kết nối được cổng Thu hồi vật tư NextGen (kiểm tra VPN / mạng nội bộ).',
+    };
+  }
+
+  notify(`Đang tìm phiếu thu hồi HĐ ${requestedContract}…`);
+  let openedMobileMenu = false;
+  let searchSent = false;
+  const searchDeadline = Date.now() + 8000;
+
+  while (Date.now() < searchDeadline) {
+    const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (stRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        contract: requestedContract,
+        loginUrl: RECALL_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    if (stRes.ok && stRes.value) {
+      const v = stRes.value;
+      if (v.onTicket && v.snapshot && (!v.snapshot.contract || v.snapshot.contract === requestedContract)) {
+        return {
+          status: 'ok',
+          mode: 'live',
+          snapshot: v.snapshot,
+          requestedContract,
+          contractMismatch: false,
+        };
+      }
+      if (!v.hasVisibleSearchInput && v.hasMenuToggle && !openedMobileMenu) {
+        openedMobileMenu = true;
+        await evalRecallDom('window.__riRecallDom.openMobileMenu()');
+        await sleep(320);
+        continue;
+      }
+      if (v.hasVisibleSearchInput || (openedMobileMenu && v.hasAnySearchInput)) {
+        const sCall = await evalRecallDom(
+          `window.__riRecallDom.searchContract(${JSON.stringify(requestedContract)})`
+        );
+        if (sCall.ok && sCall.value && sCall.value.ok) {
+          searchSent = true;
+          break;
+        }
+      }
+    }
+    await sleep(280);
+  }
+
+  if (!searchSent) {
+    return {
+      status: 'error',
+      mode: 'live',
+      contract: requestedContract,
+      message: 'Chưa thấy ô "Nhập số hợp đồng" trên cổng Thu hồi vật tư. Bấm Thử lại sau vài giây.',
+    };
+  }
+
+  notify(`Đang mở chi tiết phiếu thu hồi HĐ ${requestedContract}…`);
+  const ticketDeadline = Date.now() + 14000;
+  while (Date.now() < ticketDeadline) {
+    await sleep(350);
+    const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
+    if (!stRes.ok || !stRes.value) continue;
+    const v = stRes.value;
+    if (
+      v.onTicket &&
+      v.snapshot &&
+      (v.snapshot.contract ||
+        v.snapshot.hasEmptyNotice ||
+        v.snapshot.tickets.length > 0 ||
+        v.snapshot.items.length > 0)
+    ) {
+      await sleep(250);
+      const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+      const finalSnap =
+        (freshSnapRes.ok && freshSnapRes.value) || v.snapshot;
+      if (!finalSnap.contract) {
+        finalSnap.contract = requestedContract;
+      }
+      return {
+        status: 'ok',
+        mode: 'live',
+        snapshot: finalSnap,
+        requestedContract,
+        contractMismatch: false,
+      };
+    }
+    if (
+      !v.onTicket &&
+      v.snackbarText &&
+      /không tìm thấy|không tồn tại|không có hợp đồng|không hợp lệ/i.test(v.snackbarText)
+    ) {
+      return {
+        status: 'error',
+        mode: 'live',
+        contract: requestedContract,
+        message: v.snackbarText,
+      };
+    }
+  }
+
+  return {
+    status: 'error',
+    mode: 'live',
+    contract: requestedContract,
+    message: `Chưa nhận được phản hồi chi tiết phiếu thu hồi cho HĐ ${requestedContract}. Kiểm tra lại Mã HĐ rồi bấm Thử lại.`,
   };
 }
 async function loadRecallTicketContext(rawContractId, ctx = {}) {
@@ -9750,6 +10213,13 @@ async function loadRecallTicketContext(rawContractId, ctx = {}) {
 
   const loc = ctx.pageLocation || null;
   const doc = ctx.pageDocument || null;
+
+  if ((!isRecallPortalLocation(loc) || !doc) && canControlAndroidPortal()) {
+    return loadRecallTicketViaAndroidPortal(requestedContract, {
+      onProgress: ctx.onProgress || null,
+      forceReload: Boolean(ctx.forceReload),
+    });
+  }
 
   if (isRecallTicketLocation(loc) && doc) {
     const snapshot = parseRecallTicketFromDocument(doc, loc);
@@ -9809,6 +10279,22 @@ async function runRecallAction(actionId, rawContractId, ctx = {}) {
     const snap = res.snapshot;
     const ticket = snap.activeTicket || {};
     const contractLabel = snap.contract || normalizeContractId(rawTrimmed) || 'Phiếu đang mở';
+    const hasNoTickets = snap.tickets.length === 0 && snap.items.length === 0;
+
+    if (hasNoTickets) {
+      return {
+        status: 'ok',
+        mode: res.mode,
+        title: `Vật tư thu hồi — ${contractLabel}`,
+        message: `Hợp đồng ${contractLabel} hiện chưa có phiếu thu hồi trên hệ thống NextGen.`,
+        summaryFields: [
+          { label: 'Mã hợp đồng', value: contractLabel },
+          { label: 'Trạng thái phiếu', value: 'Chưa có phiếu thu hồi' },
+        ],
+        snapshot: snap,
+      };
+    }
+
     const summaryFields = [
       { label: 'Mã hợp đồng', value: contractLabel },
       { label: 'Phiếu đang chọn', value: snap.activeTicketTitle || `Phiếu số ${ticket.ticketNumber || '1'}` },
@@ -9833,6 +10319,27 @@ async function runRecallAction(actionId, rawContractId, ctx = {}) {
       message: `Phiếu số ${ticket.ticketNumber || '1'}: ${snap.stats.totalItems} vật tư (${snap.stats.importedCount} đã nhập kho, ${snap.stats.editableCount} sửa được).`,
       summaryFields,
       snapshot: snap,
+    };
+  }
+
+  if (res.status === 'iam_expired') {
+    return {
+      status: 'iam_expired',
+      mode: res.mode || 'live',
+      title: 'Cần đăng nhập IAM cổng Vật tư',
+      message:
+        res.message ||
+        'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Hãy bấm Đăng nhập IAM rồi thử lại.',
+      loginUrl: res.loginUrl || RECALL_ENDPOINTS.base,
+    };
+  }
+
+  if (res.status === 'error' || res.status === 'needs_contract_android') {
+    return {
+      status: res.status === 'needs_contract_android' ? 'validation_error' : 'error',
+      mode: res.mode || 'live',
+      title: 'Không đọc được Phiếu thu hồi',
+      message: res.message || 'Lỗi kết nối cổng Thu hồi vật tư NextGen.',
     };
   }
 
@@ -10060,6 +10567,12 @@ async function selectEquipmentFilterOption(
   }
 
   const { dd, panel: initialPanel } = findEquipmentFilterDropdownAndPanel(doc, fieldKind);
+  if (!dd && canControlAndroidPortal()) {
+    return selectAndroidEquipmentFilterOption(fieldKind, targetText, {
+      waitNextKind,
+      waitTimeoutMs,
+    });
+  }
   if (!dd) {
     return { ok: false, error: `Không tìm thấy ô chọn "${fieldKind}" trên trang Báo cáo nợ.` };
   }
@@ -10820,6 +11333,645 @@ function buildDemoEquipmentDebtDataset() {
     expectedItems: rows.length,
   });
 }
+
+function buildEquipmentPortalBootstrapJs() {
+  const fnSource = [
+    cleanEquipmentText,
+    normalizeEquipmentMatchKey,
+    getEquipmentElText,
+    isEquipmentPortalLocation,
+    parseEquipmentDebtNumber,
+    findEquipmentDebtGrid,
+    findEquipmentTableInGrid,
+    getEquipmentRealBodyRows,
+    findEquipmentReportMenuBtn,
+    findEquipmentFilterField,
+    findEquipmentFilterDropdownAndPanel,
+    readEquipmentFilterState,
+    readEquipmentFilterOptions,
+    parseEquipmentDebtPagerInfo,
+    findEquipmentDebtPageControls,
+    parseEquipmentDebtColumns,
+    parseEquipmentDebtPageRows,
+    isEquipmentPagerDisabled,
+    readEquipmentGridSnapshotState,
+    triggerEquipmentDebtTab,
+    triggerEquipmentDebtViewList,
+  ]
+    .map((fn) => fn.toString())
+    .join('\n');
+
+  return `
+    if (!window.__riEquipDom) {
+      window.__riEquipDom = (function() {
+        var EQUIPMENT_ENDPOINTS = ${JSON.stringify(EQUIPMENT_ENDPOINTS)};
+        ${fnSource}
+        return {
+          inspectState: function() {
+            var ctrls = findEquipmentDebtPageControls(document);
+            var table = ctrls.grid ? findEquipmentTableInGrid(ctrls.grid) : null;
+            var realRows = getEquipmentRealBodyRows(table);
+            var cols = table ? parseEquipmentDebtColumns(table) : { materials: [] };
+            var filterState = readEquipmentFilterState(document);
+            var gridSnap = ctrls.grid ? readEquipmentGridSnapshotState(ctrls.grid) : null;
+            return {
+              href: String(location.href || ''),
+              onEquipPage: isEquipmentPortalLocation(location),
+              hasReportMenuBtn: Boolean(findEquipmentReportMenuBtn(document)),
+              hasDebtTab: ctrls.hasDebtTab,
+              isDebtTabActive: ctrls.isDebtTabActive,
+              hasViewListBtn: Boolean(ctrls.viewListBtn),
+              hasGrid: Boolean(ctrls.grid),
+              realRowCount: realRows.length,
+              materialCount: cols.materials.length,
+              filterState: filterState,
+              gridSnap: gridSnap
+            };
+          },
+          clickReportMenuBtn: function() {
+            var btn = findEquipmentReportMenuBtn(document);
+            if (!btn || typeof btn.click !== 'function') return { ok: false };
+            btn.click();
+            return { ok: true };
+          },
+          clickDebtReportItem: function() {
+            var items = Array.from(document.querySelectorAll('.mud-popover-open .mud-list-item, .mud-list-item, .mud-menu-item'));
+            var item = items.find(function(el) { return /^báo cáo nợ$/i.test(getEquipmentElText(el)); }) || null;
+            if (!item || typeof item.click !== 'function') return { ok: false };
+            item.click();
+            return { ok: true };
+          },
+          clickDebtTab: function() {
+            return triggerEquipmentDebtTab(document);
+          },
+          clickViewList: function() {
+            return triggerEquipmentDebtViewList(document);
+          },
+          readFilterOptions: function(fieldKind) {
+            return readEquipmentFilterOptions(document, fieldKind);
+          },
+          openFilterDropdown: function(fieldKind, clearFirst) {
+            var found = findEquipmentFilterDropdownAndPanel(document, fieldKind);
+            var dd = found.dd;
+            if (!dd) return { ok: false, error: 'Không tìm thấy ô chọn "' + fieldKind + '" trên trang Báo cáo nợ.' };
+            var ddCls = String(dd.className || '');
+            var curText = !/rz-state-empty/i.test(ddCls) ? getEquipmentElText(dd) : '';
+            if (clearFirst && curText) {
+              var clearBtn = typeof dd.querySelector === 'function' ? dd.querySelector('.rz-dropdown-clear-icon') : null;
+              if (clearBtn && typeof clearBtn.click !== 'undefined') clearBtn.click();
+            }
+            if (typeof dd.click === 'function') dd.click();
+            return { ok: true, curText: curText };
+          },
+          pickFilterDropdownItem: function(fieldKind, targetText) {
+            var targetNorm = normalizeEquipmentMatchKey(targetText);
+            var found = findEquipmentFilterDropdownAndPanel(document, fieldKind);
+            var dd = found.dd;
+            var panel = found.panel;
+            if (!panel || typeof panel.querySelectorAll !== 'function') {
+              return { ok: false, itemCount: 0 };
+            }
+            var items = Array.from(panel.querySelectorAll('.rz-dropdown-item, .rz-multiselect-item'));
+            if (items.length === 0) return { ok: false, itemCount: 0 };
+            var match = items.find(function(el) { return normalizeEquipmentMatchKey(getEquipmentElText(el)) === targetNorm; });
+            if (!match) {
+              match = items.find(function(el) { return normalizeEquipmentMatchKey(getEquipmentElText(el)).includes(targetNorm); });
+            }
+            if (!match || typeof match.click !== 'function') {
+              return { ok: false, itemCount: items.length, notFound: true };
+            }
+            var picked = getEquipmentElText(match);
+            match.click();
+            try {
+              if (typeof getComputedStyle === 'function' && panel.offsetParent !== null && getComputedStyle(panel).display !== 'none' && dd && typeof dd.click === 'function') {
+                dd.click();
+              }
+            } catch (e) {}
+            return { ok: true, picked: picked, itemCount: items.length };
+          },
+          bumpMaxPageSize: function() {
+            var grid = findEquipmentDebtGrid(document);
+            if (!grid) return { changed: false, targetSize: 0 };
+            var pagerEl = grid.querySelector('.rz-pager');
+            var dd = pagerEl ? pagerEl.querySelector('.rz-dropdown') : null;
+            if (!dd) return { changed: false, targetSize: 0 };
+            var currentSize = parseEquipmentDebtNumber(getEquipmentElText(dd));
+            var ddId = dd.id || '';
+            var panel = ddId ? (document.getElementById('popup-' + ddId) || document.getElementById('popup' + ddId)) : null;
+            if (!panel) {
+              panel = Array.from(document.querySelectorAll('.rz-dropdown-panel')).find(function(p) {
+                var texts = Array.from(p.querySelectorAll('.rz-dropdown-item')).map(function(x) { return getEquipmentElText(x); });
+                return texts.indexOf('100') >= 0 || texts.indexOf('50') >= 0 || texts.indexOf('25') >= 0;
+              }) || null;
+            }
+            if (!panel) return { changed: false, targetSize: currentSize };
+            var numericItems = Array.from(panel.querySelectorAll('.rz-dropdown-item')).map(function(item) {
+              return { el: item, size: parseEquipmentDebtNumber(getEquipmentElText(item)) };
+            }).filter(function(x) { return x.size > 0; });
+            numericItems.sort(function(a, b) { return b.size - a.size; });
+            var best = numericItems[0];
+            if (!best || best.size <= currentSize || typeof best.el.click !== 'function') {
+              return { changed: false, targetSize: currentSize };
+            }
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            if (typeof dd.click === 'function') dd.click();
+            best.el.click();
+            return { changed: true, targetSize: best.size, prevSnap: prevSnap };
+          },
+          clickFirstPage: function() {
+            var grid = findEquipmentDebtGrid(document);
+            var pagerEl = grid ? grid.querySelector('.rz-pager') : null;
+            var firstBtn = pagerEl ? pagerEl.querySelector('.rz-pager-first') : null;
+            if (!firstBtn || isEquipmentPagerDisabled(firstBtn) || typeof firstBtn.click !== 'function') return { ok: false };
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            firstBtn.click();
+            return { ok: true, prevSnap: prevSnap };
+          },
+          clickNextPage: function() {
+            var grid = findEquipmentDebtGrid(document);
+            var pagerEl = grid ? grid.querySelector('.rz-pager') : null;
+            var nextBtn = pagerEl ? pagerEl.querySelector('.rz-pager-next') : null;
+            if (!nextBtn || isEquipmentPagerDisabled(nextBtn) || typeof nextBtn.click !== 'function') return { ok: false };
+            var prevSnap = readEquipmentGridSnapshotState(grid);
+            nextBtn.click();
+            return { ok: true, prevSnap: prevSnap };
+          },
+          readCurrentPage: function(needColumns) {
+            var grid = findEquipmentDebtGrid(document);
+            if (!grid) return null;
+            var table = findEquipmentTableInGrid(grid);
+            if (!table) return null;
+            var pagerInfo = parseEquipmentDebtPagerInfo(grid);
+            var columnsInfo = parseEquipmentDebtColumns(table);
+            var pageRows = parseEquipmentDebtPageRows(table, columnsInfo);
+            return {
+              pagerInfo: pagerInfo,
+              columnsInfo: needColumns ? columnsInfo : null,
+              pageRows: pageRows
+            };
+          }
+        };
+      })();
+    }
+  `;
+}
+
+async function evalEquipDom(expr) {
+  const boot = buildEquipmentPortalBootstrapJs();
+  return evalAndroidPortalJs(`${boot}\nreturn (${expr});`);
+}
+async function readEquipmentFilterOptionsAsync(doc, fieldKind) {
+  if (doc && findEquipmentFilterDropdownAndPanel(doc, fieldKind).dd) {
+    return readEquipmentFilterOptions(doc, fieldKind);
+  }
+  if (canControlAndroidPortal()) {
+    const r = await evalEquipDom(
+      `window.__riEquipDom.readFilterOptions(${JSON.stringify(fieldKind)})`
+    );
+    if (r.ok && r.value) {
+      return r.value;
+    }
+  }
+  return { current: '', options: [] };
+}
+
+async function selectAndroidEquipmentFilterOption(
+  fieldKind,
+  targetText,
+  { waitNextKind = '', waitTimeoutMs = 5000 } = {}
+) {
+  const targetNorm = normalizeEquipmentMatchKey(targetText);
+  if (!targetNorm) {
+    return { ok: false, error: 'Giá trị bộ lọc cần chọn đang trống.' };
+  }
+
+  const curRes = await evalEquipDom(
+    `window.__riEquipDom.readFilterOptions(${JSON.stringify(fieldKind)})`
+  );
+  const curText = (curRes.ok && curRes.value && curRes.value.current) || '';
+
+  if (curText && normalizeEquipmentMatchKey(curText) === targetNorm) {
+    if (!waitNextKind) {
+      return { ok: true, skipped: true, picked: curText };
+    }
+    const checkNextDeadline = Date.now() + 1200;
+    while (Date.now() < checkNextDeadline) {
+      const nextRes = await evalEquipDom(
+        `window.__riEquipDom.readFilterOptions(${JSON.stringify(waitNextKind)})`
+      );
+      if (nextRes.ok && nextRes.value && Array.isArray(nextRes.value.options) && nextRes.value.options.length > 0) {
+        return { ok: true, skipped: true, picked: curText };
+      }
+      await sleep(160);
+    }
+  }
+
+  const openRes = await evalEquipDom(
+    `window.__riEquipDom.openFilterDropdown(${JSON.stringify(fieldKind)}, true)`
+  );
+  if (!openRes.ok || !openRes.value || !openRes.value.ok) {
+    return {
+      ok: false,
+      error: (openRes.value && openRes.value.error) || `Không mở được danh sách chọn "${fieldKind}".`,
+    };
+  }
+  await sleep(180);
+
+  let picked = '';
+  const pickDeadline = Date.now() + 3000;
+  while (Date.now() < pickDeadline) {
+    const pRes = await evalEquipDom(
+      `window.__riEquipDom.pickFilterDropdownItem(${JSON.stringify(fieldKind)}, ${JSON.stringify(
+        targetText
+      )})`
+    );
+    if (pRes.ok && pRes.value) {
+      if (pRes.value.ok) {
+        picked = pRes.value.picked || targetText;
+        break;
+      }
+      if (pRes.value.notFound && pRes.value.itemCount > 0) {
+        return {
+          ok: false,
+          error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".`,
+        };
+      }
+    }
+    await sleep(160);
+  }
+  if (!picked) {
+    return {
+      ok: false,
+      error: `Không tìm thấy mục "${targetText}" trong danh sách "${fieldKind}".`,
+    };
+  }
+
+  if (waitNextKind) {
+    const nextDeadline = Date.now() + waitTimeoutMs;
+    while (Date.now() < nextDeadline) {
+      await sleep(180);
+      const nextRes = await evalEquipDom(
+        `window.__riEquipDom.readFilterOptions(${JSON.stringify(waitNextKind)})`
+      );
+      if (nextRes.ok && nextRes.value && Array.isArray(nextRes.value.options) && nextRes.value.options.length > 0) {
+        await sleep(150);
+        break;
+      }
+    }
+  }
+
+  return { ok: true, picked };
+}
+
+async function waitForAndroidEquipmentGridChange(
+  prevSnap,
+  { mode = 'page', targetPageSize = 0, timeoutMs = 6500 } = {}
+) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await sleep(180);
+    const stRes = await evalEquipDom('window.__riEquipDom.inspectState()');
+    const next = stRes.ok && stRes.value ? stRes.value.gridSnap : null;
+    if (!next || next.rowCount === 0) continue;
+
+    const isTransientSummary =
+      prevSnap.totalItems > 1 && next.totalItems > 0 && next.totalItems < prevSnap.totalItems;
+    if (isTransientSummary) continue;
+
+    if (mode === 'pagesize') {
+      const expectedRows =
+        targetPageSize > 0 && prevSnap.totalItems > 0
+          ? Math.min(targetPageSize, prevSnap.totalItems)
+          : 0;
+      const pageSizeChanged =
+        expectedRows > prevSnap.rowCount
+          ? next.rowCount >= expectedRows
+          : prevSnap.rowCount === 0
+          ? next.rowCount !== prevSnap.rowCount
+          : next.rowCount > prevSnap.rowCount;
+      if (pageSizeChanged) {
+        await sleep(220);
+        return true;
+      }
+      continue;
+    }
+
+    const contentChanged =
+      next.firstStaff !== prevSnap.firstStaff ||
+      next.lastStaff !== prevSnap.lastStaff ||
+      next.rowCount !== prevSnap.rowCount;
+    if (contentChanged) {
+      await sleep(180);
+      return true;
+    }
+  }
+  return false;
+}
+
+async function loadEquipmentDebtViaAndroidPortal({
+  activeFilter,
+  forceApplyFilter = false,
+  onProgress = null,
+  maxPages = 30,
+  waitMs = 6500,
+} = {}) {
+  const notifyStatus = (text) => {
+    if (typeof onProgress === 'function') {
+      onProgress({ phaseText: text });
+    }
+  };
+
+  notifyStatus('Đang kết nối Quản lý vật tư NextGen…');
+  let bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
+    reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
+    timeout: 18000,
+  });
+  if (!bgRes.ok && bgRes.status === 'needs_login') {
+    notifyStatus('Đang đồng bộ phiên IAM cho Quản lý vật tư…');
+    const warmRes = await warmPortalSession(EQUIPMENT_ENDPOINTS.base, {
+      timeout: 12000,
+      force: true,
+    });
+    if (warmRes.ok) {
+      bgRes = await loadAndroidPortalBackground(EQUIPMENT_ENDPOINTS.base, {
+        reusePrefix: 'https://nextgen.fpt.net/resource/equipment',
+        timeout: 18000,
+      });
+    }
+  }
+  if (!bgRes.ok) {
+    if (bgRes.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Không kết nối được Quản lý vật tư NextGen (kiểm tra VPN / mạng nội bộ).',
+    };
+  }
+
+  let st = null;
+  const readyDeadline = Date.now() + 8500;
+  while (Date.now() < readyDeadline) {
+    const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+    if (r.status === 'needs_login') {
+      return {
+        status: 'iam_expired',
+        mode: 'live',
+        loginUrl: EQUIPMENT_ENDPOINTS.base,
+        message:
+          'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm "Đăng nhập IAM" bên dưới rồi thử lại.',
+      };
+    }
+    if (r.ok && r.value && (r.value.hasDebtTab || r.value.hasReportMenuBtn)) {
+      st = r.value;
+      break;
+    }
+    await sleep(280);
+  }
+  if (!st) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Trang Quản lý vật tư chưa tải xong menu Blazor. Bấm Thử lại sau vài giây.',
+    };
+  }
+
+  if (!st.hasDebtTab) {
+    notifyStatus('Đang tự mở Báo cáo → Báo cáo nợ…');
+    const mBtn = await evalEquipDom('window.__riEquipDom.clickReportMenuBtn()');
+    if (!mBtn.ok || !mBtn.value || !mBtn.value.ok) {
+      return {
+        status: 'error',
+        mode: 'live',
+        message: 'Không tìm thấy menu "Báo cáo" trên Quản lý vật tư.',
+      };
+    }
+    let clickedDebtItem = false;
+    const menuDeadline = Date.now() + 2500;
+    while (Date.now() < menuDeadline) {
+      await sleep(220);
+      const dItem = await evalEquipDom('window.__riEquipDom.clickDebtReportItem()');
+      if (dItem.ok && dItem.value && dItem.value.ok) {
+        clickedDebtItem = true;
+        break;
+      }
+    }
+    if (!clickedDebtItem) {
+      return {
+        status: 'error',
+        mode: 'live',
+        message: 'Không mở được mục "Báo cáo nợ" trong menu Báo cáo.',
+      };
+    }
+
+    const tabOpenDeadline = Date.now() + 6500;
+    while (Date.now() < tabOpenDeadline) {
+      await sleep(250);
+      const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+      if (r.ok && r.value && r.value.hasDebtTab) {
+        st = r.value;
+        break;
+      }
+    }
+  }
+
+  if (!st.hasDebtTab) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Chưa mở được trang Báo cáo nợ trên NextGen.',
+    };
+  }
+
+  if (!st.isDebtTabActive) {
+    notifyStatus('Đang chuyển sang tab Tồn công nợ theo NV…');
+    await evalEquipDom('window.__riEquipDom.clickDebtTab()');
+    await sleep(700);
+    const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+    if (r.ok && r.value) st = r.value;
+  }
+
+  const filterToUse = activeFilter || getEffectiveEquipmentDebtFilter();
+  if (forceApplyFilter || st.realRowCount === 0 || st.materialCount === 0) {
+    const fs = st.filterState || {};
+    if (forceApplyFilter || fs.missingRequired) {
+      notifyStatus('Đang chọn Vùng cố định…');
+      const r1 = await selectAndroidEquipmentFilterOption('region', filterToUse.region, {
+        waitNextKind: 'province',
+      });
+      if (!r1.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r1.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+
+      notifyStatus('Đang chọn Tỉnh thành cố định…');
+      const r2 = await selectAndroidEquipmentFilterOption('province', filterToUse.province, {
+        waitNextKind: 'partner',
+      });
+      if (!r2.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r2.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+
+      notifyStatus('Đang chọn Đối tác cố định…');
+      const r3 = await selectAndroidEquipmentFilterOption('partner', filterToUse.partner);
+      if (!r3.ok) {
+        return {
+          status: 'needs_report_loaded',
+          mode: 'live',
+          hasDebtTab: true,
+          isDebtTabActive: true,
+          hasViewListBtn: true,
+          filterMissing: true,
+          message: `${r3.error} Hãy chọn lại bộ lọc cố định bên dưới.`,
+        };
+      }
+    }
+
+    notifyStatus('Đang bấm "Xem danh sách" & chờ bảng tải…');
+    await evalEquipDom('window.__riEquipDom.clickViewList()');
+    let loaded = false;
+    const loadDeadline = Date.now() + 22000;
+    while (Date.now() < loadDeadline) {
+      await sleep(350);
+      const r = await evalEquipDom('window.__riEquipDom.inspectState()');
+      if (r.ok && r.value && r.value.realRowCount > 0 && r.value.materialCount > 0) {
+        st = r.value;
+        loaded = true;
+        await sleep(200);
+        break;
+      }
+    }
+    if (!loaded) {
+      return {
+        status: 'needs_report_loaded',
+        mode: 'live',
+        hasDebtTab: true,
+        isDebtTabActive: true,
+        hasViewListBtn: true,
+        filterMissing: false,
+        message:
+          'Đã bấm "Xem danh sách" nhưng bảng chưa trả dữ liệu kịp. Bấm Đọc lại dữ liệu để thử tiếp.',
+      };
+    }
+  }
+
+  if (st.gridSnap && st.gridSnap.totalPages > 1) {
+    const bumpRes = await evalEquipDom('window.__riEquipDom.bumpMaxPageSize()');
+    if (bumpRes.ok && bumpRes.value && bumpRes.value.changed && bumpRes.value.prevSnap) {
+      notifyStatus('Đang mở rộng 100 KTV/trang để gom nhanh…');
+      await waitForAndroidEquipmentGridChange(bumpRes.value.prevSnap, {
+        mode: 'pagesize',
+        targetPageSize: bumpRes.value.targetSize || 100,
+        timeoutMs: Math.max(waitMs, 6500),
+      });
+    }
+  }
+
+  const postBump = await evalEquipDom('window.__riEquipDom.inspectState()');
+  if (postBump.ok && postBump.value && postBump.value.gridSnap && postBump.value.gridSnap.currentPage > 1) {
+    const firstRes = await evalEquipDom('window.__riEquipDom.clickFirstPage()');
+    if (firstRes.ok && firstRes.value && firstRes.value.ok && firstRes.value.prevSnap) {
+      await waitForAndroidEquipmentGridChange(firstRes.value.prevSnap, {
+        mode: 'page',
+        timeoutMs: waitMs,
+      });
+    }
+  }
+
+  let columnsInfo = null;
+  let lastPager = { currentPage: 1, totalPages: 1, totalItems: 0 };
+  const staffMap = new Map();
+  let pagesScanned = 0;
+
+  for (let step = 0; step < maxPages; step += 1) {
+    const pageRes = await evalEquipDom(
+      `window.__riEquipDom.readCurrentPage(${columnsInfo ? 'false' : 'true'})`
+    );
+    if (!pageRes.ok || !pageRes.value) break;
+    const { pagerInfo, columnsInfo: cols, pageRows } = pageRes.value;
+    if (!columnsInfo && cols) {
+      columnsInfo = cols;
+    }
+    if (pagerInfo) {
+      lastPager = pagerInfo;
+    }
+    for (const row of pageRows || []) {
+      if (row && row.staff) {
+        staffMap.set(row.staff, row);
+      }
+    }
+    pagesScanned += 1;
+
+    if (typeof onProgress === 'function') {
+      onProgress({
+        currentPage: lastPager.currentPage,
+        totalPages: lastPager.totalPages,
+        collectedStaff: staffMap.size,
+        totalItems: lastPager.totalItems,
+      });
+    }
+
+    if (lastPager.currentPage >= lastPager.totalPages) {
+      break;
+    }
+
+    const nextClick = await evalEquipDom('window.__riEquipDom.clickNextPage()');
+    if (!nextClick.ok || !nextClick.value || !nextClick.value.ok || !nextClick.value.prevSnap) {
+      break;
+    }
+    const changed = await waitForAndroidEquipmentGridChange(nextClick.value.prevSnap, {
+      mode: 'page',
+      timeoutMs: waitMs,
+    });
+    if (!changed) {
+      break;
+    }
+  }
+
+  const finalInspect = await evalEquipDom('window.__riEquipDom.inspectState()');
+  const fsEnd = (finalInspect.ok && finalInspect.value && finalInspect.value.filterState) || {};
+  const currentFilter = {
+    region: fsEnd.region || filterToUse.region,
+    province: fsEnd.province || filterToUse.province,
+    partner: fsEnd.partner || filterToUse.partner,
+  };
+
+  const finalMaterials = (columnsInfo && columnsInfo.materials) || [];
+  const dataset = buildEquipmentDebtDataset(finalMaterials, Array.from(staffMap.values()), {
+    pagesScanned,
+    totalPages: lastPager.totalPages,
+    expectedItems: lastPager.totalItems,
+  });
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    dataset,
+    currentFilter,
+  };
+}
 async function loadEquipmentDebtContext(ctx = {}) {
   if (!isUserscriptEnv() || ctx.forceDemo) {
     return {
@@ -10831,6 +11983,16 @@ async function loadEquipmentDebtContext(ctx = {}) {
 
   const loc = ctx.pageLocation || null;
   const doc = ctx.pageDocument || null;
+
+  if ((!isEquipmentPortalLocation(loc) || !doc) && canControlAndroidPortal()) {
+    return loadEquipmentDebtViaAndroidPortal({
+      activeFilter: ctx.activeFilter || getEffectiveEquipmentDebtFilter(),
+      forceApplyFilter: Boolean(ctx.forceApplyFilter),
+      onProgress: ctx.onProgress || null,
+      maxPages: ctx.maxPages || 30,
+      waitMs: ctx.waitMs || 6500,
+    });
+  }
 
   if (!isEquipmentPortalLocation(loc) || !doc) {
     return {
@@ -11317,7 +12479,9 @@ function mountRemoteInside({
     deployBusyAction: '',
     deployArmedAction: '',
     recallLoading: false,
+    recallProgress: '',
     recallError: '',
+    recallLoginUrl: '',
     recallStatus: '',
     recallMode: '',
     recallNotice: '',
@@ -11331,6 +12495,7 @@ function mountRemoteInside({
     equipDebtLoading: false,
     equipDebtProgress: '',
     equipDebtError: '',
+    equipDebtLoginUrl: '',
     equipDebtStatus: '',
     equipDebtMode: '',
     equipDebtNotice: '',
@@ -11636,7 +12801,9 @@ function mountRemoteInside({
 
   function resetRecallModalState() {
     state.recallLoading = false;
+    state.recallProgress = '';
     state.recallError = '';
+    state.recallLoginUrl = '';
     state.recallStatus = '';
     state.recallMode = '';
     state.recallNotice = '';
@@ -11653,6 +12820,7 @@ function mountRemoteInside({
     state.equipDebtLoading = false;
     state.equipDebtProgress = '';
     state.equipDebtError = '';
+    state.equipDebtLoginUrl = '';
     state.equipDebtStatus = '';
     state.equipDebtMode = '';
     state.equipDebtNotice = '';
@@ -12968,9 +14136,14 @@ function mountRemoteInside({
     renderConfirm();
   }
 
-  async function loadRecallModal(rawContractId = state.contractInput, { clearNotice = false } = {}) {
+  async function loadRecallModal(
+    rawContractId = state.contractInput,
+    { clearNotice = false, forceReload = false } = {}
+  ) {
     state.recallLoading = true;
+    state.recallProgress = 'Đang đọc danh sách vật tư thu hồi…';
     state.recallError = '';
+    state.recallLoginUrl = '';
     if (clearNotice) {
       state.recallNotice = '';
       state.recallNoticeTone = 'info';
@@ -12982,16 +14155,38 @@ function mountRemoteInside({
       const res = await loadRecallTicketContext(cleanId, {
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
+        forceReload,
+        onProgress: (msg) => {
+          if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') return;
+          if (msg && msg !== state.recallProgress) {
+            state.recallProgress = msg;
+            renderConfirm();
+          }
+        },
       });
       if (!state.confirmAction || state.confirmAction.id !== 'manage_recall') {
         return;
       }
       state.recallLoading = false;
+      state.recallProgress = '';
       state.recallStatus = res.status || 'needs_recall_page';
       state.recallMode = res.mode || 'live';
       state.recallSnapshot = res.snapshot || null;
       state.recallContractMismatch = Boolean(res.contractMismatch);
-      if (res.status === 'ok' && res.snapshot && res.snapshot.contract && !state.contractInput) {
+      if (res.status === 'error') {
+        state.recallError = res.message || 'Không đọc được dữ liệu phiếu thu hồi.';
+      } else if (res.status === 'iam_expired') {
+        state.recallLoginUrl = res.loginUrl || RECALL_ENDPOINTS.base;
+        state.recallNotice =
+          res.message ||
+          'Phiên đăng nhập IAM trên NextGen Vật tư đã hết hạn. Bấm "Đăng nhập IAM" rồi thử lại.';
+        state.recallNoticeTone = 'warn';
+      } else if (res.status === 'needs_contract_android') {
+        state.recallNotice =
+          res.message ||
+          'Vui lòng nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.';
+        state.recallNoticeTone = 'warn';
+      } else if (res.status === 'ok' && res.snapshot && res.snapshot.contract && !state.contractInput) {
         state.contractInput = res.snapshot.contract;
         setState(STORAGE_KEYS.LAST_CONTRACT, res.snapshot.contract);
         renderMain();
@@ -13001,15 +14196,22 @@ function mountRemoteInside({
         return;
       }
       state.recallLoading = false;
+      state.recallProgress = '';
       state.recallError = err && err.message ? err.message : 'Lỗi đọc dữ liệu phiếu thu hồi.';
     }
     renderConfirm();
   }
 
   function collapseForRecallDialog(actionLabel) {
+    state.recallArmedCreate = false;
+    if (canControlAndroidPortal() && showAndroidPortalOverlay(actionLabel)) {
+      state.recallNotice = `Đã mở "${actionLabel}" trên trang NextGen. Lưu xong bạn bấm nút "Xong" ở góc phải trên để quay lại & tự làm mới.`;
+      state.recallNoticeTone = 'info';
+      renderConfirm();
+      return;
+    }
     state.recallReturnPending = true;
     state.recallReturnLabel = actionLabel;
-    state.recallArmedCreate = false;
     state.recallNotice = `Đã mở "${actionLabel}" trên trang gốc. Xong việc bấm nút nổi để quay lại & làm mới.`;
     state.recallNoticeTone = 'info';
     state.isOpen = false;
@@ -13053,11 +14255,10 @@ function mountRemoteInside({
     );
   }
 
-  function syncEquipDebtDraftFromPage() {
-    if (!pageDocument) return;
-    const rInfo = readEquipmentFilterOptions(pageDocument, 'region');
-    const pInfo = readEquipmentFilterOptions(pageDocument, 'province');
-    const prInfo = readEquipmentFilterOptions(pageDocument, 'partner');
+  async function syncEquipDebtDraftFromPage() {
+    const rInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'region');
+    const pInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'province');
+    const prInfo = await readEquipmentFilterOptionsAsync(pageDocument, 'partner');
     const activeFilter = getEffectiveEquipmentDebtFilter();
     state.equipDebtSavedFilter = activeFilter;
     state.equipDebtRegionOpts = rInfo.options || [];
@@ -13077,13 +14278,18 @@ function mountRemoteInside({
     );
   }
 
-  async function loadEquipmentDebtModal({ allowAutoSetup = true, autoDepth = 0 } = {}) {
+  async function loadEquipmentDebtModal({
+    allowAutoSetup = true,
+    autoDepth = 0,
+    forceApplyFilter = false,
+  } = {}) {
     const customSavedFilter = getEquipmentDebtFilter();
     const activeFilter = getEffectiveEquipmentDebtFilter();
     state.equipDebtSavedFilter = activeFilter;
     state.equipDebtLoading = true;
     state.equipDebtProgress = 'Đang đọc bảng Tồn công nợ theo NV…';
     state.equipDebtError = '';
+    state.equipDebtLoginUrl = '';
     state.equipDebtNotice = '';
     renderConfirm();
 
@@ -13099,7 +14305,13 @@ function mountRemoteInside({
       const res = await loadEquipmentDebtContext({
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
+        activeFilter,
+        forceApplyFilter,
         onProgress: (p) => {
+          if (p && p.phaseText) {
+            setModalProgress(p.phaseText);
+            return;
+          }
           const nextMsg = `Đang gom trang ${p.currentPage}/${p.totalPages} (${p.collectedStaff}${
             p.totalItems ? `/${p.totalItems}` : ''
           } KTV)…`;
@@ -13116,8 +14328,16 @@ function mountRemoteInside({
       state.equipDebtHasReportMenu = Boolean(res.hasReportMenuBtn);
       state.equipDebtFilterMissing = Boolean(res.filterMissing);
 
+      const useInPageAutoSetup = !canControlAndroidPortal();
+
       // Tu dong dieu huong & nap du lieu theo bo loc co dinh (neu chua bi chan boi depth)
-      if (res.status === 'needs_report_loaded' && allowAutoSetup && autoDepth < 3 && pageDocument) {
+      if (
+        res.status === 'needs_report_loaded' &&
+        useInPageAutoSetup &&
+        allowAutoSetup &&
+        autoDepth < 3 &&
+        pageDocument
+      ) {
         if (!res.hasDebtTab && res.hasReportMenuBtn) {
           setModalProgress('Đang tự mở Báo cáo → Báo cáo nợ…');
           const mRes = await triggerEquipmentOpenDebtReportMenu(pageDocument);
@@ -13147,7 +14367,7 @@ function mountRemoteInside({
               state.equipDebtStatus = 'needs_report_loaded';
               state.equipDebtNotice = `${applyRes.error} Hãy chọn lại bộ lọc cố định bên dưới.`;
               state.equipDebtNoticeTone = 'warn';
-              syncEquipDebtDraftFromPage();
+              await syncEquipDebtDraftFromPage();
               state.equipDebtFilterEditOpen = true;
               renderConfirm();
               return;
@@ -13170,7 +14390,8 @@ function mountRemoteInside({
       state.equipDebtProgress = '';
       state.equipDebtStatus = res.status || 'needs_equipment_page';
       state.equipDebtMode = res.mode || 'live';
-      state.equipDebtError = '';
+      state.equipDebtError = res.status === 'error' ? res.message || 'Lỗi đọc báo cáo tồn nợ.' : '';
+      state.equipDebtLoginUrl = res.loginUrl || '';
 
       if (res.status === 'ok' && res.dataset) {
         if (
@@ -13209,9 +14430,9 @@ function mountRemoteInside({
       } else {
         state.equipDebtDataset = null;
         if (res.status === 'needs_report_loaded' && res.hasDebtTab) {
-          syncEquipDebtDraftFromPage();
+          await syncEquipDebtDraftFromPage();
         }
-        if (res.status !== 'ok' && res.message) {
+        if (res.status !== 'ok' && res.status !== 'error' && res.message) {
           state.equipDebtNotice = res.message;
           state.equipDebtNoticeTone = 'warn';
         }
@@ -17511,7 +18732,7 @@ function mountRemoteInside({
         sheetParts.push(
           el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
             el('span', { className: 'ri-spinner' }),
-            el('span', { text: 'Đang đọc danh sách vật tư thu hồi…' }),
+            el('span', { text: state.recallProgress || 'Đang đọc danh sách vật tư thu hồi…' }),
           ])
         );
       } else if (state.recallError) {
@@ -17521,9 +18742,62 @@ function mountRemoteInside({
             el('div', { className: 'ri-result-actions' }, [
               el('button', {
                 type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Thử lại',
+                onClick: () => loadRecallModal(contractId, { forceReload: true }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Mở trang Thu hồi gốc',
+                onClick: () => openRecallPortalWithContract(contractId),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus === 'iam_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.recallNotice ||
+                'Phiên đăng nhập IAM trên cổng Vật tư NextGen đã hết hạn. Bấm Đăng nhập IAM bên dưới rồi thử lại.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Đăng nhập IAM',
+                onClick: () =>
+                  openExternalOrPortalUrl(state.recallLoginUrl || RECALL_ENDPOINTS.base, {
+                    mode: 'login',
+                    title: 'Đăng nhập Vật tư NextGen',
+                    pageWindow,
+                  }),
+              }),
+              el('button', {
+                type: 'button',
                 className: 'ri-secondary-btn',
                 text: 'Thử lại',
-                onClick: () => loadRecallModal(contractId),
+                onClick: () => loadRecallModal(contractId, { forceReload: true }),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.recallStatus === 'needs_contract_android') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.recallNotice ||
+                'Hãy nhập Mã hợp đồng ở màn hình chính trước khi mở Phiếu thu hồi vật tư.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Mở trang Thu hồi NextGen',
+                onClick: () => openRecallPortalWithContract(''),
               }),
             ]),
           ])
@@ -17639,7 +18913,37 @@ function mountRemoteInside({
                   type: 'button',
                   className: 'ri-primary-btn',
                   text: `Tìm ${contractId} trên NextGen`,
-                  onClick: () => openRecallPortalWithContract(contractId),
+                  onClick: () => {
+                    if (canControlAndroidPortal()) {
+                      loadRecallModal(contractId, { clearNotice: true, forceReload: true });
+                      return;
+                    }
+                    openRecallPortalWithContract(contractId);
+                  },
+                }),
+              ]),
+            ])
+          );
+        }
+
+        if (tickets.length === 0 && items.length === 0) {
+          sheetParts.push(
+            el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+              el('div', {
+                text: `Hợp đồng ${snap.contract || contractId || ''} hiện chưa có phiếu thu hồi trên hệ thống NextGen.`,
+              }),
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  text: 'Xem trên trang NextGen',
+                  onClick: () => {
+                    if (canControlAndroidPortal()) {
+                      showAndroidPortalOverlay(`Phiếu thu hồi ${snap.contract || contractId || ''}`);
+                      return;
+                    }
+                    openRecallPortalWithContract(contractId);
+                  },
                 }),
               ]),
             ])
@@ -17670,7 +18974,7 @@ function mountRemoteInside({
                 type: 'button',
                 className: 'ri-danger-btn',
                 text: 'Xác nhận tạo phiếu (+)',
-                onClick: () => {
+                onClick: async () => {
                   state.recallArmedCreate = false;
                   if (isDemo) {
                     const nextNum = String(tickets.length + 1);
@@ -17696,7 +19000,7 @@ function mountRemoteInside({
                     renderConfirm();
                     return;
                   }
-                  const cRes = triggerRecallCreateTicket(pageDocument);
+                  const cRes = await triggerRecallPortalAction('create_ticket', {}, pageDocument);
                   if (!cRes.ok) {
                     state.recallNotice = cRes.error;
                     state.recallNoticeTone = 'error';
@@ -17734,14 +19038,14 @@ function mountRemoteInside({
                 className: 'ri-primary-btn',
                 disabled: !isDemo && !snap.canAddEquipment,
                 text: '+ Thêm thiết bị',
-                onClick: () => {
+                onClick: async () => {
                   if (isDemo) {
                     state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
                     state.recallNoticeTone = 'ok';
                     renderConfirm();
                     return;
                   }
-                  const aRes = triggerRecallAddEquipment(pageDocument);
+                  const aRes = await triggerRecallPortalAction('add_equipment', {}, pageDocument);
                   if (!aRes.ok) {
                     state.recallNotice = aRes.error;
                     state.recallNoticeTone = 'error';
@@ -17789,7 +19093,7 @@ function mountRemoteInside({
                     {
                       type: 'button',
                       className: `ri-box-item${t.isSelected ? ' is-selected' : ''}`,
-                      onClick: () => {
+                      onClick: async () => {
                         if (t.isSelected) return;
                         if (isDemo) {
                           snap.tickets = tickets.map((item) => ({
@@ -17803,7 +19107,11 @@ function mountRemoteInside({
                           renderConfirm();
                           return;
                         }
-                        const swRes = triggerRecallSelectTicket(pageDocument, t.index);
+                        const swRes = await triggerRecallPortalAction(
+                          'select_ticket',
+                          { ticketIndex: t.index },
+                          pageDocument
+                        );
                         if (!swRes.ok) {
                           state.recallNotice = swRes.error;
                           state.recallNoticeTone = 'error';
@@ -17892,14 +19200,18 @@ function mountRemoteInside({
                           type: 'button',
                           className: 'ri-primary-btn',
                           text: 'Sửa vật tư',
-                          onClick: () => {
+                          onClick: async () => {
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
                               state.recallNoticeTone = 'ok';
                               renderConfirm();
                               return;
                             }
-                            const eRes = triggerRecallEditEquipment(pageDocument, item.rowIndex);
+                            const eRes = await triggerRecallPortalAction(
+                              'edit_equipment',
+                              { rowIndex: item.rowIndex },
+                              pageDocument
+                            );
                             if (!eRes.ok) {
                               state.recallNotice = eRes.error;
                               state.recallNoticeTone = 'error';
@@ -17918,14 +19230,18 @@ function mountRemoteInside({
                           type: 'button',
                           className: 'ri-secondary-btn',
                           text: '+ TB phụ',
-                          onClick: () => {
+                          onClick: async () => {
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm "+ Thêm thiết bị phụ" cho "${item.name}".`;
                               state.recallNoticeTone = 'ok';
                               renderConfirm();
                               return;
                             }
-                            const subRes = triggerRecallAddAccessory(pageDocument, item.rowIndex);
+                            const subRes = await triggerRecallPortalAction(
+                              'add_accessory',
+                              { rowIndex: item.rowIndex },
+                              pageDocument
+                            );
                             if (!subRes.ok) {
                               state.recallNotice = subRes.error;
                               state.recallNoticeTone = 'error';
@@ -18017,7 +19333,7 @@ function mountRemoteInside({
                 className: 'ri-primary-btn',
                 disabled: !isDemo && !snap.canAddNote,
                 text: 'Gửi ghi chú',
-                onClick: () => {
+                onClick: async () => {
                   const text = String(state.recallNoteInput || '').trim();
                   if (!text) {
                     state.recallNotice = 'Vui lòng nhập nội dung ghi chú trước khi gửi.';
@@ -18033,7 +19349,11 @@ function mountRemoteInside({
                     renderConfirm();
                     return;
                   }
-                  const nRes = triggerRecallSubmitNote(pageDocument, text);
+                  const nRes = await triggerRecallPortalAction(
+                    'submit_note',
+                    { note: text },
+                    pageDocument
+                  );
                   if (!nRes.ok) {
                     state.recallNotice = nRes.error;
                     state.recallNoticeTone = 'error';
@@ -18093,7 +19413,7 @@ function mountRemoteInside({
           state.equipDebtDraftPartner = '';
           state.equipDebtProvinceOpts = [];
           state.equipDebtPartnerOpts = [];
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -18103,7 +19423,9 @@ function mountRemoteInside({
             waitNextKind: 'province',
           });
           if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-          state.equipDebtProvinceOpts = readEquipmentFilterOptions(pageDocument, 'province').options;
+          state.equipDebtProvinceOpts = (
+            await readEquipmentFilterOptionsAsync(pageDocument, 'province')
+          ).options;
           state.equipDebtFilterBusy = false;
           renderConfirm();
         });
@@ -18137,7 +19459,7 @@ function mountRemoteInside({
           state.equipDebtDraftProvince = val;
           state.equipDebtDraftPartner = '';
           state.equipDebtPartnerOpts = [];
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -18147,7 +19469,9 @@ function mountRemoteInside({
             waitNextKind: 'partner',
           });
           if (!state.confirmAction || state.confirmAction.id !== 'equipment_debt') return;
-          state.equipDebtPartnerOpts = readEquipmentFilterOptions(pageDocument, 'partner').options;
+          state.equipDebtPartnerOpts = (
+            await readEquipmentFilterOptionsAsync(pageDocument, 'partner')
+          ).options;
           state.equipDebtFilterBusy = false;
           renderConfirm();
         });
@@ -18179,7 +19503,7 @@ function mountRemoteInside({
         partnerSel.addEventListener('change', async (e) => {
           const val = e.target.value;
           state.equipDebtDraftPartner = val;
-          if (!val || !pageDocument) {
+          if (!val || (!pageDocument && !canControlAndroidPortal())) {
             renderConfirm();
             return;
           }
@@ -18210,6 +19534,10 @@ function mountRemoteInside({
               setEquipmentDebtFilter(nextFilter);
               state.equipDebtSavedFilter = nextFilter;
               state.equipDebtFilterEditOpen = false;
+              if (canControlAndroidPortal()) {
+                loadEquipmentDebtModal({ allowAutoSetup: true, forceApplyFilter: true });
+                return;
+              }
               state.equipDebtLoading = true;
               state.equipDebtProgress = 'Đang áp dụng bộ lọc cố định & tải dữ liệu…';
               renderConfirm();
@@ -18307,6 +19635,35 @@ function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Thử lại',
                 onClick: () => loadEquipmentDebtModal(),
+              }),
+            ]),
+          ])
+        );
+      } else if (state.equipDebtStatus === 'iam_expired') {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'warn', 'aria-live': 'polite' }, [
+            el('div', {
+              text:
+                state.equipDebtNotice ||
+                'Phiên đăng nhập IAM trên Quản lý vật tư đã hết hạn. Bấm Đăng nhập IAM bên dưới rồi thử lại.',
+            }),
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                text: 'Đăng nhập IAM',
+                onClick: () =>
+                  openExternalOrPortalUrl(state.equipDebtLoginUrl || EQUIPMENT_ENDPOINTS.base, {
+                    mode: 'login',
+                    title: 'Đăng nhập Quản lý vật tư',
+                    pageWindow,
+                  }),
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-secondary-btn',
+                text: 'Thử lại',
+                onClick: () => loadEquipmentDebtModal({ allowAutoSetup: true }),
               }),
             ]),
           ])
@@ -18509,12 +19866,16 @@ function mountRemoteInside({
               title: state.equipDebtSavedFilter
                 ? `Đang cố định: ${state.equipDebtSavedFilter.region} • ${state.equipDebtSavedFilter.partner}`
                 : 'Chọn hoặc đổi bộ lọc cố định',
-              onClick: () => {
-                if (!state.equipDebtFilterEditOpen) {
-                  syncEquipDebtDraftFromPage();
-                }
-                state.equipDebtFilterEditOpen = !state.equipDebtFilterEditOpen;
+              onClick: async () => {
+                const opening = !state.equipDebtFilterEditOpen;
+                state.equipDebtFilterEditOpen = opening;
                 renderConfirm();
+                if (opening) {
+                  await syncEquipDebtDraftFromPage();
+                  if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+                    renderConfirm();
+                  }
+                }
               },
             })
           );
@@ -19979,11 +21340,19 @@ function mountRemoteInside({
         const recallSearchTimer = setInterval(() => {
           recallSearchAttempts += 1;
           const ctrls = findRecallSearchControls(pageDocument);
-          if (ctrls.input) {
+          const inputVisible =
+            ctrls.input &&
+            (ctrls.input.offsetParent === undefined || ctrls.input.offsetParent !== null);
+          if (inputVisible || (ctrls.input && recallSearchAttempts >= 4)) {
             clearInterval(recallSearchTimer);
             const sRes = triggerRecallSearchOnPage(pageDocument, pendingRecallContract);
             if (sRes.ok) {
               addLog('Vật tư', 'Tự tìm phiếu thu hồi', pendingRecallContract, 'ok');
+            }
+          } else if (recallSearchAttempts === 2) {
+            const toggleBtn = findRecallMobileMenuToggle(pageDocument);
+            if (toggleBtn && typeof toggleBtn.click === 'function') {
+              toggleBtn.click();
             }
           } else if (recallSearchAttempts >= 20) {
             clearInterval(recallSearchTimer);
@@ -20002,6 +21371,11 @@ function mountRemoteInside({
         return;
       }
       refreshSessionStatus();
+      if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+        loadRecallModal(state.contractInput);
+      } else if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+        loadEquipmentDebtModal({ allowAutoSetup: true });
+      }
     };
     window.__riHandleBack = () => {
       if (state.confirmAction) {

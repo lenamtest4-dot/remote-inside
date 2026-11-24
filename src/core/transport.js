@@ -120,13 +120,20 @@ function ensureNativePendingBridge() {
         return;
       }
 
-      if (entry.kind === 'warm' || typeof parsed.status === 'string') {
+      if (
+        entry.kind === 'warm' ||
+        entry.kind === 'portal_bg' ||
+        entry.kind === 'portal_eval' ||
+        typeof parsed.status === 'string'
+      ) {
         entry.resolve({
           ok: Boolean(parsed.ok),
           mode: 'android',
           status: typeof parsed.status === 'string' ? parsed.status : parsed.ok ? 'ok' : 'error',
           finalUrl: String(parsed.finalUrl || entry.url || ''),
           sawAuth: Boolean(parsed.sawAuth),
+          reused: Boolean(parsed.reused),
+          value: parsed.value !== undefined ? parsed.value : null,
           error: parsed.error ? String(parsed.error) : undefined,
         });
         return;
@@ -231,6 +238,136 @@ export function canWarmPortalSession() {
     Boolean(window.RemoteInsideNative) &&
     typeof window.RemoteInsideNative.warmPortalSession === 'function'
   );
+}
+
+export function canControlAndroidPortal() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window !== 'undefined' &&
+    Boolean(window.RemoteInsideNative) &&
+    typeof window.RemoteInsideNative.loadPortalBackground === 'function' &&
+    typeof window.RemoteInsideNative.evalPortalJs === 'function'
+  );
+}
+
+export function showAndroidPortalOverlay(title = '') {
+  if (
+    !isAndroidAppEnv() ||
+    typeof window === 'undefined' ||
+    !window.RemoteInsideNative ||
+    typeof window.RemoteInsideNative.showPortalOverlay !== 'function'
+  ) {
+    return false;
+  }
+  try {
+    window.RemoteInsideNative.showPortalOverlay(String(title || ''));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function loadAndroidPortalBackground(
+  url,
+  { reusePrefix = '', timeout = 18000 } = {}
+) {
+  if (!url || typeof url !== 'string') {
+    return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: '' });
+  }
+  if (!canControlAndroidPortal()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', finalUrl: url });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_pbg_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(3000, Math.min(30000, Number(timeout) || 18000));
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      resolve({ ok: false, status: 'timeout', finalUrl: url });
+    }, numericTimeout + 4000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'portal_bg',
+      resolve,
+      timer,
+      url,
+    });
+
+    try {
+      window.RemoteInsideNative.loadPortalBackground(
+        JSON.stringify({
+          reqId,
+          url,
+          reusePrefix: String(reusePrefix || ''),
+          timeout: numericTimeout,
+        })
+      );
+    } catch (err) {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        status: 'error',
+        finalUrl: url,
+        error: err && err.message ? err.message : 'PORTAL_BG_FAILED',
+      });
+    }
+  });
+}
+
+export function evalAndroidPortalJs(script, { timeout = 8000 } = {}) {
+  if (!script || typeof script !== 'string') {
+    return Promise.resolve({ ok: false, status: 'empty_script', value: null });
+  }
+  if (!canControlAndroidPortal()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', value: null });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_peval_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1000, Math.min(20000, Number(timeout) || 8000));
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      resolve({ ok: false, status: 'timeout', value: null });
+    }, numericTimeout + 2000);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'portal_eval',
+      resolve,
+      timer,
+      url: '',
+    });
+
+    try {
+      window.RemoteInsideNative.evalPortalJs(
+        JSON.stringify({
+          reqId,
+          script,
+        })
+      );
+    } catch (err) {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve({
+        ok: false,
+        status: 'error',
+        value: null,
+        error: err && err.message ? err.message : 'PORTAL_EVAL_FAILED',
+      });
+    }
+  });
 }
 
 export function clearWarmSessionCache() {

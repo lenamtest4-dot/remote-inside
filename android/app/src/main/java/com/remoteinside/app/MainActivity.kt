@@ -83,6 +83,12 @@ class MainActivity : AppCompatActivity() {
     private var portalLoginSawAuthHost: Boolean = false
     private var portalAutoCloseRunnable: Runnable? = null
 
+    private var activePortalBgTask: SsoWarmupTask? = null
+    private var activePortalBgSawAuth: Boolean = false
+    private var activePortalBgLastUrl: String = ""
+    private var portalBgSettleRunnable: Runnable? = null
+    private var portalBgTimeoutRunnable: Runnable? = null
+
     @Volatile
     private var webViewUserAgent: String = ""
 
@@ -222,7 +228,9 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
                 val transport = resultMsg?.obj as? WebView.WebViewTransport ?: return false
-                val tempWebView = WebView(this@MainActivity)
+                val tempWebView = WebView(this@MainActivity).apply {
+                    settings.javaScriptEnabled = true
+                }
                 var forwarded = false
                 fun forwardAndDestroy(target: String?) {
                     if (forwarded) return
@@ -275,8 +283,16 @@ class MainActivity : AppCompatActivity() {
                 tvPortalUrl.text = url.orEmpty()
                 portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
                 portalAutoCloseRunnable = null
-                if (portalLoginActive && isAuthUrl(url)) {
+                if (isAuthUrl(url)) {
                     portalLoginSawAuthHost = true
+                }
+                if (!url.isNullOrBlank() && url != "about:blank" && activePortalBgTask != null) {
+                    portalBgSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                    portalBgSettleRunnable = null
+                    activePortalBgLastUrl = url
+                    if (isAuthUrl(url)) {
+                        activePortalBgSawAuth = true
+                    }
                 }
             }
 
@@ -309,6 +325,82 @@ class MainActivity : AppCompatActivity() {
                     portalAutoCloseRunnable = autoClose
                     mainHandler.postDelayed(autoClose, 900L)
                 }
+
+                val bgTask = activePortalBgTask
+                if (bgTask != null && !url.isNullOrBlank() && url != "about:blank") {
+                    activePortalBgLastUrl = url
+                    portalBgSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                    portalBgSettleRunnable = null
+                    val bgReqId = bgTask.reqId
+                    if (isAuthUrl(url)) {
+                        activePortalBgSawAuth = true
+                        val runnable = Runnable {
+                            val current = activePortalBgTask ?: return@Runnable
+                            if (current.reqId != bgReqId) return@Runnable
+                            finishPortalBgTask(
+                                ok = false,
+                                status = "needs_login",
+                                finalUrl = activePortalBgLastUrl.ifBlank { current.url }
+                            )
+                        }
+                        portalBgSettleRunnable = runnable
+                        mainHandler.postDelayed(runnable, 2200L)
+                    } else if (isTargetPortalUrl(url, bgTask.targetHost)) {
+                        val runnable = Runnable {
+                            val current = activePortalBgTask ?: return@Runnable
+                            if (current.reqId != bgReqId) return@Runnable
+                            val checkJs = """
+                                (function() {
+                                  var pwd = !!document.querySelector('input[type="password"]');
+                                  var title = String(document.title || '');
+                                  var hasFrameset = !!document.querySelector('frameset');
+                                  return JSON.stringify({
+                                    href: String(location.href || ''),
+                                    hasPwd: pwd,
+                                    title: title,
+                                    hasFrameset: hasFrameset
+                                  });
+                                })();
+                            """.trimIndent()
+                            portalWebView.evaluateJavascript(checkJs) { jsResult ->
+                                val stillCurrent = activePortalBgTask ?: return@evaluateJavascript
+                                if (stillCurrent.reqId != bgReqId) return@evaluateJavascript
+                                val rawStr = runCatching {
+                                    JSONTokener(jsResult ?: "null").nextValue() as? String
+                                }.getOrNull()
+                                val meta = runCatching {
+                                    if (!rawStr.isNullOrBlank()) JSONObject(rawStr) else null
+                                }.getOrNull()
+                                val domHref = meta?.optString("href", "").orEmpty()
+                                val effectiveUrl = domHref.ifBlank { activePortalBgLastUrl.ifBlank { url } }
+                                val hasPwd = meta?.optBoolean("hasPwd", false) ?: false
+                                val pageTitle = meta?.optString("title", "").orEmpty()
+                                val hasFrameset = meta?.optBoolean("hasFrameset", false) ?: false
+                                val hasLoginTitle =
+                                    !hasFrameset && SSO_LOGIN_TITLE_RE.containsMatchIn(pageTitle)
+
+                                if (!hasPwd &&
+                                    !hasLoginTitle &&
+                                    isTargetPortalUrl(effectiveUrl, stillCurrent.targetHost)
+                                ) {
+                                    finishPortalBgTask(
+                                        ok = true,
+                                        status = "ok",
+                                        finalUrl = effectiveUrl
+                                    )
+                                } else {
+                                    finishPortalBgTask(
+                                        ok = false,
+                                        status = "needs_login",
+                                        finalUrl = effectiveUrl
+                                    )
+                                }
+                            }
+                        }
+                        portalBgSettleRunnable = runnable
+                        mainHandler.postDelayed(runnable, 700L)
+                    }
+                }
             }
 
             override fun onReceivedSslError(
@@ -317,11 +409,34 @@ class MainActivity : AppCompatActivity() {
                 error: SslError?
             ) {
                 handler?.cancel()
-                Toast.makeText(
-                    this@MainActivity,
-                    "Cảnh báo: Chứng chỉ SSL trang không hợp lệ.",
-                    Toast.LENGTH_LONG
-                ).show()
+                if (activePortalBgTask != null) {
+                    finishPortalBgTask(
+                        ok = false,
+                        status = "ssl_error",
+                        finalUrl = activePortalBgLastUrl
+                    )
+                }
+                if (portalOverlay.visibility == View.VISIBLE) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "Cảnh báo: Chứng chỉ SSL trang không hợp lệ.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                if (request?.isForMainFrame == true && activePortalBgTask != null) {
+                    finishPortalBgTask(
+                        ok = false,
+                        status = "network_error",
+                        finalUrl = activePortalBgLastUrl
+                    )
+                }
             }
         }
     }
@@ -531,6 +646,31 @@ class MainActivity : AppCompatActivity() {
         startNextSsoTask()
     }
 
+    private fun finishPortalBgTask(
+        ok: Boolean,
+        status: String,
+        finalUrl: String,
+        reused: Boolean = false
+    ) {
+        val task = activePortalBgTask ?: return
+        activePortalBgTask = null
+        portalBgSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+        portalBgSettleRunnable = null
+        portalBgTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+        portalBgTimeoutRunnable = null
+        runCatching { CookieManager.getInstance().flush() }
+        deliverBridgeResponse(
+            task.reqId,
+            JSONObject().apply {
+                put("ok", ok)
+                put("status", status)
+                put("finalUrl", finalUrl.ifBlank { task.url })
+                put("sawAuth", activePortalBgSawAuth)
+                put("reused", reused)
+            }
+        )
+    }
+
     private fun setupOverlayButtons() {
         btnPortalBack.setOnClickListener {
             val curUrl = portalWebView.url.orEmpty()
@@ -545,7 +685,10 @@ class MainActivity : AppCompatActivity() {
         btnPortalDone.setOnClickListener {
             val curUrl = portalWebView.url.orEmpty()
             val curHost = runCatching { Uri.parse(curUrl).host }.getOrNull().orEmpty()
-            val loggedIn = isAllowedPortalHost(curHost) && !isAuthUrl(curUrl)
+            val loggedIn =
+                (portalLoginActive || portalLoginSawAuthHost) &&
+                    isAllowedPortalHost(curHost) &&
+                    !isAuthUrl(curUrl)
             closePortalOverlay(completedHost = curHost, loginCompleted = loggedIn)
         }
         btnPortalReload.setOnClickListener {
@@ -600,6 +743,9 @@ class MainActivity : AppCompatActivity() {
             if (isDestroyed || isFinishing) {
                 return@runOnUiThread
             }
+            if (activePortalBgTask != null) {
+                finishPortalBgTask(ok = false, status = "superseded", finalUrl = url)
+            }
             portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
             portalAutoCloseRunnable = null
             portalLoginActive = (mode == "login")
@@ -614,6 +760,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showPortalOverlayInternal(title: String) {
+        runOnUiThread {
+            if (isDestroyed || isFinishing) {
+                return@runOnUiThread
+            }
+            portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+            portalAutoCloseRunnable = null
+            portalLoginActive = false
+            portalLoginSawAuthHost = false
+            val currentTitle = portalWebView.title?.trim().orEmpty()
+            tvPortalTitle.text = when {
+                title.isNotBlank() -> title
+                currentTitle.isNotEmpty() -> currentTitle
+                else -> "Trang nội bộ FPT"
+            }
+            tvPortalUrl.text = portalWebView.url.orEmpty()
+            portalProgress.visibility = View.GONE
+            portalOverlay.visibility = View.VISIBLE
+        }
+    }
+
     private fun closePortalOverlay(completedHost: String = "", loginCompleted: Boolean = false) {
         portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
         portalAutoCloseRunnable = null
@@ -623,7 +790,7 @@ class MainActivity : AppCompatActivity() {
         if (portalOverlay.visibility != View.VISIBLE) {
             return
         }
-        portalOverlay.visibility = View.GONE
+        portalOverlay.visibility = View.INVISIBLE
         CookieManager.getInstance().flush()
         consoleWebView.evaluateJavascript(
             "window.__riOnPortalBrowserClosed && window.__riOnPortalBrowserClosed(${JSONObject.quote(completedHost)}, ${if (loginCompleted) "true" else "false"});",
@@ -635,6 +802,7 @@ class MainActivity : AppCompatActivity() {
         mainHandler.removeCallbacksAndMessages(null)
         ssoQueue.clear()
         activeSsoTask = null
+        activePortalBgTask = null
         httpExecutor.shutdownNow()
         pendingResponses.clear()
         runCatching {
@@ -957,6 +1125,176 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun openPortal(url: String, mode: String, title: String) {
             openPortalOverlay(url, mode, title)
+        }
+
+        @JavascriptInterface
+        fun showPortalOverlay(title: String) {
+            showPortalOverlayInternal(title)
+        }
+
+        @JavascriptInterface
+        fun loadPortalBackground(payloadJson: String) {
+            val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val reqId = payload.optString("reqId", "")
+            val url = payload.optString("url", "")
+            val reusePrefix = payload.optString("reusePrefix", "").trim()
+            val timeoutMs = payload.optInt("timeout", 18000).coerceIn(3000, 30000)
+            if (reqId.isBlank()) return
+
+            val uri = runCatching { Uri.parse(url) }.getOrNull()
+            val scheme = uri?.scheme?.lowercase(Locale.US).orEmpty()
+            val host = uri?.host?.trim()?.lowercase(Locale.US).orEmpty()
+            if (uri == null ||
+                (scheme != "http" && scheme != "https") ||
+                !isAllowedPortalHost(host) ||
+                isAuthHost(host)
+            ) {
+                deliverBridgeResponse(
+                    reqId,
+                    JSONObject().apply {
+                        put("ok", false)
+                        put("status", "invalid_url")
+                        put("finalUrl", url)
+                    }
+                )
+                return
+            }
+
+            runOnUiThread {
+                if (isDestroyed || isFinishing) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "destroyed")
+                            put("finalUrl", url)
+                        }
+                    )
+                    return@runOnUiThread
+                }
+
+                val curUrl = portalWebView.url.orEmpty()
+                if (reusePrefix.isNotEmpty() &&
+                    activePortalBgTask == null &&
+                    curUrl.startsWith(reusePrefix, ignoreCase = true) &&
+                    !isAuthUrl(curUrl)
+                ) {
+                    runCatching { CookieManager.getInstance().flush() }
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", true)
+                            put("status", "ok")
+                            put("finalUrl", curUrl)
+                            put("sawAuth", false)
+                            put("reused", true)
+                        }
+                    )
+                    return@runOnUiThread
+                }
+
+                if (activePortalBgTask != null) {
+                    finishPortalBgTask(ok = false, status = "superseded", finalUrl = curUrl)
+                }
+
+                if (portalOverlay.visibility != View.VISIBLE) {
+                    portalOverlay.visibility = View.INVISIBLE
+                }
+
+                val task = SsoWarmupTask(reqId, url, host, timeoutMs)
+                activePortalBgTask = task
+                activePortalBgSawAuth = false
+                activePortalBgLastUrl = url
+                portalBgSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                portalBgSettleRunnable = null
+                portalBgTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+
+                val timeoutTask = Runnable {
+                    val current = activePortalBgTask ?: return@Runnable
+                    if (current.reqId != reqId) return@Runnable
+                    val fallbackStatus = if (activePortalBgSawAuth || isAuthUrl(activePortalBgLastUrl)) {
+                        "needs_login"
+                    } else {
+                        "timeout"
+                    }
+                    finishPortalBgTask(
+                        ok = false,
+                        status = fallbackStatus,
+                        finalUrl = activePortalBgLastUrl.ifBlank { current.url }
+                    )
+                }
+                portalBgTimeoutRunnable = timeoutTask
+                mainHandler.postDelayed(timeoutTask, timeoutMs.toLong())
+                portalWebView.loadUrl(url)
+            }
+        }
+
+        @JavascriptInterface
+        fun evalPortalJs(payloadJson: String) {
+            val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val reqId = payload.optString("reqId", "")
+            val script = payload.optString("script", "")
+            if (reqId.isBlank()) return
+
+            runOnUiThread {
+                if (isDestroyed || isFinishing) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "destroyed")
+                            put("finalUrl", "")
+                        }
+                    )
+                    return@runOnUiThread
+                }
+
+                val curUrl = portalWebView.url.orEmpty()
+                val curHost = runCatching { Uri.parse(curUrl).host }.getOrNull().orEmpty()
+                if (curUrl.isBlank() || curUrl == "about:blank" || !isAllowedPortalHost(curHost)) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "no_portal")
+                            put("finalUrl", curUrl)
+                        }
+                    )
+                    return@runOnUiThread
+                }
+
+                if (isAuthUrl(curUrl)) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "needs_login")
+                            put("finalUrl", curUrl)
+                        }
+                    )
+                    return@runOnUiThread
+                }
+
+                val wrappedScript =
+                    "(function(){try{var __fn=function(){\n" +
+                        script +
+                        "\n};var __val=__fn();return JSON.stringify({ok:true,status:\"ok\",finalUrl:String(location.href||\"\"),value:__val===undefined?null:__val});}catch(__err){return JSON.stringify({ok:false,status:\"js_error\",finalUrl:String(location.href||\"\"),error:String(__err&&__err.message?__err.message:__err)});}})();"
+
+                portalWebView.evaluateJavascript(wrappedScript) { jsResult ->
+                    val rawStr = runCatching {
+                        JSONTokener(jsResult ?: "null").nextValue() as? String
+                    }.getOrNull()
+                    val parsedObj = runCatching {
+                        if (!rawStr.isNullOrBlank()) JSONObject(rawStr) else null
+                    }.getOrNull()
+                    val out = parsedObj ?: JSONObject().apply {
+                        put("ok", false)
+                        put("status", "eval_null")
+                        put("finalUrl", portalWebView.url.orEmpty())
+                    }
+                    deliverBridgeResponse(reqId, out)
+                }
+            }
         }
 
         @JavascriptInterface

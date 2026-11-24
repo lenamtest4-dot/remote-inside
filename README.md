@@ -1,10 +1,10 @@
-# Remote Inside (v0.14.0)
+# Remote Inside (v0.14.2)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
 
 - **Inside** (`inside.fpt.net` / `fox-erp.fpt.net`) — *Đã ghép đủ 7 lệnh*: Tra thông tin HĐ, **Phiếu triển khai FOX-ERP** (Xem phiếu, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User & Sửa SĐT CMR, Biên bản ĐT, Cập nhật Online), ByPass (CheckList ByPass), Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port)
 - **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
-- **Vật tư** (`nextgen.fpt.net/resource/recall` & `/resource/equipment`) — *Thu hồi & Tồn nợ*: Phiếu thu hồi vật tư NextGen (thêm/sửa thiết bị, tạo phiếu `+`, ghi chú) và Tra cứu tồn nợ vật tư theo KTV (Báo cáo nợ)
+- **Vật tư** (`nextgen.fpt.net/resource/recall` & `/resource/equipment`) — *Thu hồi & Tồn nợ*: Phiếu thu hồi vật tư NextGen (thêm/sửa thiết bị, tạo phiếu `+`, ghi chú) và Tra cứu tồn nợ vật tư theo KTV (Báo cáo nợ); trên App Android chạy qua WebView nền và tự cấp lại `SessionCode` từ Fox-ERP khi cần
 - **Radius** (`radius-portal.fpt.net`) — *Đã ghép IPNAT & IPv6*: Tra cứu thông số kết nối, chỉnh Tình trạng NAT (`Default NAT` / `Khách hàng dùng Camera` / `ByPass NAT`), chỉnh IPv6 (`Deactivate` / `Active` / `Rule`) kèm ghi chú không dấu & Kill Session
 - **Camera** (`fli-mngt.fcam.vn`) — Kiểm tra lỗi, Khởi động lại Camera *(đang chờ quét ghép tiếp)*
 
@@ -15,7 +15,7 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.14.0.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.14.2.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.

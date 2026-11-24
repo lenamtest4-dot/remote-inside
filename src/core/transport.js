@@ -494,6 +494,7 @@ export async function triggerFoxErpPushUserSession(appCode, bearerToken = '', fe
     await doFetch(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`, {
       method: 'POST',
       credentials: 'include',
+      keepalive: true,
       headers,
       body: JSON.stringify({ appCode: cleanCode }),
     });
@@ -558,6 +559,7 @@ export async function bootstrapNextGenViaFoxErpAndroid(
         fetch(${JSON.stringify(`${FOX_ERP_HOME_URL}gateway/center/UserSession/PushUserSession`)}, {
           method: 'POST',
           credentials: 'include',
+          keepalive: true,
           headers: hdrs,
           body: JSON.stringify({ appCode: ${JSON.stringify(app.appCode)} })
         }).catch(function() {});
@@ -589,6 +591,7 @@ export async function bootstrapNextGenViaFoxErpAndroid(
   }
 
   notify('Đang mở lại NextGen bằng phiên vừa cấp…');
+  await sleep(300);
   const nextRes = await loadAndroidPortalBackground(launchInfo.url, { timeout: 20000 });
   return nextRes;
 }

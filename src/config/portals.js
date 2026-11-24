@@ -6,7 +6,7 @@ export const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 
 export const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
-  { id: 'partner', portalId: 'inside', label: 'Partner', url: 'https://partner.fpt.net/monitor' },
+  { id: 'partner', portalId: 'inside', label: 'Partner', url: 'http://partner.fpt.net/pt-portal/monitor' },
   { id: 'fox_erp', portalId: 'inside', label: 'FOX-ERP', url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket' },
   { id: 'port', portalId: 'port', label: 'Port (FTTH NEW)', url: 'http://port.fpt.net/' },
   { id: 'recall', portalId: 'recall', label: 'Vật tư', url: 'https://nextgen.fpt.net/resource/recall' },

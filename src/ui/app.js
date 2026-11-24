@@ -4264,16 +4264,20 @@ export function mountRemoteInside({
       }
     }
     if (res.status === 'needs_scan') {
+      if (!isAndroidAppEnv()) {
+        extraBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Mở Quét cấu trúc',
+            onClick: () => {
+              state.scannerOpen = true;
+              renderScanner();
+            },
+          })
+        );
+      }
       extraBtns.push(
-        el('button', {
-          type: 'button',
-          className: 'ri-secondary-btn',
-          text: 'Mở Quét cấu trúc',
-          onClick: () => {
-            state.scannerOpen = true;
-            renderScanner();
-          },
-        }),
         el('button', {
           type: 'button',
           className: 'ri-secondary-btn',
@@ -10073,15 +10077,21 @@ export function mountRemoteInside({
             : '';
         if (targetKey) {
           let foxAttempts = 0;
-          const foxTimer = setInterval(() => {
+          let foxHandled = false;
+          const foxTimer = setInterval(async () => {
+            if (foxHandled) return;
             foxAttempts += 1;
             const launch = buildFoxErpNextGenLaunchUrlFromStorage(
               targetKey,
               pageWindow.localStorage
             );
             if (launch.ok && launch.url) {
+              foxHandled = true;
               clearInterval(foxTimer);
-              triggerFoxErpPushUserSession(launch.appCode, launch.bearerToken);
+              await Promise.race([
+                triggerFoxErpPushUserSession(launch.appCode, launch.bearerToken),
+                new Promise((r) => setTimeout(r, 800)),
+              ]);
               pageWindow.location.href = launch.url;
             } else if (foxAttempts >= 25) {
               clearInterval(foxTimer);

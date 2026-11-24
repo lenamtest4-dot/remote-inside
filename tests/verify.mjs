@@ -2705,6 +2705,11 @@ async function runTests() {
   assert.equal(PORTALS.camera.iamSso, false);
   assert.equal(IAM_SSO_TARGETS.length, 6);
   assert.equal(
+    IAM_SSO_TARGETS.find((t) => t.id === 'partner').url,
+    DEPLOYMENT_ENDPOINTS.partnerMonitor,
+    'IAM_SSO_TARGETS partner URL must match DEPLOYMENT_ENDPOINTS.partnerMonitor'
+  );
+  assert.equal(
     IAM_SSO_TARGETS.some((t) => t.portalId === 'camera' || /fcam\.vn/.test(t.url)),
     false,
     'IAM_SSO_TARGETS must exclude Camera portal'
@@ -4616,6 +4621,20 @@ async function runTests() {
     forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
     false,
     'Built equipment debt bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  const transportSourceText = fs.readFileSync(
+    path.join(ROOT_DIR, 'src', 'core', 'transport.js'),
+    'utf8'
+  );
+  assert.ok(
+    /PushUserSession[\s\S]{0,220}keepalive:\s*true/.test(transportSourceText),
+    'src/core/transport.js must use keepalive: true for Fox-ERP PushUserSession requests'
+  );
+  assert.ok(
+    /if\s*\(\s*res\.status\s*===\s*'needs_scan'\s*\)\s*\{\s*if\s*\(\s*!isAndroidAppEnv\(\)\s*\)[\s\S]{0,220}Mở Quét cấu trúc/.test(
+      appSourceText
+    ),
+    'src/ui/app.js must guard Mở Quét cấu trúc button on needs_scan with !isAndroidAppEnv()'
   );
   console.log('   OK: Quản lý vật tư — Tồn công nợ theo NV tests passed.');
 

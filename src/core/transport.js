@@ -4,7 +4,7 @@
  * Khi mo file preview.html doc lap, tu dong chay che do xem thu (Demo).
  */
 
-import { IAM_SSO_TARGETS } from '../config/portals.js';
+import { IAM_SSO_TARGETS, PORTALS } from '../config/portals.js';
 
 const IAM_HOST_RE = /(iam|sso|login|auth|signin|oauth|cas)/i;
 const LOGIN_PASSWORD_INPUT_RE = /<input[^>]+type\s*=\s*["']?password["']?/i;
@@ -693,8 +693,10 @@ export function canClearPortalHostCookies() {
 export function clearPortalHostCookies(
   hosts,
   {
-    clearSharedPrefixes = ['MVCPORT_', 'PORT_'],
+    clearSharedPrefixes = [],
+    clearSharedNames = [],
     clearIamAuthTemp = true,
+    clearIamIdentity = false,
     clearCache = true,
     timeout = 5000,
   } = {}
@@ -747,8 +749,12 @@ export function clearPortalHostCookies(
           hosts: normalizedHosts,
           clearSharedPrefixes: Array.isArray(clearSharedPrefixes)
             ? clearSharedPrefixes
-            : ['MVCPORT_', 'PORT_'],
+            : [],
+          clearSharedNames: Array.isArray(clearSharedNames)
+            ? clearSharedNames
+            : [],
           clearIamAuthTemp: Boolean(clearIamAuthTemp),
+          clearIamIdentity: Boolean(clearIamIdentity),
           clearCache: Boolean(clearCache),
         })
       );
@@ -759,6 +765,43 @@ export function clearPortalHostCookies(
       clearTimeout(timer);
       settle({ ok: false, status: 'error', value: 0 });
     }
+  });
+}
+
+export function clearPortalSessionCookies(
+  portalId,
+  {
+    clearIamAuthTemp = true,
+    clearIamIdentity = false,
+    clearCache = true,
+    timeout = 5000,
+  } = {}
+) {
+  const key = String(portalId || '').trim().toLowerCase();
+  const portal = key ? PORTALS[key] : null;
+  if (!portal) {
+    return Promise.resolve({ ok: false, status: 'invalid_portal', value: 0 });
+  }
+  const sessionReset = portal.sessionReset || {};
+  const hosts =
+    clearIamIdentity &&
+    Array.isArray(sessionReset.switchAccountHosts) &&
+    sessionReset.switchAccountHosts.length > 0
+      ? sessionReset.switchAccountHosts
+      : Array.isArray(sessionReset.hosts) && sessionReset.hosts.length > 0
+        ? sessionReset.hosts
+        : portal.hosts || [];
+  return clearPortalHostCookies(hosts, {
+    clearSharedPrefixes: Array.isArray(sessionReset.sharedPrefixes)
+      ? sessionReset.sharedPrefixes
+      : [],
+    clearSharedNames: Array.isArray(sessionReset.sharedNames)
+      ? sessionReset.sharedNames
+      : [],
+    clearIamAuthTemp,
+    clearIamIdentity,
+    clearCache,
+    timeout,
   });
 }
 

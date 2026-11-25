@@ -995,18 +995,41 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             return
         }
 
-        let rawPrefixes = payload["clearSharedPrefixes"] as? [Any]
-        let sharedPrefixes: [String] = rawPrefixes?
-            .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            ?? ["MVCPORT_", "PORT_"]
+        let includesPort = allowedHosts.contains {
+            $0 == "port.fpt.net" || $0 == "mvcport.fpt.net"
+        }
+        let sharedPrefixes: [String]
+        if let rawPrefixes = payload["clearSharedPrefixes"] as? [Any] {
+            sharedPrefixes = rawPrefixes
+                .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        } else {
+            sharedPrefixes = includesPort ? ["MVCPORT_", "PORT_"] : []
+        }
+
+        let sharedNames: [String]
+        if let rawNames = payload["clearSharedNames"] as? [Any] {
+            sharedNames = rawNames
+                .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        } else {
+            sharedNames = includesPort ? [".ASPXAUTH"] : []
+        }
+
         let clearIamAuthTemp = (payload["clearIamAuthTemp"] as? Bool) ?? true
+        let clearIamIdentity = (payload["clearIamIdentity"] as? Bool) ?? false
         let clearCache = (payload["clearCache"] as? Bool) ?? true
         let iamTempCookieNames: Set<String> = [
             "AUTH_SESSION_ID",
             "AUTH_SESSION_ID_LEGACY",
             "KC_RESTART",
             "KEYCLOAK_LOCALE"
+        ]
+        let iamIdentityCookieNames: Set<String> = [
+            "KEYCLOAK_IDENTITY",
+            "KEYCLOAK_IDENTITY_LEGACY",
+            "KEYCLOAK_SESSION",
+            "KEYCLOAK_SESSION_LEGACY"
         ]
 
         func matchesTargetCookie(_ cookie: HTTPCookie) -> Bool {
@@ -1022,12 +1045,30 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                 let matchesPrefix = sharedPrefixes.contains { prefix in
                     cName.range(of: prefix, options: [.anchored, .caseInsensitive]) != nil
                 }
-                if matchesPrefix || cName.caseInsensitiveCompare(".ASPXAUTH") == .orderedSame {
+                let matchesName = sharedNames.contains { shared in
+                    cName.caseInsensitiveCompare(shared) == .orderedSame
+                }
+                if matchesPrefix || matchesName {
                     return true
                 }
             }
-            if clearIamAuthTemp && dom == "iam.fpt.net" {
-                return iamTempCookieNames.contains(cookie.name)
+            if dom == "iam.fpt.net" {
+                if clearIamIdentity {
+                    let knownIamCookies = iamTempCookieNames.union(iamIdentityCookieNames)
+                    return knownIamCookies.contains(cookie.name) || !cookie.name.isEmpty
+                }
+                if clearIamAuthTemp {
+                    return iamTempCookieNames.contains(cookie.name)
+                }
+                return false
+            }
+            if clearIamIdentity && (
+                dom == "login.microsoftonline.com" ||
+                dom.hasSuffix(".login.microsoftonline.com") ||
+                dom == "login.microsoft.com" ||
+                dom == "login.live.com"
+            ) {
+                return true
             }
             return false
         }
@@ -1063,23 +1104,28 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                     finish()
                     return
                 }
-                let cacheTypes: Set<String> = [
+                let httpCacheTypes: Set<String> = [
                     WKWebsiteDataTypeDiskCache,
                     WKWebsiteDataTypeMemoryCache,
-                    WKWebsiteDataTypeOfflineWebApplicationCache,
-                    WKWebsiteDataTypeLocalStorage,
-                    WKWebsiteDataTypeSessionStorage
+                    WKWebsiteDataTypeOfflineWebApplicationCache
                 ]
-                self.dataStore.fetchDataRecords(ofTypes: cacheTypes) { records in
+                let matchesFptDomain = allowedHosts.contains { $0.hasSuffix(".fpt.net") }
+                self.dataStore.fetchDataRecords(ofTypes: httpCacheTypes) { records in
                     let hostRecords = records.filter { record in
                         let name = record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
                         guard name != "console" else { return false }
-                        return allowedHosts.contains(where: { name == $0 || name.hasSuffix(".\($0)") })
+                        if allowedHosts.contains(where: { name == $0 || name.hasSuffix(".\($0)") }) {
+                            return true
+                        }
+                        if matchesFptDomain && name == "fpt.net" {
+                            return true
+                        }
+                        return false
                     }
                     if hostRecords.isEmpty {
                         finish()
                     } else {
-                        self.dataStore.removeData(ofTypes: cacheTypes, for: hostRecords) {
+                        self.dataStore.removeData(ofTypes: httpCacheTypes, for: hostRecords) {
                             finish()
                         }
                     }

@@ -6,6 +6,7 @@
 import { PORTALS, validateContractId } from '../config/portals.js';
 import {
   canWarmPortalSession,
+  clearPortalSessionCookies,
   isAndroidAppEnv,
   isUserscriptEnv,
   requestPortal,
@@ -587,6 +588,10 @@ async function requestRadiusApi(url, { method = 'POST', body = null, ctx = {}, a
     const missingTokenOr401 =
       res.status === 401 || res.error === 'RADIUS_TOKEN_MISSING';
     if (missingTokenOr401 && allowWarmRetry && canWarmPortalSession()) {
+      await clearPortalSessionCookies('radius', {
+        clearIamAuthTemp: true,
+        clearCache: true,
+      });
       const warmRes = await warmPortalSession(RADIUS_ENDPOINTS.PORTAL_URL, {
         force: true,
         timeout: 15000,

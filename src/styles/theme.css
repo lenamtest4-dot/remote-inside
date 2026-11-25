@@ -410,6 +410,14 @@
   border-style: solid;
 }
 
+.ri-tab.is-locked,
+.ri-tab:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+  background: var(--bg-subtle);
+  border-style: dashed;
+}
+
 .ri-tab-sep {
   width: 1px;
   align-self: stretch;
@@ -600,8 +608,13 @@
   gap: 6px;
 }
 
-.ri-secondary-btn:hover {
+.ri-secondary-btn:hover:not(:disabled) {
   background: var(--bg-subtle);
+}
+
+.ri-secondary-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
 }
 
 /* Khung ket qua tra ve */
@@ -1467,6 +1480,28 @@
   color: var(--ink-secondary);
   padding: 6px 2px;
   user-select: none;
+}
+
+.ri-menu-switch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink-primary);
+  cursor: pointer;
+}
+
+.ri-menu-switch-toggle input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex-shrink: 0;
+  accent-color: var(--accent-signal);
 }
 
 .ri-privacy-note {

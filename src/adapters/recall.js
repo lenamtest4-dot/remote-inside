@@ -11,6 +11,7 @@ import {
   FOX_ERP_HOME_URL,
   bootstrapNextGenViaFoxErpAndroid,
   canControlAndroidPortal,
+  clearPortalSessionCookies,
   evalAndroidPortalJs,
   isNextGenSessionExpiredDocument,
   isUserscriptEnv,
@@ -1648,7 +1649,11 @@ async function loadRecallTicketViaAndroidPortal(
     timeout: 18000,
   });
   if (!bgRes.ok && bgRes.status === 'needs_login') {
-    notify('Đang đồng bộ phiên IAM cho cổng Vật tư…');
+    notify('Đang làm sạch phiên cũ & đồng bộ IAM cho cổng Vật tư…');
+    await clearPortalSessionCookies('recall', {
+      clearIamAuthTemp: true,
+      clearCache: true,
+    });
     const warmRes = await warmPortalSession(RECALL_ENDPOINTS.base, {
       timeout: 12000,
       force: true,

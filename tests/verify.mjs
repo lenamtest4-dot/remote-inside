@@ -8,6 +8,7 @@ import {
   IAM_SSO_TARGETS,
   PORTALS,
   PORTAL_ORDER,
+  isPortalLocked,
   normalizeContractId,
   validateContractId,
 } from '../src/config/portals.js';
@@ -38,6 +39,7 @@ import {
   canWarmPortalSession,
   checkPortalSession,
   clearPortalHostCookies,
+  clearPortalSessionCookies,
   clearWarmSessionCache,
   detectIamRedirect,
   evalAndroidPortalJs,
@@ -377,6 +379,26 @@ async function runTests() {
       );
     }
   }
+  assert.equal(PORTALS.camera.locked, true, 'Camera portal must be locked until live data exists');
+  assert.equal(isPortalLocked('camera'), true);
+  assert.equal(isPortalLocked(PORTALS.camera), true);
+  for (const unlockedPid of ['inside', 'port', 'recall', 'radius']) {
+    assert.equal(isPortalLocked(unlockedPid), false, `${unlockedPid} must not be locked`);
+    assert.ok(
+      PORTALS[unlockedPid].sessionReset &&
+        Array.isArray(PORTALS[unlockedPid].sessionReset.hosts) &&
+        PORTALS[unlockedPid].sessionReset.hosts.length > 0,
+      `${unlockedPid} must define sessionReset.hosts`
+    );
+  }
+  assert.deepEqual(PORTALS.inside.sessionReset.sharedNames, []);
+  assert.deepEqual(PORTALS.port.sessionReset.sharedNames, ['.ASPXAUTH']);
+  assert.deepEqual(PORTALS.radius.sessionReset.sharedPrefixes, ['accesstoken_iam_radius']);
+  assert.deepEqual(PORTALS.radius.sessionReset.sharedNames, []);
+  assert.ok(
+    PORTALS.recall.sessionReset.switchAccountHosts.includes('fox-erp.fpt.net'),
+    'recall switchAccountHosts must include fox-erp.fpt.net for SessionCode handoff'
+  );
   assert.equal(PORTALS.inside.actions[0].id, 'lookup');
   assert.equal(PORTALS.inside.actions[1].id, 'deploy_ticket');
   assert.equal(PORTALS.inside.status, 'priority');
@@ -1906,7 +1928,32 @@ async function runTests() {
       assert.equal(clearCalls14.length, 1, 'bootstrapMvcPortSession must wipe Port cookies before OIDC warmup');
       assert.deepEqual(clearCalls14[0].hosts, ['port.fpt.net', 'mvcport.fpt.net']);
       assert.deepEqual(clearCalls14[0].clearSharedPrefixes, ['MVCPORT_', 'PORT_']);
+      assert.deepEqual(clearCalls14[0].clearSharedNames, ['.ASPXAUTH']);
       assert.equal(clearCalls14[0].clearIamAuthTemp, true);
+      assert.equal(clearCalls14[0].clearIamIdentity, false);
+
+      clearCalls14.length = 0;
+      await clearPortalSessionCookies('inside', { clearIamIdentity: true });
+      await clearPortalSessionCookies('recall', { clearIamIdentity: false });
+      await clearPortalSessionCookies('recall', { clearIamIdentity: true });
+      await clearPortalSessionCookies('radius', { clearIamIdentity: true });
+      assert.equal(clearCalls14.length, 4);
+      assert.deepEqual(clearCalls14[0].hosts, [
+        'inside.fpt.net',
+        'mvc.inside.fpt.net',
+        'fox-erp.fpt.net',
+        'partner.fpt.net',
+      ]);
+      assert.deepEqual(clearCalls14[0].clearSharedNames, []);
+      assert.equal(clearCalls14[0].clearIamIdentity, true);
+      assert.deepEqual(clearCalls14[1].hosts, ['nextgen.fpt.net']);
+      assert.equal(clearCalls14[1].clearIamIdentity, false);
+      assert.deepEqual(clearCalls14[2].hosts, ['nextgen.fpt.net', 'fox-erp.fpt.net']);
+      assert.equal(clearCalls14[2].clearIamIdentity, true);
+      assert.deepEqual(clearCalls14[3].hosts, ['radius-portal.fpt.net']);
+      assert.deepEqual(clearCalls14[3].clearSharedPrefixes, ['accesstoken_iam_radius']);
+      assert.deepEqual(clearCalls14[3].clearSharedNames, []);
+      assert.equal(clearCalls14[3].clearIamIdentity, true);
 
       const leftMenuCall = httpCalls14.find((c) => c.url.includes('LeftMenu.aspx'));
       assert.ok(leftMenuCall, 'fetchTokenFromPortIndex must always hydrate LeftMenu.aspx');
@@ -2296,6 +2343,10 @@ async function runTests() {
     'MVCPORT_TOKEN_PROD',
     'AUTH_SESSION_ID',
     'KC_RESTART',
+    'KEYCLOAK_IDENTITY',
+    'login.microsoftonline.com',
+    'clearSharedNames',
+    'clearIamIdentity',
     'matchesSharedPrefix',
     '1400L else 900L',
   ]) {
@@ -5204,10 +5255,21 @@ async function runTests() {
     let currentIpv6Note = 'Bat IPv6 cho KH';
     const seenPayloads22 = [];
     const warmUrls22 = [];
+    const clearCalls22 = [];
 
     globalThis.window = {
       RemoteInsideNative: {
         openPortal: () => {},
+        clearPortalCookies: (raw) => {
+          const parsed = JSON.parse(raw || '{}');
+          clearCalls22.push(parsed);
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', value: 3 })
+            );
+          });
+        },
         warmPortalSession: (raw) => {
           const { reqId, url } = JSON.parse(raw);
           warmUrls22.push(url);
@@ -5303,6 +5365,10 @@ async function runTests() {
     assert.equal(liveLookup.status, 'ok');
     assert.equal(liveLookup.mode, 'live');
     assert.equal(liveLookup.record.objID, 9012345);
+    assert.equal(clearCalls22.length, 1, 'Radius 401 must clear radius cookies before warmup');
+    assert.deepEqual(clearCalls22[0].hosts, ['radius-portal.fpt.net']);
+    assert.deepEqual(clearCalls22[0].clearSharedPrefixes, ['accesstoken_iam_radius']);
+    assert.equal(clearCalls22[0].clearIamAuthTemp, true);
     assert.deepEqual(warmUrls22, [RADIUS_ENDPOINTS.PORTAL_URL]);
     assert.equal(seenPayloads22.every((p) => p.useRadiusBearer === true), true);
 
@@ -6485,6 +6551,10 @@ async function runTests() {
     'clearSessionCookies',
     'AUTH_SESSION_ID',
     'KC_RESTART',
+    'KEYCLOAK_IDENTITY',
+    'login.microsoftonline.com',
+    'clearSharedNames',
+    'clearIamIdentity',
     '1.4 : 0.9',
     'evalPortalJs',
     'loadPortalBackground',
@@ -6496,6 +6566,25 @@ async function runTests() {
   ]) {
     assert.ok(combinedSwift.includes(iosToken), `iOS Swift codebase must include ${iosToken}`);
   }
+  const iosMvcSrc = fs.readFileSync(path.join(swiftSourcesDir, 'MainViewController.swift'), 'utf8');
+  const clearPortalStart = iosMvcSrc.indexOf('private func handleClearPortalCookies');
+  const clearPortalEnd = iosMvcSrc.indexOf('private func handleClearSessionCookies');
+  assert.ok(
+    clearPortalStart > 0 && clearPortalEnd > clearPortalStart,
+    'MainViewController.swift must define handleClearPortalCookies before handleClearSessionCookies'
+  );
+  const clearPortalBody = iosMvcSrc.slice(clearPortalStart, clearPortalEnd);
+  assert.ok(
+    clearPortalBody.includes('httpCacheTypes') &&
+      clearPortalBody.includes('WKWebsiteDataTypeDiskCache'),
+    'handleClearPortalCookies must clear HTTP disk/memory cache only'
+  );
+  assert.equal(
+    clearPortalBody.includes('WKWebsiteDataTypeLocalStorage') ||
+      clearPortalBody.includes('WKWebsiteDataTypeSessionStorage'),
+    false,
+    'handleClearPortalCookies on iOS must NOT include WKWebsiteDataTypeLocalStorage/SessionStorage'
+  );
   assert.equal(
     forbiddenDemoDataRe.test(combinedSwift) || forbiddenDemoDataRe.test(iosAssetContent),
     false,
@@ -6506,9 +6595,18 @@ async function runTests() {
     userscriptContent.includes('@grant        GM.xmlHttpRequest'),
     'Userscript header must declare GM.xmlHttpRequest for Safari iOS compatibility'
   );
-  for (const token of ['isIosAppEnv', 'readNativeClipboardAsync', '-webkit-touch-callout']) {
+  for (const token of [
+    'isIosAppEnv',
+    'readNativeClipboardAsync',
+    '-webkit-touch-callout',
+    'openPortalCleanLogin',
+    'isolatedLoginPortalId',
+    'is-locked',
+    '🔒 Camera (Chưa có dữ liệu)',
+  ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
     assert.ok(androidAssetContent.includes(token), `Mobile bundle must include ${token}`);
+    assert.ok(iosAssetContent.includes(token), `iOS bundle must include ${token}`);
   }
   console.log('   OK: iOS Native App & Safari Userscript compatibility tests passed.');
 

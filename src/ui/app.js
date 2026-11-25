@@ -7,6 +7,7 @@ import {
   IAM_SSO_TARGETS,
   PORTALS,
   PORTAL_ORDER,
+  isPortalLocked,
   normalizeContractId,
   validateContractId,
 } from '../config/portals.js';
@@ -35,6 +36,7 @@ import {
   canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
+  clearPortalSessionCookies,
   clearWarmSessionCache,
   detectIamRedirect,
   isAndroidAppEnv,
@@ -345,12 +347,15 @@ export function mountRemoteInside({
   const matchedPortalId = currentHost
     ? PORTAL_ORDER.find(
         (id) =>
+          !isPortalLocked(id) &&
           Array.isArray(PORTALS[id].hosts) &&
           PORTALS[id].hosts.some((h) => h.toLowerCase() === currentHost)
       )
     : '';
   const savedPortal = getState(STORAGE_KEYS.ACTIVE_PORTAL, 'inside');
-  const initialPortal = matchedPortalId || (PORTALS[savedPortal] ? savedPortal : 'inside');
+  const initialPortal =
+    matchedPortalId ||
+    (PORTALS[savedPortal] && !isPortalLocked(savedPortal) ? savedPortal : 'inside');
   const initialContract = getState(STORAGE_KEYS.LAST_CONTRACT, '') || '';
 
   const state = {
@@ -371,6 +376,8 @@ export function mountRemoteInside({
     isWide: false,
     iamSyncing: false,
     iamSyncText: '',
+    isolatedLoginPortalId: '',
+    menuSwitchAccountMode: false,
     openViews: {},
     viewReloadKeys: {},
     confirmAction: null,
@@ -611,20 +618,70 @@ export function mountRemoteInside({
     return PORTALS.inside.url;
   }
 
-  async function openPortCleanLogin(fallbackUrl = '', title = 'Đăng nhập Port (làm sạch phiên)') {
+  function detectPortalIdFromUrl(url, fallbackId = 'inside') {
+    const raw = String(url || '').trim().toLowerCase();
+    if (/port\.fpt\.net|mvcport\.fpt\.net|client_id=mvc-port/.test(raw)) return 'port';
+    if (/radius-portal\.fpt\.net/.test(raw)) return 'radius';
+    if (/nextgen\.fpt\.net/.test(raw)) return 'recall';
+    if (/inside\.fpt\.net|fox-erp\.fpt\.net|partner\.fpt\.net/.test(raw)) return 'inside';
+    return fallbackId && PORTALS[fallbackId] && !isPortalLocked(fallbackId)
+      ? fallbackId
+      : 'inside';
+  }
+
+  async function openPortalCleanLogin(
+    portalId,
+    { fallbackUrl = '', title = '', clearIamIdentity = false } = {}
+  ) {
+    const targetId = PORTALS[portalId] && !isPortalLocked(portalId)
+      ? portalId
+      : detectPortalIdFromUrl(fallbackUrl, 'inside');
+    const portal = PORTALS[targetId] || PORTALS.inside;
     if (state.appMenuOpen) {
       state.appMenuOpen = false;
       renderScanner();
     }
     clearWarmSessionCache();
-    await clearPortCookiesIncognito({ clearIamAuthTemp: true, clearCache: true });
-    const targetUrl = canClearPortalHostCookies()
-      ? PORTALS.port.url
-      : fallbackUrl || PORT_ENDPOINTS.oidcPromptLogin;
+    if (targetId === 'port') {
+      clearPortTokenCache();
+    }
+    await clearPortalSessionCookies(targetId, {
+      clearIamAuthTemp: true,
+      clearIamIdentity: Boolean(clearIamIdentity),
+      clearCache: true,
+    });
+    state.isolatedLoginPortalId = clearIamIdentity ? targetId : '';
+
+    let targetUrl = '';
+    if (clearIamIdentity) {
+      if (targetId === 'port') {
+        targetUrl = PORT_ENDPOINTS.oidcPromptLogin;
+      } else if (targetId === 'recall') {
+        targetUrl = FOX_ERP_HOME_URL;
+      } else {
+        targetUrl = fallbackUrl || portal.url;
+      }
+    } else if (targetId === 'port' && canClearPortalHostCookies()) {
+      targetUrl = PORTALS.port.url;
+    } else {
+      targetUrl = fallbackUrl || portal.loginUrl || portal.url;
+    }
+
+    const defaultTitle = clearIamIdentity
+      ? `Đổi tài khoản IAM — ${portal.label}`
+      : `Đăng nhập ${portal.label}`;
     return openExternalOrPortalUrl(targetUrl, {
       mode: 'login',
-      title,
+      title: title || defaultTitle,
       pageWindow,
+    });
+  }
+
+  function openPortCleanLogin(fallbackUrl = '', title = 'Đăng nhập Port (ẩn danh)') {
+    return openPortalCleanLogin('port', {
+      fallbackUrl,
+      title,
+      clearIamIdentity: false,
     });
   }
 
@@ -805,6 +862,8 @@ export function mountRemoteInside({
     state.appMenuOpen = false;
     resetConfirmState();
     state.result = null;
+    state.isolatedLoginPortalId = '';
+    state.menuSwitchAccountMode = false;
     state.authGateSyncing = false;
     state.authGateAutoOpened = false;
     if (standalone && isAndroidAppEnv()) {
@@ -3413,6 +3472,8 @@ export function mountRemoteInside({
 
   async function triggerAction(action) {
     if (state.isRunning) return;
+    const activePortal = PORTALS[state.activePortalId];
+    if (!activePortal || isPortalLocked(activePortal)) return;
 
     const requiresContract = action.requiresContract !== false;
     const check = validateContractId(state.contractInput);
@@ -3475,6 +3536,7 @@ export function mountRemoteInside({
   async function runConfirmedAction(action, actionCtx = {}) {
     if (state.isRunning) return;
     const portal = PORTALS[state.activePortalId];
+    if (!portal || isPortalLocked(portal)) return;
     const contractId = normalizeContractId(state.contractInput);
 
     resetConfirmState();
@@ -4664,10 +4726,13 @@ export function mountRemoteInside({
             return;
           }
           if (isAndroid && state.sessionStatus.state === 'iam_expired') {
-            openExternalOrPortalUrl(
-              state.sessionStatus.loginUrl || getUnifiedIamLoginUrl(),
-              { mode: 'login', title: 'Đăng nhập IAM (1 lần cho tất cả)', pageWindow }
-            );
+            const targetUrl = state.sessionStatus.loginUrl || getUnifiedIamLoginUrl();
+            const targetPortalId = detectPortalIdFromUrl(targetUrl, state.activePortalId);
+            openPortalCleanLogin(targetPortalId, {
+              fallbackUrl: targetUrl,
+              title: 'Làm sạch phiên & Đăng nhập IAM',
+              clearIamIdentity: false,
+            });
             return;
           }
           refreshSessionStatus();
@@ -4829,41 +4894,51 @@ export function mountRemoteInside({
       const p = PORTALS[id];
       if (!p) continue;
       const isPlanned = p.status === 'planned';
+      const isLocked = isPortalLocked(p);
       if (!isPlanned) {
         sawReadyTab = true;
       } else if (sawReadyTab && !insertedPlannedSep) {
         insertedPlannedSep = true;
         tabNodes.push(el('span', { className: 'ri-tab-sep', 'aria-hidden': 'true' }));
       }
-      const active = state.activePortalId === id;
-      const tabClasses = ['ri-tab', active ? 'is-active' : '', isPlanned ? 'is-planned' : '']
+      const active = !isLocked && state.activePortalId === id;
+      const tabClasses = [
+        'ri-tab',
+        active ? 'is-active' : '',
+        isPlanned ? 'is-planned' : '',
+        isLocked ? 'is-locked' : '',
+      ]
         .filter(Boolean)
         .join(' ');
+      const tabAttrs = {
+        type: 'button',
+        role: 'tab',
+        'aria-selected': active ? 'true' : 'false',
+        className: tabClasses,
+      };
+      if (isLocked) {
+        tabAttrs.disabled = true;
+        tabAttrs['aria-disabled'] = 'true';
+        tabAttrs.tabindex = '-1';
+        tabAttrs.title = 'Chưa có dữ liệu thao tác — tạm khóa';
+      } else {
+        tabAttrs.onClick = () => {
+          state.activePortalId = id;
+          state.result = null;
+          setState(STORAGE_KEYS.ACTIVE_PORTAL, id);
+          renderMain();
+          refreshSessionStatus();
+        };
+      }
       tabNodes.push(
-        el(
-          'button',
-          {
-            type: 'button',
-            role: 'tab',
-            'aria-selected': active ? 'true' : 'false',
-            className: tabClasses,
-            onClick: () => {
-              state.activePortalId = id;
-              state.result = null;
-              setState(STORAGE_KEYS.ACTIVE_PORTAL, id);
-              renderMain();
-              refreshSessionStatus();
-            },
-          },
-          [
-            el('span', { text: p.label }),
-            el('span', {
-              className: 'ri-tab-badge',
-              'data-tier': p.status,
-              text: p.statusLabel,
-            }),
-          ]
-        )
+        el('button', tabAttrs, [
+          el('span', { text: isLocked ? `🔒 ${p.label}` : p.label }),
+          el('span', {
+            className: 'ri-tab-badge',
+            'data-tier': p.status,
+            text: p.statusLabel,
+          }),
+        ])
       );
     }
 
@@ -5028,6 +5103,11 @@ export function mountRemoteInside({
       extraBtns.push(copySummaryBtn);
     }
     if ((res.status === 'iam_expired' || res.showLoginBtn) && res.loginUrl) {
+      const targetPortalId = detectPortalIdFromUrl(res.loginUrl, state.activePortalId);
+      const targetPortal = PORTALS[targetPortalId] || PORTALS.inside;
+      const supportsIsolatedSwitch =
+        canClearPortalHostCookies() && Boolean(targetPortal && targetPortal.iamSso);
+
       if (state.activePortalId === 'port' && isLoggedInPortHost()) {
         extraBtns.push(
           el('button', {
@@ -5056,26 +5136,37 @@ export function mountRemoteInside({
           })
         );
       } else {
-        const isPortLoginTarget =
-          state.activePortalId === 'port' ||
-          /port\.fpt\.net|client_id=mvc-port/i.test(String(res.loginUrl || ''));
         extraBtns.push(
           el('button', {
             type: 'button',
             className: 'ri-primary-btn',
-            text:
-              isPortLoginTarget && canClearPortalHostCookies()
-                ? 'Làm sạch phiên Port & Đăng nhập'
-                : 'Đăng nhập IAM ngay',
+            text: canClearPortalHostCookies()
+              ? `Làm sạch phiên ${targetPortal.label} & Đăng nhập`
+              : 'Đăng nhập IAM ngay',
             onClick: () => {
-              if (isPortLoginTarget) {
-                openPortCleanLogin(res.loginUrl, 'Đăng nhập Port (ẩn danh)');
-                return;
-              }
-              openExternalOrPortalUrl(res.loginUrl, {
-                mode: 'login',
-                title: 'Đăng nhập IAM',
-                pageWindow,
+              openPortalCleanLogin(targetPortalId, {
+                fallbackUrl: res.loginUrl,
+                title: canClearPortalHostCookies()
+                  ? `Đăng nhập ${targetPortal.label} (làm sạch phiên)`
+                  : 'Đăng nhập IAM',
+                clearIamIdentity: false,
+              });
+            },
+          })
+        );
+      }
+
+      if (supportsIsolatedSwitch) {
+        extraBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đổi TK IAM riêng',
+            onClick: () => {
+              openPortalCleanLogin(targetPortalId, {
+                fallbackUrl: res.loginUrl,
+                title: `Đổi tài khoản IAM — ${targetPortal.label}`,
+                clearIamIdentity: true,
               });
             },
           })
@@ -5536,10 +5627,10 @@ export function mountRemoteInside({
             className: 'ri-secondary-btn',
             text: 'Đăng nhập IAM',
             onClick: () => {
-              openExternalOrPortalUrl(state.oltLoginUrl, {
-                mode: 'login',
-                title: 'Đăng nhập IAM',
-                pageWindow,
+              openPortalCleanLogin('inside', {
+                fallbackUrl: state.oltLoginUrl,
+                title: 'Đăng nhập Inside (IAM)',
+                clearIamIdentity: false,
               });
             },
           })
@@ -6005,10 +6096,10 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                openExternalOrPortalUrl(state.modemLoginUrl, {
-                  mode: 'login',
-                  title: 'Đăng nhập IAM',
-                  pageWindow,
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.modemLoginUrl,
+                  title: 'Đăng nhập Inside (IAM)',
+                  clearIamIdentity: false,
                 });
               },
             })
@@ -6269,10 +6360,10 @@ export function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Đăng nhập IAM',
                 onClick: () => {
-                  openExternalOrPortalUrl(state.boxLoginUrl, {
-                    mode: 'login',
-                    title: 'Đăng nhập IAM',
-                    pageWindow,
+                  openPortalCleanLogin('inside', {
+                    fallbackUrl: state.boxLoginUrl,
+                    title: 'Đăng nhập Inside (IAM)',
+                    clearIamIdentity: false,
                   });
                 },
               })
@@ -6460,10 +6551,10 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                openExternalOrPortalUrl(state.killLoginUrl, {
-                  mode: 'login',
-                  title: 'Đăng nhập IAM',
-                  pageWindow,
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.killLoginUrl,
+                  title: 'Đăng nhập Inside (IAM)',
+                  clearIamIdentity: false,
                 });
               },
             })
@@ -6618,10 +6709,10 @@ export function mountRemoteInside({
               className: 'ri-secondary-btn',
               text: 'Đăng nhập IAM',
               onClick: () => {
-                openExternalOrPortalUrl(state.bypassLoginUrl, {
-                  mode: 'login',
-                  title: 'Đăng nhập IAM',
-                  pageWindow,
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.bypassLoginUrl,
+                  title: 'Đăng nhập Inside (IAM)',
+                  clearIamIdentity: false,
                 });
               },
             })
@@ -7085,10 +7176,10 @@ export function mountRemoteInside({
               className: 'ri-primary-btn',
               text: state.deployLoginLabel || 'Đăng nhập IAM',
               onClick: () => {
-                openExternalOrPortalUrl(state.deployLoginUrl, {
-                  mode: 'login',
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.deployLoginUrl,
                   title: state.deployLoginLabel || 'Đăng nhập FOX-ERP / Partner',
-                  pageWindow,
+                  clearIamIdentity: false,
                 });
               },
             })
@@ -7901,14 +7992,11 @@ export function mountRemoteInside({
                     className: 'ri-secondary-btn',
                     text: 'Đăng nhập FOX-ERP',
                     onClick: () => {
-                      openExternalOrPortalUrl(
-                        state.deployLoginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage,
-                        {
-                          mode: 'login',
-                          title: 'Đăng nhập FOX-ERP',
-                          pageWindow,
-                        }
-                      );
+                      openPortalCleanLogin('inside', {
+                        fallbackUrl: state.deployLoginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage,
+                        title: 'Đăng nhập FOX-ERP',
+                        clearIamIdentity: false,
+                      });
                     },
                   }),
                 ]),
@@ -8307,10 +8395,10 @@ export function mountRemoteInside({
                 className: 'ri-primary-btn',
                 text: 'Đăng nhập IAM',
                 onClick: () =>
-                  openExternalOrPortalUrl(state.recallLoginUrl || RECALL_ENDPOINTS.base, {
-                    mode: 'login',
+                  openPortalCleanLogin('recall', {
+                    fallbackUrl: state.recallLoginUrl || RECALL_ENDPOINTS.base,
                     title: 'Đăng nhập Vật tư NextGen',
-                    pageWindow,
+                    clearIamIdentity: false,
                   }),
               }),
               el('button', {
@@ -9408,10 +9496,10 @@ export function mountRemoteInside({
                 className: 'ri-primary-btn',
                 text: 'Đăng nhập IAM',
                 onClick: () =>
-                  openExternalOrPortalUrl(state.equipDebtLoginUrl || EQUIPMENT_ENDPOINTS.base, {
-                    mode: 'login',
+                  openPortalCleanLogin('recall', {
+                    fallbackUrl: state.equipDebtLoginUrl || EQUIPMENT_ENDPOINTS.base,
                     title: 'Đăng nhập Quản lý vật tư',
-                    pageWindow,
+                    clearIamIdentity: false,
                   }),
               }),
               el('button', {
@@ -10597,10 +10685,10 @@ export function mountRemoteInside({
             className: 'ri-secondary-btn',
             text: 'Đăng nhập Radius (IAM)',
             onClick: () => {
-              openExternalOrPortalUrl(state.radiusLoginUrl || RADIUS_ENDPOINTS.PORTAL_URL, {
-                mode: 'login',
+              openPortalCleanLogin('radius', {
+                fallbackUrl: state.radiusLoginUrl || RADIUS_ENDPOINTS.PORTAL_URL,
                 title: 'Đăng nhập Radius (IAM)',
-                pageWindow,
+                clearIamIdentity: false,
               });
             },
           }),
@@ -11194,7 +11282,12 @@ export function mountRemoteInside({
             type: 'button',
             className: 'ri-primary-btn',
             text: 'Đăng nhập Vật tư (NextGen)',
-            onClick: () => openLogin(EQUIPMENT_ENDPOINTS.base, 'Đăng nhập Vật tư (NextGen)'),
+            onClick: () =>
+              openPortalCleanLogin('recall', {
+                fallbackUrl: EQUIPMENT_ENDPOINTS.base,
+                title: 'Đăng nhập Vật tư (NextGen)',
+                clearIamIdentity: false,
+              }),
           }),
           el('button', {
             type: 'button',
@@ -11224,44 +11317,90 @@ export function mountRemoteInside({
             className: 'ri-summary-toggle',
             text: 'Mở trang cổng riêng lẻ (khi cần)',
           }),
+          el('label', { className: 'ri-menu-switch-toggle' }, [
+            el('input', {
+              type: 'checkbox',
+              checked: Boolean(state.menuSwitchAccountMode),
+              onChange: (ev) => {
+                state.menuSwitchAccountMode = Boolean(ev && ev.target && ev.target.checked);
+              },
+            }),
+            el('span', {
+              text: 'Đổi tài khoản IAM riêng cho cổng bấm (giữ phiên cổng khác)',
+            }),
+          ]),
           el('div', { className: 'ri-result-actions' }, [
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Inside',
-              onClick: () => openLogin(PORTALS.inside.url, 'Đăng nhập Inside'),
+              onClick: () =>
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: PORTALS.inside.url,
+                  title: state.menuSwitchAccountMode
+                    ? 'Đổi tài khoản IAM — Inside'
+                    : 'Đăng nhập Inside',
+                  clearIamIdentity: state.menuSwitchAccountMode,
+                }),
             }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Port',
               onClick: () =>
-                openPortCleanLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (ẩn danh)'),
+                openPortalCleanLogin('port', {
+                  fallbackUrl: PORTALS.port.loginUrl || PORTALS.port.url,
+                  title: state.menuSwitchAccountMode
+                    ? 'Đổi tài khoản IAM — Port'
+                    : 'Đăng nhập Port (ẩn danh)',
+                  clearIamIdentity: state.menuSwitchAccountMode,
+                }),
             }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Vật tư',
-              onClick: () => openLogin(PORTALS.recall.url, 'Mở cổng Vật tư'),
+              onClick: () =>
+                openPortalCleanLogin('recall', {
+                  fallbackUrl: PORTALS.recall.url,
+                  title: state.menuSwitchAccountMode
+                    ? 'Đổi tài khoản IAM — Vật tư'
+                    : 'Mở cổng Vật tư',
+                  clearIamIdentity: state.menuSwitchAccountMode,
+                }),
             }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'FOX-ERP / Partner',
               onClick: () =>
-                openLogin(DEPLOYMENT_ENDPOINTS.partnerMonitor, 'Đăng nhập FOX-ERP / Partner'),
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: DEPLOYMENT_ENDPOINTS.partnerMonitor,
+                  title: state.menuSwitchAccountMode
+                    ? 'Đổi tài khoản IAM — FOX-ERP / Partner'
+                    : 'Đăng nhập FOX-ERP / Partner',
+                  clearIamIdentity: state.menuSwitchAccountMode,
+                }),
             }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
-              text: 'Camera (Sắp ghép)',
-              onClick: () => openLogin(PORTALS.camera.url, 'Đăng nhập Camera'),
+              disabled: true,
+              'aria-disabled': 'true',
+              text: '🔒 Camera (Chưa có dữ liệu)',
             }),
             el('button', {
               type: 'button',
               className: 'ri-secondary-btn',
-              text: 'Radius (Sắp ghép)',
-              onClick: () => openLogin(PORTALS.radius.url, 'Mở cổng Radius'),
+              text: 'Radius',
+              onClick: () =>
+                openPortalCleanLogin('radius', {
+                  fallbackUrl: PORTALS.radius.url,
+                  title: state.menuSwitchAccountMode
+                    ? 'Đổi tài khoản IAM — Radius'
+                    : 'Mở cổng Radius',
+                  clearIamIdentity: state.menuSwitchAccountMode,
+                }),
             }),
           ]),
         ]),
@@ -11685,6 +11824,8 @@ export function mountRemoteInside({
     window.__riOnPortalBrowserClosed = async (completedHost = '', loginCompleted = false) => {
       clearWarmSessionCache();
       clearPortTokenCache();
+      const isolatedPortalId = state.isolatedLoginPortalId;
+      state.isolatedLoginPortalId = '';
       const cleanHost = String(completedHost || '').trim().toLowerCase();
       if (standalone && isAndroidAppEnv() && state.authGate !== 'unlocked') {
         if (loginCompleted) {
@@ -11723,6 +11864,34 @@ export function mountRemoteInside({
           return;
         }
         await bootstrapAndroidAuthGate({ autoOpenLogin: false, allowSsoWarmup: false });
+        return;
+      }
+
+      if (loginCompleted && isolatedPortalId) {
+        if (
+          isolatedPortalId === 'port' ||
+          cleanHost === 'port.fpt.net' ||
+          cleanHost === 'mvcport.fpt.net'
+        ) {
+          await bootstrapMvcPortSession();
+        }
+        await refreshSessionStatus();
+        const isolatedLabel =
+          (PORTALS[isolatedPortalId] && PORTALS[isolatedPortalId].label) ||
+          cleanHost ||
+          isolatedPortalId;
+        state.result = {
+          status: 'ok',
+          title: `Đã đổi tài khoản IAM riêng cho ${isolatedLabel}`,
+          message:
+            'Phiên các cổng còn lại được giữ nguyên. Nếu muốn đồng bộ lại tất cả cổng cùng 1 tài khoản, mở Menu → Đồng bộ lại phiên tất cả cổng IAM.',
+        };
+        renderMain();
+        if (state.confirmAction && state.confirmAction.id === 'manage_recall') {
+          loadRecallModal(state.contractInput);
+        } else if (state.confirmAction && state.confirmAction.id === 'equipment_debt') {
+          loadEquipmentDebtModal({ allowAutoSetup: true });
+        }
         return;
       }
 

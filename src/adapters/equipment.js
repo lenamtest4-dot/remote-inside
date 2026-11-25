@@ -19,6 +19,7 @@ import {
   FOX_ERP_HOME_URL,
   bootstrapNextGenViaFoxErpAndroid,
   canControlAndroidPortal,
+  clearPortalSessionCookies,
   evalAndroidPortalJs,
   isNextGenSessionExpiredDocument,
   isUserscriptEnv,
@@ -1380,7 +1381,11 @@ async function loadEquipmentDebtViaAndroidPortal({
     timeout: 18000,
   });
   if (!bgRes.ok && bgRes.status === 'needs_login') {
-    notifyStatus('Đang đồng bộ phiên IAM cho Quản lý vật tư…');
+    notifyStatus('Đang làm sạch phiên cũ & đồng bộ IAM cho Quản lý vật tư…');
+    await clearPortalSessionCookies('recall', {
+      clearIamAuthTemp: true,
+      clearCache: true,
+    });
     const warmRes = await warmPortalSession(EQUIPMENT_ENDPOINTS.base, {
       timeout: 12000,
       force: true,

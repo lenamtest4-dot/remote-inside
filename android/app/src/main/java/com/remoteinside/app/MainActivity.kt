@@ -1512,18 +1512,40 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            val rawPrefixes = payload.optJSONArray("clearSharedPrefixes")
+            val includesPort = allowedHosts.any {
+                it == "port.fpt.net" || it == "mvcport.fpt.net"
+            }
+            val includesRadius = allowedHosts.contains("radius-portal.fpt.net")
+
             val sharedPrefixes = mutableListOf<String>()
-            if (rawPrefixes != null) {
-                for (i in 0 until rawPrefixes.length()) {
-                    val p = rawPrefixes.optString(i, "").trim()
-                    if (p.isNotEmpty()) sharedPrefixes.add(p)
+            if (payload.has("clearSharedPrefixes")) {
+                val rawPrefixes = payload.optJSONArray("clearSharedPrefixes")
+                if (rawPrefixes != null) {
+                    for (i in 0 until rawPrefixes.length()) {
+                        val p = rawPrefixes.optString(i, "").trim()
+                        if (p.isNotEmpty()) sharedPrefixes.add(p)
+                    }
                 }
-            } else {
+            } else if (includesPort) {
                 sharedPrefixes.add("MVCPORT_")
                 sharedPrefixes.add("PORT_")
             }
+
+            val sharedNames = mutableListOf<String>()
+            if (payload.has("clearSharedNames")) {
+                val rawNames = payload.optJSONArray("clearSharedNames")
+                if (rawNames != null) {
+                    for (i in 0 until rawNames.length()) {
+                        val n = rawNames.optString(i, "").trim()
+                        if (n.isNotEmpty()) sharedNames.add(n)
+                    }
+                }
+            } else if (includesPort) {
+                sharedNames.add(".ASPXAUTH")
+            }
+
             val clearIamAuthTemp = payload.optBoolean("clearIamAuthTemp", true)
+            val clearIamIdentity = payload.optBoolean("clearIamIdentity", false)
             val clearCache = payload.optBoolean("clearCache", true)
 
             httpExecutor.execute {
@@ -1541,9 +1563,6 @@ class MainActivity : AppCompatActivity() {
                         clearedCount++
                     }
 
-                    val includesPort = allowedHosts.any {
-                        it == "port.fpt.net" || it == "mvcport.fpt.net"
-                    }
                     val explicitPortCookieNames = listOf(
                         ".ASPXAUTH",
                         "ASP.NET_SessionId",
@@ -1554,6 +1573,11 @@ class MainActivity : AppCompatActivity() {
                         "MVCPORT_COOKIE_V2_PROD",
                         "__RequestVerificationToken"
                     )
+                    val explicitRadiusCookieNames = listOf(
+                        "accesstoken_iam_radius",
+                        "refresh_token",
+                        "id_token"
+                    )
 
                     for (host in allowedHosts) {
                         val probeUrls = mutableListOf("http://$host/", "https://$host/")
@@ -1561,6 +1585,9 @@ class MainActivity : AppCompatActivity() {
                             probeUrls.add("http://mvcport.fpt.net/FTTH_NewPort")
                             probeUrls.add("http://mvcport.fpt.net/ftth_newport")
                             probeUrls.add("http://mvcport.fpt.net/FTTH_NEW")
+                        } else if (host == "nextgen.fpt.net") {
+                            probeUrls.add("https://nextgen.fpt.net/resource/recall")
+                            probeUrls.add("https://nextgen.fpt.net/resource/equipment")
                         }
                         val names = linkedSetOf<String>()
                         for (probeUrl in probeUrls) {
@@ -1578,6 +1605,9 @@ class MainActivity : AppCompatActivity() {
                         if (includesPort && (host == "port.fpt.net" || host == "mvcport.fpt.net")) {
                             names.addAll(explicitPortCookieNames)
                         }
+                        if (includesRadius && host == "radius-portal.fpt.net") {
+                            names.addAll(explicitRadiusCookieNames)
+                        }
                         for (cName in names) {
                             expireCookie("http://$host/", cName, "/")
                             expireCookie("https://$host/", cName, "/")
@@ -1587,24 +1617,41 @@ class MainActivity : AppCompatActivity() {
                                 expireCookie("http://mvcport.fpt.net/FTTH_NewPort", cName, "/FTTH_NewPort")
                                 expireCookie("http://mvcport.fpt.net/ftth_newport", cName, "/ftth_newport")
                                 expireCookie("http://mvcport.fpt.net/FTTH_NEW", cName, "/FTTH_NEW")
+                            } else if (host == "nextgen.fpt.net") {
+                                expireCookie("https://nextgen.fpt.net/resource", cName, "/resource")
+                                expireCookie("https://nextgen.fpt.net/resource/recall", cName, "/resource/recall")
+                                expireCookie("https://nextgen.fpt.net/resource/equipment", cName, "/resource/equipment")
                             }
                             val matchesSharedPrefix = sharedPrefixes.any { prefix ->
                                 cName.startsWith(prefix, ignoreCase = true)
                             }
-                            if (matchesSharedPrefix || cName.equals(".ASPXAUTH", ignoreCase = true)) {
+                            val matchesSharedName = sharedNames.any { shared ->
+                                cName.equals(shared, ignoreCase = true)
+                            }
+                            if (matchesSharedPrefix || matchesSharedName) {
                                 expireCookie("http://fpt.net/", cName, "/", ".fpt.net")
                                 expireCookie("https://fpt.net/", cName, "/", ".fpt.net")
                             }
                         }
                     }
 
-                    if (clearIamAuthTemp) {
-                        val iamTempNames = listOf(
+                    if (clearIamAuthTemp || clearIamIdentity) {
+                        val iamCookieNames = linkedSetOf(
                             "AUTH_SESSION_ID",
                             "AUTH_SESSION_ID_LEGACY",
                             "KC_RESTART",
                             "KEYCLOAK_LOCALE"
                         )
+                        if (clearIamIdentity) {
+                            iamCookieNames.addAll(
+                                listOf(
+                                    "KEYCLOAK_IDENTITY",
+                                    "KEYCLOAK_IDENTITY_LEGACY",
+                                    "KEYCLOAK_SESSION",
+                                    "KEYCLOAK_SESSION_LEGACY"
+                                )
+                            )
+                        }
                         val iamTargets = listOf(
                             Pair("https://iam.fpt.net/auth/realms/fpt/", "/auth/realms/fpt/"),
                             Pair("https://iam.fpt.net/auth/realms/fpt", "/auth/realms/fpt"),
@@ -1614,9 +1661,43 @@ class MainActivity : AppCompatActivity() {
                             Pair("http://iam.fpt.net/", "/")
                         )
                         for ((iamUrl, iamPath) in iamTargets) {
-                            for (iamCookie in iamTempNames) {
+                            for (iamCookie in iamCookieNames) {
                                 expireCookie(iamUrl, iamCookie, iamPath)
                             }
+                        }
+                    }
+
+                    if (clearIamIdentity) {
+                        val azureNames = linkedSetOf(
+                            "ESTSAUTH",
+                            "ESTSAUTHPERSISTENT",
+                            "ESTSAUTHLIGHT",
+                            "SignInStateCookie",
+                            "buid",
+                            "fpc",
+                            "stsservicecookie",
+                            "x-ms-gateway-slice"
+                        )
+                        val rawAzure = runCatching {
+                            cookieManager.getCookie("https://login.microsoftonline.com/")
+                        }.getOrNull().orEmpty()
+                        if (rawAzure.isNotBlank()) {
+                            for (part in rawAzure.split(";")) {
+                                val eq = part.indexOf('=')
+                                if (eq > 0) {
+                                    val cName = part.substring(0, eq).trim()
+                                    if (cName.isNotEmpty()) azureNames.add(cName)
+                                }
+                            }
+                        }
+                        for (azName in azureNames) {
+                            expireCookie("https://login.microsoftonline.com/", azName, "/")
+                            expireCookie(
+                                "https://login.microsoftonline.com/",
+                                azName,
+                                "/",
+                                ".login.microsoftonline.com"
+                            )
                         }
                     }
 

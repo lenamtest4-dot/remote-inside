@@ -29,6 +29,11 @@ export const PORTALS = {
     fullName: 'inside.fpt.net',
     url: 'http://inside.fpt.net/default.asp',
     hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
+    sessionReset: {
+      hosts: ['inside.fpt.net', 'mvc.inside.fpt.net', 'fox-erp.fpt.net', 'partner.fpt.net'],
+      sharedPrefixes: [],
+      sharedNames: [],
+    },
     iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 7 lệnh',
@@ -105,6 +110,11 @@ export const PORTALS = {
     loginUrl: PORT_OIDC_LOGIN_URL,
     sessionCheckUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
     hosts: ['port.fpt.net', 'mvcport.fpt.net'],
+    sessionReset: {
+      hosts: ['port.fpt.net', 'mvcport.fpt.net'],
+      sharedPrefixes: ['MVCPORT_', 'PORT_'],
+      sharedNames: ['.ASPXAUTH'],
+    },
     iamSso: true,
     status: 'priority',
     statusLabel: 'Đủ 3 lệnh',
@@ -142,9 +152,10 @@ export const PORTALS = {
     url: 'https://fli-mngt.fcam.vn/',
     hosts: ['fli-mngt.fcam.vn'],
     iamSso: false,
+    locked: true,
     status: 'planned',
-    statusLabel: 'Sắp ghép',
-    description: 'Kiểm tra trạng thái và hỗ trợ xử lý lỗi Camera.',
+    statusLabel: 'Tạm khóa',
+    description: 'Chưa có dữ liệu thao tác — tạm khóa.',
     actions: [
       {
         id: 'check_camera',
@@ -169,6 +180,12 @@ export const PORTALS = {
     fullName: 'nextgen.fpt.net/resource/recall',
     url: 'https://nextgen.fpt.net/resource/recall',
     hosts: ['nextgen.fpt.net'],
+    sessionReset: {
+      hosts: ['nextgen.fpt.net'],
+      switchAccountHosts: ['nextgen.fpt.net', 'fox-erp.fpt.net'],
+      sharedPrefixes: [],
+      sharedNames: [],
+    },
     iamSso: true,
     status: 'priority',
     statusLabel: 'Thu hồi & Tồn nợ',
@@ -213,6 +230,11 @@ export const PORTALS = {
     fullName: 'radius-portal.fpt.net',
     url: 'http://radius-portal.fpt.net/networkConnection',
     hosts: ['radius-portal.fpt.net'],
+    sessionReset: {
+      hosts: ['radius-portal.fpt.net'],
+      sharedPrefixes: ['accesstoken_iam_radius'],
+      sharedNames: [],
+    },
     iamSso: true,
     status: 'priority',
     statusLabel: 'IPNAT & IPv6',
@@ -257,6 +279,12 @@ export const PORTALS = {
     ],
   },
 };
+
+export function isPortalLocked(portalOrId) {
+  const portal =
+    typeof portalOrId === 'string' ? PORTALS[portalOrId] : portalOrId;
+  return Boolean(portal && portal.locked);
+}
 
 export const CONTRACT_REGEX = /^[A-Z0-9._-]{3,32}$/;
 

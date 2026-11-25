@@ -138,6 +138,7 @@ export function clearPortTokenCache() {
 
 export async function clearPortCookiesIncognito({
   clearIamAuthTemp = true,
+  clearIamIdentity = false,
   clearCache = true,
 } = {}) {
   clearPortTokenCache();
@@ -146,7 +147,9 @@ export async function clearPortCookiesIncognito({
   }
   return clearPortalHostCookies(['port.fpt.net', 'mvcport.fpt.net'], {
     clearSharedPrefixes: ['MVCPORT_', 'PORT_'],
+    clearSharedNames: ['.ASPXAUTH'],
     clearIamAuthTemp,
+    clearIamIdentity,
     clearCache,
   });
 }
@@ -526,7 +529,12 @@ export async function bootstrapMvcPortSession() {
         timeout: 14000,
         force: true,
       });
-      if ((!oidcWarm || !oidcWarm.ok) && (!oidcWarm || oidcWarm.status !== 'needs_login')) {
+      if (
+        (!oidcWarm || !oidcWarm.ok) &&
+        (!oidcWarm ||
+          oidcWarm.status !== 'needs_login' ||
+          /\/LoginPage\.aspx/i.test(String(oidcWarm.finalUrl || '')))
+      ) {
         oidcWarm = await warmPortalSession(PORTALS.port.url, {
           targetHost: 'port.fpt.net',
           timeout: 14000,

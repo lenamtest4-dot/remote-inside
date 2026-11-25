@@ -1300,6 +1300,63 @@
   font-weight: 700;
 }
 
+.ri-mode-btn--wide {
+  grid-column: 1 / -1;
+}
+
+.ri-reassign-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.ri-reassign-emp-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  color: var(--ink-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ri-reassign-emp-btn:hover {
+  border-color: var(--accent-signal);
+  background: var(--accent-signal-soft);
+}
+
+.ri-reassign-emp-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.ri-reassign-emp-meta {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.ri-reassign-preview {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--accent-signal);
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .ri-port-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

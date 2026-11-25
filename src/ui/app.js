@@ -100,19 +100,29 @@ import {
   canEditDeploymentCameraPhone,
   clearDeploymentTicketMac,
   completeDeploymentTicket,
+  fetchDeploymentAssignedEmps,
   fetchDeploymentEContracts,
   fetchDeploymentEquipments,
   fetchDeploymentModemMetrics,
+  fetchDeploymentPartnerData,
   fetchDeploymentPayment,
   fetchDeploymentPhones,
   fetchDeploymentTicket,
+  fetchDeploymentUserInfo,
+  filterBlocksByPartner,
+  filterEmployeesByBlock,
+  findPartnerByDeptId,
   normalizeTicketSummary,
   parseDataFilterOptions,
+  reassignDeploymentEmployee,
+  resolveDefaultDeploymentLocationId,
   revealDeploymentPhone,
+  searchDeploymentEmployees,
   signDeploymentEContract,
   syncDeploymentOnline,
   updateDeploymentCameraPhone,
   updateDeploymentConstruction,
+  validateAndBuildReassignPayload,
   validateCameraPhoneNumber,
 } from '../adapters/deployment.js';
 import {
@@ -468,6 +478,16 @@ export function mountRemoteInside({
     deployReasonUnuseCapLan: '0',
     deployBusyAction: '',
     deployArmedAction: '',
+    deployUserInfo: null,
+    deployReassignLoading: false,
+    deployReassignError: '',
+    deployReassignLocationId: '',
+    deployReassignPartnerData: null,
+    deployReassignPartnerId: '',
+    deployReassignBlockId: '',
+    deployReassignEmpCode: '',
+    deployReassignReasonId: '',
+    deployReassignSearch: '',
     recallLoading: false,
     recallProgress: '',
     recallError: '',
@@ -899,6 +919,16 @@ export function mountRemoteInside({
     state.deployReasonUnuseCapLan = '0';
     state.deployBusyAction = '';
     state.deployArmedAction = '';
+    state.deployUserInfo = null;
+    state.deployReassignLoading = false;
+    state.deployReassignError = '';
+    state.deployReassignLocationId = '';
+    state.deployReassignPartnerData = null;
+    state.deployReassignPartnerId = '';
+    state.deployReassignBlockId = '';
+    state.deployReassignEmpCode = '';
+    state.deployReassignReasonId = '';
+    state.deployReassignSearch = '';
   }
 
   function resetRecallModalState() {
@@ -1404,6 +1434,113 @@ export function mountRemoteInside({
     renderConfirm();
   }
 
+  function applyDefaultDeployReassignSelection(partnerData, ticket) {
+    const partners =
+      partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+    const byDept =
+      ticket && ticket.deptId ? findPartnerByDeptId(partners, ticket.deptId) : null;
+    const byTicketPartner =
+      !byDept && ticket && ticket.partnerId
+        ? partners.find((p) => p && Number(p.Partner) === Number(ticket.partnerId))
+        : null;
+    const fallbackSingle =
+      !byDept && !byTicketPartner && partners.length === 1 ? partners[0] : null;
+    const chosenPartner = byDept || byTicketPartner || fallbackSingle || null;
+    state.deployReassignPartnerId = chosenPartner ? String(chosenPartner.Partner) : '';
+
+    if (chosenPartner) {
+      const blocks = filterBlocksByPartner(partnerData, chosenPartner.Partner);
+      let chosenBlock = null;
+      if (ticket && ticket.blockId) {
+        chosenBlock = blocks.find((b) => b && Number(b.Id) === Number(ticket.blockId)) || null;
+      }
+      if (!chosenBlock && ticket && ticket.blockDepName) {
+        const targetName = String(ticket.blockDepName).trim().toLowerCase();
+        chosenBlock =
+          blocks.find(
+            (b) => b && String(b.SubName || '').trim().toLowerCase() === targetName
+          ) || null;
+      }
+      if (!chosenBlock && blocks.length === 1) {
+        chosenBlock = blocks[0];
+      }
+      state.deployReassignBlockId = chosenBlock ? String(chosenBlock.Id) : '';
+    } else {
+      state.deployReassignBlockId = '';
+    }
+    state.deployReassignEmpCode = '';
+  }
+
+  async function loadDeployReassignData({ forceReload = false, locationIdOverride = '' } = {}) {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket) return;
+    if (!forceReload && !locationIdOverride && state.deployReassignPartnerData) {
+      return;
+    }
+
+    state.deployReassignLoading = true;
+    state.deployReassignError = '';
+    renderConfirm();
+
+    const grant = state.deployGrant || '';
+    try {
+      let userInfo = state.deployUserInfo;
+      if (!userInfo || forceReload) {
+        const userRes = await fetchDeploymentUserInfo({ grant });
+        if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+        if (userRes.status === 'ok' && userRes.userInfo) {
+          userInfo = userRes.userInfo;
+          state.deployUserInfo = userInfo;
+        } else if (userRes.status === 'iam_expired') {
+          state.deployReassignLoading = false;
+          state.deployReassignError =
+            userRes.message || 'Phiên đăng nhập FOX-ERP chưa sẵn sàng.';
+          state.deployLoginUrl = userRes.loginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage;
+          renderConfirm();
+          return;
+        }
+      }
+
+      const locs = userInfo && Array.isArray(userInfo.locations) ? userInfo.locations : [];
+      const userLocId = userInfo ? userInfo.locationId : 0;
+      const targetLocationId = locationIdOverride
+        ? Number(locationIdOverride)
+        : Number(state.deployReassignLocationId || 0) ||
+          resolveDefaultDeploymentLocationId(ticket, summary, locs, userLocId);
+
+      state.deployReassignLocationId = targetLocationId ? String(targetLocationId) : '';
+      state.deployReassignPartnerData = null;
+      state.deployReassignPartnerId = '';
+      state.deployReassignBlockId = '';
+      state.deployReassignEmpCode = '';
+
+      const partnerRes = await fetchDeploymentPartnerData({
+        locationId: targetLocationId,
+        grant,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployReassignLoading = false;
+
+      if (partnerRes.status !== 'ok') {
+        state.deployReassignError =
+          partnerRes.message || 'Không tải được danh sách Đối tác / Tổ / KTV.';
+        if (partnerRes.loginUrl) {
+          state.deployLoginUrl = partnerRes.loginUrl;
+        }
+      } else {
+        state.deployReassignPartnerData = partnerRes.partnerData || null;
+        applyDefaultDeployReassignSelection(state.deployReassignPartnerData, ticket);
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployReassignLoading = false;
+      state.deployReassignError =
+        err && err.message ? err.message : 'Lỗi tải dữ liệu Phân tuyến KTV.';
+    }
+    renderConfirm();
+  }
+
   async function switchDeployTicketSupId(nextSupId) {
     const summary = state.deploySummary;
     if (!summary || !Array.isArray(summary.tickets)) return;
@@ -1414,10 +1551,21 @@ export function mountRemoteInside({
     state.deployArmedAction = '';
     state.deployEditingPhoneToken = '';
     state.deployEditingPhoneValue = '';
+    state.deployReassignBlockId = '';
+    state.deployReassignEmpCode = '';
+    state.deployReassignReasonId = '';
+    state.deployReassignSearch = '';
     applyDeployTicketDraftFromSummary(state.deploySummary);
+    if (state.deployReassignPartnerData) {
+      applyDefaultDeployReassignSelection(state.deployReassignPartnerData, target);
+    }
     renderConfirm();
     await Promise.all([refreshDeployEquipmentsInModal(), refreshDeployPaymentInModal()]);
     if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+    if (state.deployTab === 'reassign' && !state.deployReassignPartnerData) {
+      loadDeployReassignData({ forceReload: true });
+      return;
+    }
     renderConfirm();
   }
 
@@ -1475,6 +1623,8 @@ export function mountRemoteInside({
 
       if (state.deployTab === 'extras') {
         loadDeployExtrasForModal({ forceReload: true });
+      } else if (state.deployTab === 'reassign') {
+        loadDeployReassignData({ forceReload: true });
       }
     } catch (err) {
       if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
@@ -1705,6 +1855,138 @@ export function mountRemoteInside({
         state.deployEditingPhoneToken = '';
         state.deployEditingPhoneValue = '';
         await loadDeployExtrasForModal({ forceReload: true });
+      },
+    });
+  }
+
+  function handleDeployReassignSubmit() {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket) return;
+
+    const partnerData = state.deployReassignPartnerData;
+    const partners =
+      partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+    const selectedPartner =
+      partners.find((p) => String(p.Partner) === String(state.deployReassignPartnerId)) || null;
+    const blocks = selectedPartner
+      ? filterBlocksByPartner(partnerData, selectedPartner.Partner)
+      : [];
+    const selectedBlock =
+      blocks.find((b) => String(b.Id) === String(state.deployReassignBlockId)) || null;
+    const employees = selectedBlock ? filterEmployeesByBlock(partnerData, selectedBlock.Id) : [];
+    const selectedEmployee =
+      employees.find(
+        (e) => String(e.CodeEmployee) === String(state.deployReassignEmpCode)
+      ) || null;
+    const reasonOptions = parseDataFilterOptions(
+      state.deployDataFilter,
+      DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE
+    );
+    const selectedReason =
+      reasonOptions.find((r) => String(r.id) === String(state.deployReassignReasonId)) || null;
+
+    const check = validateAndBuildReassignPayload({
+      objId: summary.objId,
+      supId: ticket.supId,
+      contract: summary.contract,
+      locationId: state.deployReassignLocationId,
+      partnerData,
+      partner: selectedPartner,
+      block: selectedBlock,
+      employee: selectedEmployee,
+      reason: selectedReason,
+    });
+    if (!check.valid) {
+      state.deployArmedAction = '';
+      state.deployNotice = check.error;
+      state.deployNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+
+    const grant = state.deployGrant || '';
+    const targetSupId = ticket.supId;
+    const targetPartner = selectedPartner;
+    const targetBlock = selectedBlock;
+    const targetEmployee = selectedEmployee;
+
+    return runDeployMutation({
+      busyKey: 'reassign_emp',
+      pendingText: `Đang phân tuyến ${ticket.depCode || summary.contract} cho ${check.payload.EmpAccount}…`,
+      fallbackErr: 'Phân tuyến không thành công.',
+      logAction: 'Phân tuyến KTV',
+      fn: (curSummary, curTicket) =>
+        reassignDeploymentEmployee({
+          objId: curSummary.objId,
+          supId: curTicket.supId,
+          contract: curSummary.contract,
+          locationId: state.deployReassignLocationId,
+          partnerData,
+          partner: targetPartner,
+          block: targetBlock,
+          employee: targetEmployee,
+          reason: selectedReason,
+          grant,
+        }),
+      onOk: async (res) => {
+        let nextMainEmp = {
+          account: targetEmployee.InsideAccount || '',
+          name: targetEmployee.InsideAccount || '',
+          phone: '',
+          code: String(targetEmployee.CodeEmployee ?? ''),
+          status: 1,
+        };
+        let nextSupportEmps = ticket.supportEmps || [];
+        let empRefreshWarn = '';
+
+        if (res.mode !== 'demo') {
+          const empRes = await fetchDeploymentAssignedEmps({
+            supId: targetSupId,
+            objId: summary.objId,
+            grant,
+          });
+          if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+          if (empRes.status === 'ok') {
+            if (empRes.mainEmp) {
+              nextMainEmp = empRes.mainEmp;
+            }
+            nextSupportEmps = empRes.supportEmps || [];
+          } else {
+            empRefreshWarn = empRes.message || '';
+          }
+        }
+
+        if (state.deploySummary && Array.isArray(state.deploySummary.tickets)) {
+          const updatedTickets = state.deploySummary.tickets.map((t) =>
+            Number(t.supId) === Number(targetSupId)
+              ? {
+                  ...t,
+                  mainEmp: nextMainEmp,
+                  supportEmps: nextSupportEmps,
+                  deptId: Number((targetPartner && targetPartner.Code) ?? t.deptId),
+                  partnerId: Number((targetPartner && targetPartner.Partner) ?? t.partnerId),
+                  blockId: Number((targetBlock && targetBlock.Id) ?? t.blockId),
+                  blockDepName: String((targetBlock && targetBlock.SubName) || t.blockDepName || ''),
+                }
+              : t
+          );
+          const updatedActive =
+            updatedTickets.find((t) => Number(t.supId) === Number(targetSupId)) ||
+            state.deploySummary.ticket;
+          state.deploySummary = {
+            ...state.deploySummary,
+            tickets: updatedTickets,
+            ticket: updatedActive,
+          };
+        }
+
+        state.deployReassignEmpCode = '';
+        state.deployReassignReasonId = '';
+        state.deployReassignSearch = '';
+        if (empRefreshWarn) {
+          state.deployNotice = `${res.message} (Lưu ý đồng bộ lại KTV: ${empRefreshWarn})`;
+        }
       },
     });
   }
@@ -6468,6 +6750,17 @@ export function mountRemoteInside({
               }),
               el('button', {
                 type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'reassign' ? ' is-active' : ''}`,
+                text: 'Phân tuyến',
+                onClick: () => {
+                  state.deployTab = 'reassign';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                  loadDeployReassignData();
+                },
+              }),
+              el('button', {
+                type: 'button',
                 className: `ri-mode-btn${state.deployTab === 'equipment' ? ' is-active' : ''}`,
                 text: `Vật tư & MAC (${eq.importItems.length})`,
                 onClick: () => {
@@ -6488,7 +6781,7 @@ export function mountRemoteInside({
               }),
               el('button', {
                 type: 'button',
-                className: `ri-mode-btn${state.deployTab === 'extras' ? ' is-active' : ''}`,
+                className: `ri-mode-btn ri-mode-btn--wide${state.deployTab === 'extras' ? ' is-active' : ''}`,
                 text: 'SĐT & BBĐT',
                 onClick: () => {
                   state.deployTab = 'extras';
@@ -6594,6 +6887,23 @@ export function mountRemoteInside({
               ['Ngày hoàn tất', ticket.finishDate],
               ['Cáp khảo sát', `Indoor: ${ticket.indoor || '0'}m • Outdoor: ${ticket.outdoor || '0'}m`],
               ['Ghi chú CS', csNoteText],
+            ])
+          );
+
+          sheetParts.push(
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                disabled: isBusy,
+                text: 'Phân tuyến cho KTV khác',
+                onClick: () => {
+                  state.deployTab = 'reassign';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                  loadDeployReassignData();
+                },
+              }),
             ])
           );
 
@@ -7082,6 +7392,409 @@ export function mountRemoteInside({
                   ]);
                 })
               )
+            );
+          }
+        } else if (state.deployTab === 'reassign') {
+          const currentMainText = ticket.mainEmp
+            ? [
+                ticket.mainEmp.account,
+                ticket.mainEmp.code ? `(${ticket.mainEmp.code})` : '',
+                ticket.mainEmp.phone,
+              ]
+                .filter(Boolean)
+                .join(' ')
+            : 'Chưa phân công';
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', {
+                  className: 'ri-confirm-label',
+                  text: `KTV hiện tại: ${currentMainText}`,
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  disabled: state.deployReassignLoading || isBusy,
+                  text: 'Tải lại DS KTV',
+                  onClick: () => loadDeployReassignData({ forceReload: true }),
+                }),
+              ]),
+            ])
+          );
+
+          if (state.deployUserInfo && state.deployUserInfo.canAssign === false) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', {
+                  text: 'Tài khoản hiện tại không thấy cờ quyền Phân tuyến (IsAssign=false) trên FOX-ERP — nếu thao tác bị từ chối máy chủ sẽ báo chi tiết.',
+                }),
+              ])
+            );
+          }
+
+          if (Number(ticket.status) === 1) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', {
+                  text: 'Phiếu đang ở trạng thái Hoàn tất — FOX-ERP có thể không cho phân tuyến lại.',
+                }),
+              ])
+            );
+          }
+
+          if (state.deployReassignLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh sách Đối tác / Block / KTV…' }),
+              ])
+            );
+          } else if (state.deployReassignError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                el('div', { text: state.deployReassignError }),
+                el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-primary-btn',
+                    text: 'Thử lại',
+                    onClick: () => loadDeployReassignData({ forceReload: true }),
+                  }),
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-secondary-btn',
+                    text: 'Đăng nhập FOX-ERP',
+                    onClick: () => {
+                      openExternalOrPortalUrl(
+                        state.deployLoginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage,
+                        {
+                          mode: 'login',
+                          title: 'Đăng nhập FOX-ERP',
+                          pageWindow,
+                        }
+                      );
+                    },
+                  }),
+                ]),
+              ])
+            );
+          } else if (state.deployReassignPartnerData) {
+            const partnerData = state.deployReassignPartnerData;
+            const locations =
+              state.deployUserInfo && Array.isArray(state.deployUserInfo.locations)
+                ? state.deployUserInfo.locations
+                : [];
+            const activeLocObj = locations.find(
+              (l) => String(l.LocationId) === String(state.deployReassignLocationId)
+            );
+            const showLocationSelect = locations.length > 1 || Boolean(ticket.isGsafe);
+
+            if (showLocationSelect && locations.length > 0) {
+              const locSelect = el(
+                'select',
+                { className: 'ri-select', id: 'ri-deploy-reassign-location' },
+                locations.map((loc) =>
+                  el('option', {
+                    value: String(loc.LocationId),
+                    text: String(loc.LocationNameVn || loc.SubParentDesc || loc.LocationId),
+                  })
+                )
+              );
+              locSelect.value = String(state.deployReassignLocationId || '');
+              locSelect.addEventListener('change', (e) => {
+                state.deployArmedAction = '';
+                loadDeployReassignData({
+                  forceReload: true,
+                  locationIdOverride: e.target.value,
+                });
+              });
+              sheetParts.push(
+                el('div', { className: 'ri-confirm-input-wrap' }, [
+                  el('label', {
+                    className: 'ri-confirm-label',
+                    for: 'ri-deploy-reassign-location',
+                    text: 'Tỉnh / Khu vực',
+                  }),
+                  locSelect,
+                ])
+              );
+            } else {
+              const locLabel =
+                (activeLocObj && (activeLocObj.LocationNameVn || activeLocObj.SubParentDesc)) ||
+                (state.deployUserInfo && state.deployUserInfo.subParentDesc) ||
+                (state.deployReassignLocationId ? `Khu vực #${state.deployReassignLocationId}` : 'Khu vực mặc định');
+              sheetParts.push(
+                el('div', { className: 'ri-field-hint' }, [
+                  document.createTextNode(`Khu vực: ${locLabel}`),
+                ])
+              );
+            }
+
+            const partners = Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+            const selectedPartner =
+              partners.find((p) => String(p.Partner) === String(state.deployReassignPartnerId)) ||
+              null;
+            const blocks = selectedPartner
+              ? filterBlocksByPartner(partnerData, selectedPartner.Partner)
+              : [];
+            const selectedBlock =
+              blocks.find((b) => String(b.Id) === String(state.deployReassignBlockId)) || null;
+            const employees = selectedBlock
+              ? filterEmployeesByBlock(partnerData, selectedBlock.Id)
+              : [];
+            const selectedEmployee =
+              employees.find(
+                (e) => String(e.CodeEmployee) === String(state.deployReassignEmpCode)
+              ) || null;
+            const reasonOptions = parseDataFilterOptions(
+              state.deployDataFilter,
+              DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE
+            );
+
+            const resultsHost = el('div', {
+              className: 'ri-reassign-results',
+              id: 'ri-deploy-reassign-results',
+            });
+
+            function renderQuickSearchResults(rawQuery) {
+              while (resultsHost.firstChild) {
+                resultsHost.removeChild(resultsHost.firstChild);
+              }
+              const trimmed = String(rawQuery || '').trim();
+              if (!trimmed) return;
+              const hits = searchDeploymentEmployees(partnerData, trimmed, {
+                partnerId: Number(state.deployReassignPartnerId || 0),
+                limit: 12,
+              });
+              if (hits.length === 0) {
+                resultsHost.appendChild(
+                  el('div', {
+                    className: 'ri-field-hint',
+                    text: 'Không tìm thấy KTV khớp từ khóa trong khu vực hiện tại.',
+                  })
+                );
+                return;
+              }
+              for (const hit of hits) {
+                const emp = hit.employee;
+                const blk = hit.block;
+                const prt = hit.partner;
+                const empLabel = [emp.InsideAccount || emp.CodeEmployee, emp.CodeEmployee ? `(${emp.CodeEmployee})` : '']
+                  .filter(Boolean)
+                  .join(' ');
+                const metaLabel = [
+                  (blk && blk.SubName) || '',
+                  (prt && prt.InfdivName) || '',
+                ]
+                  .filter(Boolean)
+                  .join(' • ');
+                resultsHost.appendChild(
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-reassign-emp-btn',
+                      onClick: () => {
+                        state.deployReassignPartnerId = String(
+                          (prt && prt.Partner) || emp.PartnerId || (blk && blk.PartnerId) || ''
+                        );
+                        state.deployReassignBlockId = String(
+                          (blk && blk.Id) || emp.BlockId || ''
+                        );
+                        state.deployReassignEmpCode = String(emp.CodeEmployee || '');
+                        state.deployReassignSearch = '';
+                        state.deployArmedAction = '';
+                        state.deployNotice = '';
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('span', { className: 'ri-reassign-emp-title', text: empLabel }),
+                      metaLabel
+                        ? el('span', { className: 'ri-reassign-emp-meta', text: metaLabel })
+                        : null,
+                    ]
+                  )
+                );
+              }
+            }
+
+            const searchInput = el('input', {
+              type: 'search',
+              className: 'ri-confirm-input',
+              id: 'ri-deploy-reassign-search',
+              placeholder: 'Gõ tên account, mã KTV hoặc tên tổ để chọn nhanh…',
+              autocomplete: 'off',
+              value: state.deployReassignSearch || '',
+            });
+            searchInput.value = state.deployReassignSearch || '';
+            searchInput.addEventListener('input', (e) => {
+              state.deployReassignSearch = e.target.value;
+              renderQuickSearchResults(e.target.value);
+            });
+            renderQuickSearchResults(state.deployReassignSearch || '');
+
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-search',
+                  text: `Tìm nhanh KTV (${Array.isArray(partnerData.Employees) ? partnerData.Employees.length : 0} người)`,
+                }),
+                searchInput,
+                resultsHost,
+              ])
+            );
+
+            const partnerSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-partner' },
+              [
+                el('option', { value: '', text: '-- Chọn Đối tác --' }),
+                ...partners.map((p) =>
+                  el('option', {
+                    value: String(p.Partner),
+                    text: String(p.InfdivName || `Đối tác #${p.Partner}`),
+                  })
+                ),
+              ]
+            );
+            partnerSel.value = String(state.deployReassignPartnerId || '');
+            partnerSel.addEventListener('change', (e) => {
+              state.deployReassignPartnerId = e.target.value;
+              state.deployReassignBlockId = '';
+              state.deployReassignEmpCode = '';
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const blockSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-block' },
+              [
+                el('option', {
+                  value: '',
+                  text: selectedPartner ? '-- Chọn Block / Tổ --' : '-- Chọn Đối tác trước --',
+                }),
+                ...blocks.map((b) =>
+                  el('option', {
+                    value: String(b.Id),
+                    text: String(b.SubName || `Block #${b.Id}`),
+                  })
+                ),
+              ]
+            );
+            blockSel.value = String(state.deployReassignBlockId || '');
+            blockSel.disabled = !selectedPartner;
+            blockSel.addEventListener('change', (e) => {
+              state.deployReassignBlockId = e.target.value;
+              state.deployReassignEmpCode = '';
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const empSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-emp' },
+              [
+                el('option', {
+                  value: '',
+                  text: selectedBlock
+                    ? `-- Chọn KTV (${employees.length} người) --`
+                    : '-- Chọn Block trước --',
+                }),
+                ...employees.map((emp) =>
+                  el('option', {
+                    value: String(emp.CodeEmployee || ''),
+                    text: [emp.InsideAccount || emp.CodeEmployee, emp.CodeEmployee ? `• ${emp.CodeEmployee}` : '']
+                      .filter(Boolean)
+                      .join(' '),
+                  })
+                ),
+              ]
+            );
+            empSel.value = String(state.deployReassignEmpCode || '');
+            empSel.disabled = !selectedBlock;
+            empSel.addEventListener('change', (e) => {
+              state.deployReassignEmpCode = e.target.value;
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const reasonSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-reason' },
+              [
+                el('option', { value: '', text: '-- Chọn nguyên nhân phân công lại --' }),
+                ...reasonOptions.map((opt) =>
+                  el('option', { value: opt.id, text: opt.text })
+                ),
+              ]
+            );
+            reasonSel.value = String(state.deployReassignReasonId || '');
+            reasonSel.addEventListener('change', (e) => {
+              state.deployReassignReasonId = e.target.value;
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-partner',
+                  text: 'Đối tác',
+                }),
+                partnerSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-block',
+                  text: 'Block / Tổ',
+                }),
+                blockSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-emp',
+                  text: 'Nhân viên (KTV)',
+                }),
+                empSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-reason',
+                  text: 'Nguyên nhân phân công lại',
+                }),
+                reasonSel,
+              ])
+            );
+
+            if (selectedEmployee) {
+              sheetParts.push(
+                el('div', { className: 'ri-reassign-preview' }, [
+                  el('div', {
+                    text: `Chuyển phiếu ${ticket.depCode || summary.contract} → ${selectedEmployee.InsideAccount || ''} (${selectedEmployee.CodeEmployee || ''})${selectedBlock && selectedBlock.SubName ? ` • ${selectedBlock.SubName}` : ''}`,
+                  }),
+                ])
+              );
+            }
+
+            sheetParts.push(
+              el('div', { className: 'ri-result-actions' }, [
+                buildArmedConfirmRow({
+                  armKey: 'reassign_emp',
+                  idleLabel: 'Phân tuyến cho KTV này',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận phân tuyến',
+                  busyKey: 'reassign_emp',
+                  onConfirm: handleDeployReassignSubmit,
+                }),
+              ])
             );
           }
         }

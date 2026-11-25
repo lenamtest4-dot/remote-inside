@@ -119,17 +119,27 @@ import {
   completeDeploymentTicket,
   extractDeploymentTicketLink,
   extractHashFromLocation,
+  fetchDeploymentAssignedEmps,
   fetchDeploymentEContracts,
+  fetchDeploymentPartnerData,
   fetchDeploymentPayment,
   fetchDeploymentTicket,
+  fetchDeploymentUserInfo,
+  filterBlocksByPartner,
+  filterEmployeesByBlock,
   findDataFilterText,
+  findPartnerByDeptId,
   normalizeEquipmentList,
   normalizeTicketSummary,
   parseDataFilterOptions,
+  reassignDeploymentEmployee,
+  resolveDefaultDeploymentLocationId,
   revealDeploymentPhone,
+  searchDeploymentEmployees,
   syncDeploymentOnline,
   updateDeploymentCameraPhone,
   updateDeploymentConstruction,
+  validateAndBuildReassignPayload,
   validateCameraPhoneNumber,
   validateConstructionUpdate,
 } from '../src/adapters/deployment.js';
@@ -5015,6 +5025,355 @@ async function runTests() {
     assert.ok(androidAssetContent.includes(bundleToken), `Android bundle must include ${bundleToken}`);
   }
   console.log('   OK: Radius Portal IPNAT & IPv6 tests passed.');
+
+  console.log('23. Testing FOX-ERP Phân tuyến KTV (Deployment Reassignment)...');
+  assert.equal(
+    DEPLOYMENT_ENDPOINTS.getUserInfo,
+    'https://fox-erp.fpt.net/app/tkbt/tk/api/user/info'
+  );
+  assert.equal(
+    DEPLOYMENT_ENDPOINTS.getPartnerData,
+    'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-partner-data'
+  );
+  assert.equal(
+    DEPLOYMENT_ENDPOINTS.reAssignEmployee,
+    'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/re-assign-employee'
+  );
+  assert.equal(
+    DEPLOYMENT_ENDPOINTS.getAssignmentEmp,
+    'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-assignment-emp'
+  );
+  assert.equal(DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE, 'ReasonChangeEmployee');
+
+  const demoReassignUser = await fetchDeploymentUserInfo({ forceDemo: true });
+  assert.equal(demoReassignUser.status, 'ok');
+  assert.equal(demoReassignUser.userInfo.canAssign, true);
+  assert.equal(demoReassignUser.userInfo.locations.length, 2);
+
+  const demoPartnerRes = await fetchDeploymentPartnerData({ locationId: 64, forceDemo: true });
+  assert.equal(demoPartnerRes.status, 'ok');
+  const demoPartnerData = demoPartnerRes.partnerData;
+  assert.equal(demoPartnerData.Partners.length, 2);
+  assert.equal(demoPartnerData.Blocks.length, 3);
+  assert.equal(demoPartnerData.Employees.length, 4);
+
+  const matchedPartner = findPartnerByDeptId(demoPartnerData.Partners, 101);
+  assert.ok(matchedPartner, 'Must match partner where Partner.Code === ticket.DeptId');
+  assert.equal(matchedPartner.Partner, 10);
+
+  const partnerBlocks = filterBlocksByPartner(demoPartnerData, matchedPartner);
+  assert.equal(partnerBlocks.length, 2);
+  assert.equal(partnerBlocks.every((b) => b.PartnerId === 10), true);
+
+  const blockEmps = filterEmployeesByBlock(demoPartnerData, partnerBlocks[0]);
+  assert.equal(blockEmps.length, 2);
+  assert.equal(blockEmps.every((e) => e.BlockId === 5001), true);
+
+  assert.equal(
+    resolveDefaultDeploymentLocationId(
+      { addressLocationId: 48 },
+      { locationId: 64 },
+      demoReassignUser.userInfo.locations,
+      64
+    ),
+    48,
+    'Must prefer ticket.AddressInfo.LocationId when present in user allowed locations'
+  );
+  assert.equal(
+    resolveDefaultDeploymentLocationId(
+      { addressLocationId: 999 },
+      { locationId: 64 },
+      demoReassignUser.userInfo.locations,
+      12
+    ),
+    64,
+    'Must fall back to contract LocationId when address LocationId is not in allowed locations'
+  );
+
+  const quickHits = searchDeploymentEmployees(demoPartnerData, 'ktv.mau0', { partnerId: 20 });
+  assert.equal(quickHits.length, 4);
+  assert.equal(
+    quickHits[0].employee.InsideAccount,
+    'ktv.mau04',
+    'Quick search should prioritize preferred partner employees first'
+  );
+
+  const demoReasons = parseDataFilterOptions(
+    (await fetchDeploymentTicket('SGN123456', { forceDemo: true })).dataFilter,
+    DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE
+  );
+  assert.ok(demoReasons.length >= 3);
+
+  assert.equal(
+    validateAndBuildReassignPayload({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 0,
+      partnerData: demoPartnerData,
+      partner: matchedPartner,
+      block: partnerBlocks[0],
+      employee: blockEmps[1],
+      reason: demoReasons[0],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateAndBuildReassignPayload({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 64,
+      partnerData: demoPartnerData,
+      partner: null,
+      block: partnerBlocks[0],
+      employee: blockEmps[1],
+      reason: demoReasons[0],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateAndBuildReassignPayload({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 64,
+      partnerData: demoPartnerData,
+      partner: matchedPartner,
+      block: null,
+      employee: blockEmps[1],
+      reason: demoReasons[0],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateAndBuildReassignPayload({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 64,
+      partnerData: demoPartnerData,
+      partner: matchedPartner,
+      block: partnerBlocks[0],
+      employee: null,
+      reason: demoReasons[0],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateAndBuildReassignPayload({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 64,
+      partnerData: demoPartnerData,
+      partner: matchedPartner,
+      block: partnerBlocks[0],
+      employee: blockEmps[1],
+      reason: null,
+    }).valid,
+    false
+  );
+
+  const builtReassign = validateAndBuildReassignPayload({
+    objId: 1000001,
+    supId: 900001,
+    contract: 'sgn123456',
+    locationId: 64,
+    partnerData: demoPartnerData,
+    partner: { Partner: 20 },
+    block: demoPartnerData.Blocks[2],
+    employee: demoPartnerData.Employees[3],
+    reason: demoReasons[1],
+  });
+  assert.equal(builtReassign.valid, true);
+  assert.deepEqual(builtReassign.payload, {
+    ObjId: 1000001,
+    SupId: 900001,
+    Contract: 'SGN123456',
+    LocationId: 64,
+    DeptId: 102,
+    EmpAccount: 'ktv.mau04',
+    EmpCode: 'MAU0004',
+    BlockId: 5003,
+    CauseId: Number(demoReasons[1].id),
+    CauseAssign: demoReasons[1].text,
+  });
+
+  const demoReassignSubmit = await reassignDeploymentEmployee({
+    objId: 1000001,
+    supId: 900001,
+    contract: 'SGN123456',
+    locationId: 64,
+    partnerData: demoPartnerData,
+    partner: matchedPartner,
+    block: partnerBlocks[0],
+    employee: blockEmps[1],
+    reason: demoReasons[0],
+    forceDemo: true,
+  });
+  assert.equal(demoReassignSubmit.status, 'ok');
+  assert.equal(demoReassignSubmit.mode, 'demo');
+  assert.equal(demoReassignSubmit.empCode, 'MAU0002');
+  assert.equal((await fetchDeploymentAssignedEmps({ supId: 900001, objId: 1000001, forceDemo: true })).status, 'ok');
+
+  // Mocked live flow for FOX-ERP Reassignment (/api/user/info direct JSON without Succeeded wrapper + get-partner-data + re-assign-employee + get-assignment-emp)
+  const hadWin23 = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+  const prevWin23 = globalThis.window;
+  const grantStore23 = new Map();
+  const capturedReassignReqs = [];
+  try {
+    globalThis.window = {
+      RemoteInsideNative: {
+        httpRequest(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          capturedReassignReqs.push(parsed);
+          let bodyObj = { Succeeded: false };
+          if (parsed.url === DEPLOYMENT_ENDPOINTS.getUserInfo) {
+            bodyObj = {
+              Info: { UserName: 'ktv.quanly.demo', LocationId: 64, SubParentDesc: '64. Demo' },
+              Permissions: {
+                Permission: { Deployment: { IsAssign: true, IsTransferPartner: false } },
+                Locations: [{ LocationId: 64, LocationNameVn: 'Khu vuc Demo' }],
+              },
+            };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getPartnerData) {
+            bodyObj = { Succeeded: true, Data: demoPartnerData };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.reAssignEmployee) {
+            bodyObj = { Succeeded: true, Message: 'Phân tuyến thành công!' };
+          } else if (parsed.url === DEPLOYMENT_ENDPOINTS.getAssignmentEmp) {
+            bodyObj = {
+              Succeeded: true,
+              Data: [
+                {
+                  EmpStatus: 1,
+                  EmpAccount: 'ktv.mau02',
+                  EmpName: 'KTV Mau 02',
+                  EmpPhone: '0900000008',
+                  Empcode: 'MAU0002',
+                },
+              ],
+            };
+          }
+          grantStore23.set(
+            parsed.reqId,
+            JSON.stringify({
+              ok: true,
+              status: 200,
+              finalUrl: parsed.url,
+              responseText: JSON.stringify(bodyObj),
+              responseHeaders: 'Content-Type: application/json\r\n',
+            })
+          );
+          queueMicrotask(() => {
+            if (typeof globalThis.window.__riNativeResolve === 'function') {
+              globalThis.window.__riNativeResolve(parsed.reqId);
+            }
+          });
+        },
+        consumeResponse(reqId) {
+          const val = grantStore23.get(reqId) || '';
+          grantStore23.delete(reqId);
+          return val;
+        },
+      },
+    };
+
+    const liveUserRes = await fetchDeploymentUserInfo({ grant: 'Fe26.2**demo-grant-23' });
+    assert.equal(liveUserRes.status, 'ok');
+    assert.equal(liveUserRes.mode, 'live');
+    assert.equal(liveUserRes.userInfo.canAssign, true);
+    assert.equal(liveUserRes.userInfo.locations[0].LocationId, 64);
+
+    const livePartnerRes = await fetchDeploymentPartnerData({
+      locationId: 64,
+      grant: 'Fe26.2**demo-grant-23',
+    });
+    assert.equal(livePartnerRes.status, 'ok');
+    assert.equal(livePartnerRes.partnerData.Employees.length, 4);
+
+    const liveSubmitRes = await reassignDeploymentEmployee({
+      objId: 1000001,
+      supId: 900001,
+      contract: 'SGN123456',
+      locationId: 64,
+      partnerData: livePartnerRes.partnerData,
+      partner: livePartnerRes.partnerData.Partners[0],
+      block: livePartnerRes.partnerData.Blocks[0],
+      employee: livePartnerRes.partnerData.Employees[1],
+      reason: demoReasons[0],
+      grant: 'Fe26.2**demo-grant-23',
+    });
+    assert.equal(liveSubmitRes.status, 'ok');
+    assert.equal(liveSubmitRes.mode, 'live');
+
+    const liveEmpRes = await fetchDeploymentAssignedEmps({
+      supId: 900001,
+      objId: 1000001,
+      grant: 'Fe26.2**demo-grant-23',
+    });
+    assert.equal(liveEmpRes.status, 'ok');
+    assert.equal(liveEmpRes.mainEmp.account, 'ktv.mau02');
+    assert.equal(liveEmpRes.mainEmp.code, 'MAU0002');
+
+    for (const ep of [
+      DEPLOYMENT_ENDPOINTS.getUserInfo,
+      DEPLOYMENT_ENDPOINTS.getPartnerData,
+      DEPLOYMENT_ENDPOINTS.reAssignEmployee,
+      DEPLOYMENT_ENDPOINTS.getAssignmentEmp,
+    ]) {
+      const req = capturedReassignReqs.find((r) => r.url === ep);
+      assert.ok(req, `Expected FOX-ERP reassignment request to ${ep}`);
+      assert.equal(req.headers['x-resource-grant'], 'Fe26.2**demo-grant-23');
+    }
+    const reassignReq = capturedReassignReqs.find(
+      (r) => r.url === DEPLOYMENT_ENDPOINTS.reAssignEmployee
+    );
+    assert.deepEqual(JSON.parse(reassignReq.data), {
+      ObjId: 1000001,
+      SupId: 900001,
+      Contract: 'SGN123456',
+      LocationId: 64,
+      DeptId: 101,
+      EmpAccount: 'ktv.mau02',
+      EmpCode: 'MAU0002',
+      BlockId: 5001,
+      CauseId: Number(demoReasons[0].id),
+      CauseAssign: demoReasons[0].text,
+    });
+    const empReq = capturedReassignReqs.find(
+      (r) => r.url === DEPLOYMENT_ENDPOINTS.getAssignmentEmp
+    );
+    assert.deepEqual(JSON.parse(empReq.data), {
+      DeploymentId: 900001,
+      ContractId: 1000001,
+    });
+  } finally {
+    if (hadWin23) {
+      globalThis.window = prevWin23;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
+  for (const token of [
+    DEPLOYMENT_ENDPOINTS.getUserInfo,
+    DEPLOYMENT_ENDPOINTS.getPartnerData,
+    DEPLOYMENT_ENDPOINTS.reAssignEmployee,
+    DEPLOYMENT_ENDPOINTS.getAssignmentEmp,
+    'ReasonChangeEmployee',
+    'Phân tuyến cho KTV khác',
+    'ri-reassign-emp-btn',
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Built reassignment bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: FOX-ERP Phân tuyến KTV tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

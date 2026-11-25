@@ -31,6 +31,10 @@ export const DEPLOYMENT_ENDPOINTS = {
   statusCompleted: 'https://fox-erp.fpt.net/app/tkbt/tk/api/status/completed',
   getPaymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/payment/get-payment-info',
   updateCameraPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/update-number-phone-camera',
+  getUserInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/user/info',
+  getPartnerData: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-partner-data',
+  reAssignEmployee: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/re-assign-employee',
+  getAssignmentEmp: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-assignment-emp',
 };
 
 export const DEPLOYMENT_EQUIPMENT_TYPE = {
@@ -47,6 +51,7 @@ export const DEPLOYMENT_CATALOG_KEYS = {
   REASON_HIFPT: 'ReasonNonSetHiFPT',
   NOT_COMPLETE_WIFI: 'NoneCompleteWifi',
   REASON_UNUSE_CAP_LAN: 'ReasonUnuseCapLan',
+  REASON_CHANGE_EMPLOYEE: 'ReasonChangeEmployee',
   CABLE_TYPE: 'SupportINF_CableType',
 };
 
@@ -89,6 +94,14 @@ const DEMO_DATA_FILTER = [
       { Code: 0, Tittle: 'Không chọn', Position: 1 },
       { Code: 1, Tittle: 'KH không đồng ý đi dây LAN do mất thẩm mỹ nhà', Position: 2 },
       { Code: 2, Tittle: 'KH muốn sử dụng wifi để di chuyển các vị trí khác nhau', Position: 3 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE,
+    Datas: [
+      { Code: 1, Tittle: 'Điều phối tối ưu theo tuyến địa bàn', Position: 1 },
+      { Code: 2, Tittle: 'KTV cũ bận ca vụ / quá tải lịch hẹn', Position: 2 },
+      { Code: 3, Tittle: 'Chuyển KTV chuyên trách khu vực', Position: 3 },
     ],
   },
 ];
@@ -269,6 +282,17 @@ export function normalizeTicketSummary(contractData, selectedSupId = 0) {
       odcCableType: String(t.ODCCableType || '').trim(),
       blockDepName: String(t.BlockDepName || t.BlockName || '').trim(),
       plotsName: String(t.PlotsName || '').trim(),
+      deptId: Number(t.DeptId ?? 0),
+      partnerId: Number(t.PartnerId ?? 0),
+      blockId: Number(t.BlockId ?? t.BlockDepId ?? 0),
+      addressLocationId: Number((t.AddressInfo && t.AddressInfo.LocationId) ?? t.LocationId ?? 0),
+      isGsafe:
+        Array.isArray(t.OrdersInfo) &&
+        t.OrdersInfo.some(
+          (o) =>
+            Array.isArray(o && o.ServiceInfos) &&
+            o.ServiceInfos.some((sv) => /gsafe/i.test(String((sv && (sv.ServiceName || sv.Name)) || '')))
+        ),
       finishDate: String(t.FinishDate || '').trim(),
       descriptionCs: String(t.DescriptionCs || '').trim(),
       mainEmp: mapAssignedEmployee(mainRaw),
@@ -297,6 +321,7 @@ export function normalizeTicketSummary(contractData, selectedSupId = 0) {
   return {
     objId: Number(src.ObjId ?? 0),
     contract,
+    locationId: Number(src.LocationId ?? 0),
     fullName: String(src.FullName || '').trim(),
     address: String(src.Address || (ticket && ticket.location) || '').trim(),
     nameObj: String(src.NameObj || '').trim(),
@@ -411,11 +436,241 @@ export function buildCompletedPayload({
   return payload;
 }
 
+function foldDeploymentSearchText(raw) {
+  return String(raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Xac dinh LocationId mac dinh theo quy tac DefaultLocationOf cua FOX-ERP.
+ */
+export function resolveDefaultDeploymentLocationId(
+  ticket,
+  summary,
+  userLocations = [],
+  userInfoLocationId = 0
+) {
+  const locs = Array.isArray(userLocations) ? userLocations : [];
+  const addrLocId = Number(
+    (ticket && (ticket.addressLocationId ?? (ticket.AddressInfo && ticket.AddressInfo.LocationId))) ||
+      0
+  );
+  if (addrLocId > 0 && locs.some((loc) => Number(loc && loc.LocationId) === addrLocId)) {
+    return addrLocId;
+  }
+  const contractLocId = Number((summary && (summary.locationId ?? summary.LocationId)) || 0);
+  if (contractLocId > 0) {
+    return contractLocId;
+  }
+  const userLocId = Number(userInfoLocationId || 0);
+  if (userLocId > 0) {
+    return userLocId;
+  }
+  return locs.length > 0 ? Number(locs[0].LocationId || 0) : 0;
+}
+
+/**
+ * Tim doi tac theo DeptId cua phieu (Partner.Code === ticket.deptId).
+ */
+export function findPartnerByDeptId(partners, deptId) {
+  const list = Array.isArray(partners) ? partners : [];
+  const numDept = Number(deptId || 0);
+  if (!numDept) return null;
+  return list.find((p) => p && Number(p.Code) === numDept) || null;
+}
+
+/**
+ * Loc danh sach Block thuoc doi tac dang chon (Block.PartnerId === Partner.Partner).
+ */
+export function filterBlocksByPartner(partnerData, partnerOrId) {
+  const targetId =
+    partnerOrId && typeof partnerOrId === 'object'
+      ? Number(partnerOrId.Partner ?? partnerOrId.PartnerId ?? 0)
+      : Number(partnerOrId || 0);
+  if (!targetId || !partnerData || !Array.isArray(partnerData.Blocks)) {
+    return [];
+  }
+  return partnerData.Blocks.filter((b) => b && Number(b.PartnerId) === targetId);
+}
+
+/**
+ * Loc danh sach KTV thuoc Block dang chon (Employee.BlockId === Block.Id).
+ */
+export function filterEmployeesByBlock(partnerData, blockOrId) {
+  const targetId =
+    blockOrId && typeof blockOrId === 'object'
+      ? Number(blockOrId.Id ?? blockOrId.BlockId ?? 0)
+      : Number(blockOrId || 0);
+  if (!targetId || !partnerData || !Array.isArray(partnerData.Employees)) {
+    return [];
+  }
+  return partnerData.Employees.filter((e) => e && Number(e.BlockId) === targetId);
+}
+
+/**
+ * Tim nhanh KTV theo InsideAccount, CodeEmployee hoac ten Block trong du lieu get-partner-data.
+ */
+export function searchDeploymentEmployees(
+  partnerData,
+  query = '',
+  { partnerId = 0, limit = 12 } = {}
+) {
+  const q = foldDeploymentSearchText(query);
+  if (!q || !partnerData || !Array.isArray(partnerData.Employees)) {
+    return [];
+  }
+  const blocks = Array.isArray(partnerData.Blocks) ? partnerData.Blocks : [];
+  const partners = Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+  const blockById = new Map();
+  for (const b of blocks) {
+    if (b && b.Id != null) blockById.set(Number(b.Id), b);
+  }
+  const partnerById = new Map();
+  for (const p of partners) {
+    if (p && p.Partner != null) partnerById.set(Number(p.Partner), p);
+  }
+
+  const prefPartnerId = Number(partnerId || 0);
+  const maxItems = Math.max(1, Number(limit) || 12);
+  const hits = [];
+
+  for (const emp of partnerData.Employees) {
+    if (!emp) continue;
+    const block = blockById.get(Number(emp.BlockId || 0)) || null;
+    const partner =
+      partnerById.get(Number(emp.PartnerId || (block && block.PartnerId) || 0)) || null;
+    const haystack = foldDeploymentSearchText(
+      `${emp.InsideAccount || ''} ${emp.CodeEmployee || ''} ${(block && block.SubName) || ''}`
+    );
+    if (!haystack.includes(q)) continue;
+    const empAccountFold = foldDeploymentSearchText(emp.InsideAccount || '');
+    const startsBonus = empAccountFold.startsWith(q) ? 0 : 1;
+    const partnerBonus =
+      prefPartnerId && Number(emp.PartnerId || (block && block.PartnerId)) === prefPartnerId
+        ? 0
+        : 1;
+    hits.push({
+      employee: emp,
+      block,
+      partner,
+      _rank: partnerBonus * 2 + startsBonus,
+    });
+  }
+
+  hits.sort((a, b) => {
+    if (a._rank !== b._rank) return a._rank - b._rank;
+    return String(a.employee.InsideAccount || '').localeCompare(
+      String(b.employee.InsideAccount || '')
+    );
+  });
+
+  return hits.slice(0, maxItems).map(({ employee, block, partner }) => ({
+    employee,
+    block,
+    partner,
+  }));
+}
+
+/**
+ * Kiem tra hop le du lieu Phan tuyen va dong goi payload chuan 10 truong cua FOX-ERP.
+ */
+export function validateAndBuildReassignPayload({
+  objId,
+  supId,
+  contract,
+  locationId,
+  partnerData,
+  partner,
+  block,
+  employee,
+  reason,
+} = {}) {
+  const numLocationId = Number(locationId || 0);
+  if (!Number.isInteger(numLocationId) || numLocationId <= 0) {
+    return { valid: false, error: 'Vui lòng chọn Tỉnh thành.', payload: null };
+  }
+  if (
+    !partner ||
+    typeof partner !== 'object' ||
+    partner.Partner === undefined ||
+    partner.Partner === null ||
+    String(partner.Partner).trim() === '' ||
+    !Number.isFinite(Number(partner.Partner))
+  ) {
+    return { valid: false, error: 'Chưa chọn Đối tác.', payload: null };
+  }
+  if (
+    !block ||
+    typeof block !== 'object' ||
+    block.Id === undefined ||
+    block.Id === null ||
+    !Number(block.Id)
+  ) {
+    return { valid: false, error: 'Chưa chọn Block / Tổ.', payload: null };
+  }
+  if (
+    !employee ||
+    typeof employee !== 'object' ||
+    !String(employee.InsideAccount || '').trim() ||
+    !String(employee.CodeEmployee ?? '').trim()
+  ) {
+    return { valid: false, error: 'Chưa chọn Nhân viên (KTV).', payload: null };
+  }
+  if (!reason || typeof reason !== 'object' || String(reason.id ?? reason.Id ?? '').trim() === '') {
+    return { valid: false, error: 'Chưa chọn Nguyên nhân phân công lại.', payload: null };
+  }
+
+  const numObjId = Number(objId || 0);
+  const numSupId = Number(supId || 0);
+  const cleanContract = normalizeContractId(contract);
+  if (!numObjId || !numSupId || !cleanContract) {
+    return {
+      valid: false,
+      error: 'Thiếu thông tin phiếu triển khai để phân tuyến.',
+      payload: null,
+    };
+  }
+
+  const selectedPartnerVal = Number(partner.Partner ?? 0);
+  const partners = partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+  const matchedPartner =
+    partners.find((p) => p && Number(p.Partner) === selectedPartnerVal) || partner;
+  const deptId = Number((matchedPartner && matchedPartner.Code) ?? 0);
+  const causeId = Number(reason.id ?? reason.Id ?? 0);
+  const causeAssign = String(reason.text ?? reason.Text ?? reason.Tittle ?? '').trim();
+  if (!Number.isFinite(causeId) || !causeAssign) {
+    return { valid: false, error: 'Chưa chọn Nguyên nhân phân công lại.', payload: null };
+  }
+
+  return {
+    valid: true,
+    error: '',
+    payload: {
+      ObjId: numObjId,
+      SupId: numSupId,
+      Contract: cleanContract,
+      LocationId: numLocationId,
+      DeptId: deptId,
+      EmpAccount: String(employee.InsideAccount || '').trim(),
+      EmpCode: String(employee.CodeEmployee ?? '').trim(),
+      BlockId: Number(block.Id ?? 0),
+      CauseId: causeId,
+      CauseAssign: causeAssign,
+    },
+  };
+}
+
 function buildDemoTicketPayload(contractId = 'SGN123456') {
   const cleanId = normalizeContractId(contractId) || 'SGN123456';
   return {
     ObjId: 1000001,
     Contract: cleanId,
+    LocationId: 64,
     FullName: 'NGUYEN VAN MAU',
     NameObj: 'Giga',
     LocalTypeName: 'Giga - FTTx (Demo)',
@@ -438,6 +693,10 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
         ODCCableType: 'HCM-ODC-01/HO-1/1-G',
         BlockDepName: 'Khu vuc Mau 01',
         PlotsName: 'L01',
+        DeptId: 101,
+        PartnerId: 10,
+        BlockId: 5001,
+        AddressInfo: { LocationId: 64 },
         DescriptionCs: 'Ghi chu CS mau',
         ReasonDelay: 0,
         DescriptionRd: '',
@@ -465,6 +724,119 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
     ],
   };
 }
+
+const DEMO_USER_INFO = {
+  Info: {
+    UserName: 'ktv.quanly.demo',
+    LocationId: 64,
+    SubParentDesc: '64. Khu vuc Mau',
+  },
+  Permissions: {
+    Permission: {
+      Deployment: {
+        IsAssign: true,
+        IsTransferPartner: false,
+      },
+    },
+    Locations: [
+      {
+        LocationId: 64,
+        LocationNameVn: 'Khu vực Mẫu 01 (Demo)',
+        SubParentDesc: '64. Khu vuc Mau',
+      },
+      {
+        LocationId: 48,
+        LocationNameVn: 'Khu vực Mẫu 02 (Demo)',
+        SubParentDesc: '48. Khu vuc Mau 2',
+      },
+    ],
+  },
+};
+
+const DEMO_PARTNER_DATA = {
+  Partners: [
+    {
+      LocationId: 64,
+      Code: 101,
+      Partner: 10,
+      OwnerType: 1,
+      InfdivName: 'DT Mau Khu Vuc A',
+      Supporter: 'TO A',
+      IsSO: 0,
+      OrderBy: 1,
+    },
+    {
+      LocationId: 64,
+      Code: 102,
+      Partner: 20,
+      OwnerType: 2,
+      InfdivName: 'DT Mau Khu Vuc B',
+      Supporter: 'TO B',
+      IsSO: 0,
+      OrderBy: 2,
+    },
+  ],
+  Blocks: [
+    {
+      Id: 5001,
+      PartnerId: 10,
+      SubName: 'Khu vuc Mau 01',
+      DeptId: 101,
+      LocationId: 64,
+      IsSO: 0,
+    },
+    {
+      Id: 5002,
+      PartnerId: 10,
+      SubName: 'Khu vuc Mau 02',
+      DeptId: 101,
+      LocationId: 64,
+      IsSO: 0,
+    },
+    {
+      Id: 5003,
+      PartnerId: 20,
+      SubName: 'Khu vuc Mau 03',
+      DeptId: 102,
+      LocationId: 64,
+      IsSO: 0,
+    },
+  ],
+  Employees: [
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5001,
+      CodeEmployee: 'MAU0001',
+      InsideAccount: 'ktv.mau01',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5001,
+      CodeEmployee: 'MAU0002',
+      InsideAccount: 'ktv.mau02',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5002,
+      CodeEmployee: 'MAU0003',
+      InsideAccount: 'ktv.mau03',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 20,
+      BlockId: 5003,
+      CodeEmployee: 'MAU0004',
+      InsideAccount: 'ktv.mau04',
+      Email: '',
+    },
+  ],
+};
 
 const DEMO_EQUIPMENTS = [
   {
@@ -1215,5 +1587,232 @@ export async function completeDeploymentTicket({
     message:
       res.json.Message ||
       (res.json.Succeeded ? 'Hoàn tất phiếu triển khai thành công.' : 'Không hoàn tất được phiếu.'),
+  };
+}
+
+function normalizePartnerDataPayload(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    Partners: Array.isArray(src.Partners) ? src.Partners.map((p) => ({ ...p })) : [],
+    Blocks: Array.isArray(src.Blocks) ? src.Blocks.map((b) => ({ ...b })) : [],
+    Employees: Array.isArray(src.Employees) ? src.Employees.map((e) => ({ ...e })) : [],
+  };
+}
+
+/**
+ * Tai thong tin tai khoan, khu vuc & quyen IsAssign tren FOX-ERP (response tra truc tiep, khong boc Succeeded).
+ */
+export async function fetchDeploymentUserInfo({ grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const permDep = DEMO_USER_INFO.Permissions.Permission.Deployment;
+    return {
+      status: 'ok',
+      mode: 'demo',
+      userInfo: {
+        userName: DEMO_USER_INFO.Info.UserName,
+        locationId: DEMO_USER_INFO.Info.LocationId,
+        subParentDesc: DEMO_USER_INFO.Info.SubParentDesc,
+        locations: DEMO_USER_INFO.Permissions.Locations.map((l) => ({ ...l })),
+        canAssign: Boolean(permDep.IsAssign),
+        canTransferPartner: Boolean(permDep.IsTransferPartner),
+      },
+    };
+  }
+
+  const res = await postFoxJson(DEPLOYMENT_ENDPOINTS.getUserInfo, null, { grant });
+  if (res.status !== 'ok') return res;
+  const raw = res.json || {};
+  const info = raw.Info && typeof raw.Info === 'object' ? raw.Info : null;
+  const perms = raw.Permissions && typeof raw.Permissions === 'object' ? raw.Permissions : null;
+  if (!info && !perms) {
+    return {
+      status: 'error',
+      message: raw.Message || 'Không tải được quyền phân tuyến người dùng.',
+    };
+  }
+  const deployPerm =
+    perms && perms.Permission && perms.Permission.Deployment ? perms.Permission.Deployment : {};
+  const locations = perms && Array.isArray(perms.Locations) ? perms.Locations : [];
+  return {
+    status: 'ok',
+    mode: 'live',
+    userInfo: {
+      userName: String((info && info.UserName) || '').trim(),
+      locationId: Number((info && info.LocationId) || 0),
+      subParentDesc: String((info && info.SubParentDesc) || '').trim(),
+      locations,
+      canAssign: deployPerm.IsAssign !== undefined ? Boolean(deployPerm.IsAssign) : null,
+      canTransferPartner: Boolean(deployPerm.IsTransferPartner),
+    },
+  };
+}
+
+/**
+ * Tai danh sach Doi tac, Block/To va KTV theo LocationId.
+ */
+export async function fetchDeploymentPartnerData({
+  locationId = 0,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      partnerData: normalizePartnerDataPayload(DEMO_PARTNER_DATA),
+    };
+  }
+
+  const numLocationId = Number(locationId || 0);
+  if (!Number.isInteger(numLocationId) || numLocationId <= 0) {
+    return {
+      status: 'error',
+      message: 'Thiếu mã Tỉnh/Thành phố (LocationId) để tải danh sách KTV.',
+    };
+  }
+
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getPartnerData,
+    { LocationId: numLocationId },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded || !res.json.Data) {
+    return {
+      status: 'error',
+      message: res.json.Message || 'Không tải được danh sách Đối tác / Tổ / KTV.',
+    };
+  }
+  return {
+    status: 'ok',
+    mode: 'live',
+    partnerData: normalizePartnerDataPayload(res.json.Data),
+  };
+}
+
+/**
+ * Gui lenh Phan tuyen (Re-assign employee) cho phieu trien khai FOX-ERP.
+ */
+export async function reassignDeploymentEmployee({
+  objId,
+  supId,
+  contract,
+  locationId,
+  partnerData,
+  partner,
+  block,
+  employee,
+  reason,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateAndBuildReassignPayload({
+    objId,
+    supId,
+    contract,
+    locationId,
+    partnerData,
+    partner,
+    block,
+    employee,
+    reason,
+  });
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+
+  const blockName = String((block && block.SubName) || '').trim();
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: `Phân tuyến thành công cho ${check.payload.EmpAccount} (mẫu mô phỏng).`,
+      empCode: check.payload.EmpCode,
+      empAccount: check.payload.EmpAccount,
+      blockName,
+      payload: check.payload,
+    };
+  }
+
+  const res = await postFoxJson(DEPLOYMENT_ENDPOINTS.reAssignEmployee, check.payload, { grant });
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: res.json.Message || 'Phân tuyến không thành công.',
+    };
+  }
+  return {
+    status: 'ok',
+    mode: 'live',
+    message:
+      res.json.Message || `Phân tuyến thành công cho ${check.payload.EmpAccount}!`,
+    empCode: check.payload.EmpCode,
+    empAccount: check.payload.EmpAccount,
+    blockName,
+    payload: check.payload,
+  };
+}
+
+/**
+ * Tai lai danh sach nhan vien dang duoc phan cong tren phieu sau khi phan tuyen.
+ */
+export async function fetchDeploymentAssignedEmps({
+  supId,
+  objId,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const demoRaw = [
+      {
+        EmpStatus: 1,
+        EmpAccount: 'ktv.mau01',
+        EmpName: 'KTV Mau 01',
+        EmpPhone: '0900000002',
+        Empcode: 'MAU0001',
+      },
+    ];
+    return {
+      status: 'ok',
+      mode: 'demo',
+      mainEmp: mapAssignedEmployee(demoRaw[0]),
+      supportEmps: [],
+      raw: demoRaw,
+    };
+  }
+
+  const numSupId = Number(supId || 0);
+  const numObjId = Number(objId || 0);
+  if (!numSupId || !numObjId) {
+    return {
+      status: 'error',
+      message: 'Thiếu ObjId hoặc SupId để tải lại nhân viên phân công.',
+    };
+  }
+
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getAssignmentEmp,
+    { DeploymentId: numSupId, ContractId: numObjId },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return {
+      status: 'error',
+      message: res.json.Message || 'Không tải lại được nhân viên phân công của phiếu.',
+    };
+  }
+  const rows = Array.isArray(res.json.Data) ? res.json.Data : [];
+  const mainRaw = rows.find((e) => Number(e && e.EmpStatus) === 1) || null;
+  const supportRaws = rows.filter((e) => Number(e && e.EmpStatus) === 2);
+  return {
+    status: 'ok',
+    mode: 'live',
+    mainEmp: mapAssignedEmployee(mainRaw),
+    supportEmps: supportRaws.map(mapAssignedEmployee).filter(Boolean),
+    raw: rows,
   };
 }

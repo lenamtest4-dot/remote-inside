@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.14.3
+// @version      0.15.0
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
@@ -47,8 +47,8 @@
 
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.14.3";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
+  const __REMOTE_INSIDE_VERSION__ = "0.15.0";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-mode-btn--wide {\n  grid-column: 1 / -1;\n}\n\n.ri-reassign-results {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  margin-top: 8px;\n  max-height: 220px;\n  overflow-y: auto;\n}\n\n.ri-reassign-emp-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 2px;\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 10px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-reassign-emp-btn:hover {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-reassign-emp-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-reassign-emp-meta {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--ink-muted);\n}\n\n.ri-reassign-preview {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 0;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -6715,6 +6715,10 @@ const DEPLOYMENT_ENDPOINTS = {
   statusCompleted: 'https://fox-erp.fpt.net/app/tkbt/tk/api/status/completed',
   getPaymentInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/payment/get-payment-info',
   updateCameraPhone: 'https://fox-erp.fpt.net/app/tkbt/tk/api/contract/update-number-phone-camera',
+  getUserInfo: 'https://fox-erp.fpt.net/app/tkbt/tk/api/user/info',
+  getPartnerData: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-partner-data',
+  reAssignEmployee: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/re-assign-employee',
+  getAssignmentEmp: 'https://fox-erp.fpt.net/app/tkbt/tk/api/assignment/get-assignment-emp',
 };
 const DEPLOYMENT_EQUIPMENT_TYPE = {
   DEPLOY: 1,
@@ -6728,6 +6732,7 @@ const DEPLOYMENT_CATALOG_KEYS = {
   REASON_HIFPT: 'ReasonNonSetHiFPT',
   NOT_COMPLETE_WIFI: 'NoneCompleteWifi',
   REASON_UNUSE_CAP_LAN: 'ReasonUnuseCapLan',
+  REASON_CHANGE_EMPLOYEE: 'ReasonChangeEmployee',
   CABLE_TYPE: 'SupportINF_CableType',
 };
 
@@ -6770,6 +6775,14 @@ const DEMO_DATA_FILTER = [
       { Code: 0, Tittle: 'Không chọn', Position: 1 },
       { Code: 1, Tittle: 'KH không đồng ý đi dây LAN do mất thẩm mỹ nhà', Position: 2 },
       { Code: 2, Tittle: 'KH muốn sử dụng wifi để di chuyển các vị trí khác nhau', Position: 3 },
+    ],
+  },
+  {
+    ParentName: DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE,
+    Datas: [
+      { Code: 1, Tittle: 'Điều phối tối ưu theo tuyến địa bàn', Position: 1 },
+      { Code: 2, Tittle: 'KTV cũ bận ca vụ / quá tải lịch hẹn', Position: 2 },
+      { Code: 3, Tittle: 'Chuyển KTV chuyên trách khu vực', Position: 3 },
     ],
   },
 ];
@@ -6945,6 +6958,17 @@ function normalizeTicketSummary(contractData, selectedSupId = 0) {
       odcCableType: String(t.ODCCableType || '').trim(),
       blockDepName: String(t.BlockDepName || t.BlockName || '').trim(),
       plotsName: String(t.PlotsName || '').trim(),
+      deptId: Number(t.DeptId ?? 0),
+      partnerId: Number(t.PartnerId ?? 0),
+      blockId: Number(t.BlockId ?? t.BlockDepId ?? 0),
+      addressLocationId: Number((t.AddressInfo && t.AddressInfo.LocationId) ?? t.LocationId ?? 0),
+      isGsafe:
+        Array.isArray(t.OrdersInfo) &&
+        t.OrdersInfo.some(
+          (o) =>
+            Array.isArray(o && o.ServiceInfos) &&
+            o.ServiceInfos.some((sv) => /gsafe/i.test(String((sv && (sv.ServiceName || sv.Name)) || '')))
+        ),
       finishDate: String(t.FinishDate || '').trim(),
       descriptionCs: String(t.DescriptionCs || '').trim(),
       mainEmp: mapAssignedEmployee(mainRaw),
@@ -6973,6 +6997,7 @@ function normalizeTicketSummary(contractData, selectedSupId = 0) {
   return {
     objId: Number(src.ObjId ?? 0),
     contract,
+    locationId: Number(src.LocationId ?? 0),
     fullName: String(src.FullName || '').trim(),
     address: String(src.Address || (ticket && ticket.location) || '').trim(),
     nameObj: String(src.NameObj || '').trim(),
@@ -7084,11 +7109,241 @@ function buildCompletedPayload({
   return payload;
 }
 
+function foldDeploymentSearchText(raw) {
+  return String(raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Xac dinh LocationId mac dinh theo quy tac DefaultLocationOf cua FOX-ERP.
+ */
+function resolveDefaultDeploymentLocationId(
+  ticket,
+  summary,
+  userLocations = [],
+  userInfoLocationId = 0
+) {
+  const locs = Array.isArray(userLocations) ? userLocations : [];
+  const addrLocId = Number(
+    (ticket && (ticket.addressLocationId ?? (ticket.AddressInfo && ticket.AddressInfo.LocationId))) ||
+      0
+  );
+  if (addrLocId > 0 && locs.some((loc) => Number(loc && loc.LocationId) === addrLocId)) {
+    return addrLocId;
+  }
+  const contractLocId = Number((summary && (summary.locationId ?? summary.LocationId)) || 0);
+  if (contractLocId > 0) {
+    return contractLocId;
+  }
+  const userLocId = Number(userInfoLocationId || 0);
+  if (userLocId > 0) {
+    return userLocId;
+  }
+  return locs.length > 0 ? Number(locs[0].LocationId || 0) : 0;
+}
+
+/**
+ * Tim doi tac theo DeptId cua phieu (Partner.Code === ticket.deptId).
+ */
+function findPartnerByDeptId(partners, deptId) {
+  const list = Array.isArray(partners) ? partners : [];
+  const numDept = Number(deptId || 0);
+  if (!numDept) return null;
+  return list.find((p) => p && Number(p.Code) === numDept) || null;
+}
+
+/**
+ * Loc danh sach Block thuoc doi tac dang chon (Block.PartnerId === Partner.Partner).
+ */
+function filterBlocksByPartner(partnerData, partnerOrId) {
+  const targetId =
+    partnerOrId && typeof partnerOrId === 'object'
+      ? Number(partnerOrId.Partner ?? partnerOrId.PartnerId ?? 0)
+      : Number(partnerOrId || 0);
+  if (!targetId || !partnerData || !Array.isArray(partnerData.Blocks)) {
+    return [];
+  }
+  return partnerData.Blocks.filter((b) => b && Number(b.PartnerId) === targetId);
+}
+
+/**
+ * Loc danh sach KTV thuoc Block dang chon (Employee.BlockId === Block.Id).
+ */
+function filterEmployeesByBlock(partnerData, blockOrId) {
+  const targetId =
+    blockOrId && typeof blockOrId === 'object'
+      ? Number(blockOrId.Id ?? blockOrId.BlockId ?? 0)
+      : Number(blockOrId || 0);
+  if (!targetId || !partnerData || !Array.isArray(partnerData.Employees)) {
+    return [];
+  }
+  return partnerData.Employees.filter((e) => e && Number(e.BlockId) === targetId);
+}
+
+/**
+ * Tim nhanh KTV theo InsideAccount, CodeEmployee hoac ten Block trong du lieu get-partner-data.
+ */
+function searchDeploymentEmployees(
+  partnerData,
+  query = '',
+  { partnerId = 0, limit = 12 } = {}
+) {
+  const q = foldDeploymentSearchText(query);
+  if (!q || !partnerData || !Array.isArray(partnerData.Employees)) {
+    return [];
+  }
+  const blocks = Array.isArray(partnerData.Blocks) ? partnerData.Blocks : [];
+  const partners = Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+  const blockById = new Map();
+  for (const b of blocks) {
+    if (b && b.Id != null) blockById.set(Number(b.Id), b);
+  }
+  const partnerById = new Map();
+  for (const p of partners) {
+    if (p && p.Partner != null) partnerById.set(Number(p.Partner), p);
+  }
+
+  const prefPartnerId = Number(partnerId || 0);
+  const maxItems = Math.max(1, Number(limit) || 12);
+  const hits = [];
+
+  for (const emp of partnerData.Employees) {
+    if (!emp) continue;
+    const block = blockById.get(Number(emp.BlockId || 0)) || null;
+    const partner =
+      partnerById.get(Number(emp.PartnerId || (block && block.PartnerId) || 0)) || null;
+    const haystack = foldDeploymentSearchText(
+      `${emp.InsideAccount || ''} ${emp.CodeEmployee || ''} ${(block && block.SubName) || ''}`
+    );
+    if (!haystack.includes(q)) continue;
+    const empAccountFold = foldDeploymentSearchText(emp.InsideAccount || '');
+    const startsBonus = empAccountFold.startsWith(q) ? 0 : 1;
+    const partnerBonus =
+      prefPartnerId && Number(emp.PartnerId || (block && block.PartnerId)) === prefPartnerId
+        ? 0
+        : 1;
+    hits.push({
+      employee: emp,
+      block,
+      partner,
+      _rank: partnerBonus * 2 + startsBonus,
+    });
+  }
+
+  hits.sort((a, b) => {
+    if (a._rank !== b._rank) return a._rank - b._rank;
+    return String(a.employee.InsideAccount || '').localeCompare(
+      String(b.employee.InsideAccount || '')
+    );
+  });
+
+  return hits.slice(0, maxItems).map(({ employee, block, partner }) => ({
+    employee,
+    block,
+    partner,
+  }));
+}
+
+/**
+ * Kiem tra hop le du lieu Phan tuyen va dong goi payload chuan 10 truong cua FOX-ERP.
+ */
+function validateAndBuildReassignPayload({
+  objId,
+  supId,
+  contract,
+  locationId,
+  partnerData,
+  partner,
+  block,
+  employee,
+  reason,
+} = {}) {
+  const numLocationId = Number(locationId || 0);
+  if (!Number.isInteger(numLocationId) || numLocationId <= 0) {
+    return { valid: false, error: 'Vui lòng chọn Tỉnh thành.', payload: null };
+  }
+  if (
+    !partner ||
+    typeof partner !== 'object' ||
+    partner.Partner === undefined ||
+    partner.Partner === null ||
+    String(partner.Partner).trim() === '' ||
+    !Number.isFinite(Number(partner.Partner))
+  ) {
+    return { valid: false, error: 'Chưa chọn Đối tác.', payload: null };
+  }
+  if (
+    !block ||
+    typeof block !== 'object' ||
+    block.Id === undefined ||
+    block.Id === null ||
+    !Number(block.Id)
+  ) {
+    return { valid: false, error: 'Chưa chọn Block / Tổ.', payload: null };
+  }
+  if (
+    !employee ||
+    typeof employee !== 'object' ||
+    !String(employee.InsideAccount || '').trim() ||
+    !String(employee.CodeEmployee ?? '').trim()
+  ) {
+    return { valid: false, error: 'Chưa chọn Nhân viên (KTV).', payload: null };
+  }
+  if (!reason || typeof reason !== 'object' || String(reason.id ?? reason.Id ?? '').trim() === '') {
+    return { valid: false, error: 'Chưa chọn Nguyên nhân phân công lại.', payload: null };
+  }
+
+  const numObjId = Number(objId || 0);
+  const numSupId = Number(supId || 0);
+  const cleanContract = normalizeContractId(contract);
+  if (!numObjId || !numSupId || !cleanContract) {
+    return {
+      valid: false,
+      error: 'Thiếu thông tin phiếu triển khai để phân tuyến.',
+      payload: null,
+    };
+  }
+
+  const selectedPartnerVal = Number(partner.Partner ?? 0);
+  const partners = partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+  const matchedPartner =
+    partners.find((p) => p && Number(p.Partner) === selectedPartnerVal) || partner;
+  const deptId = Number((matchedPartner && matchedPartner.Code) ?? 0);
+  const causeId = Number(reason.id ?? reason.Id ?? 0);
+  const causeAssign = String(reason.text ?? reason.Text ?? reason.Tittle ?? '').trim();
+  if (!Number.isFinite(causeId) || !causeAssign) {
+    return { valid: false, error: 'Chưa chọn Nguyên nhân phân công lại.', payload: null };
+  }
+
+  return {
+    valid: true,
+    error: '',
+    payload: {
+      ObjId: numObjId,
+      SupId: numSupId,
+      Contract: cleanContract,
+      LocationId: numLocationId,
+      DeptId: deptId,
+      EmpAccount: String(employee.InsideAccount || '').trim(),
+      EmpCode: String(employee.CodeEmployee ?? '').trim(),
+      BlockId: Number(block.Id ?? 0),
+      CauseId: causeId,
+      CauseAssign: causeAssign,
+    },
+  };
+}
+
 function buildDemoTicketPayload(contractId = 'SGN123456') {
   const cleanId = normalizeContractId(contractId) || 'SGN123456';
   return {
     ObjId: 1000001,
     Contract: cleanId,
+    LocationId: 64,
     FullName: 'NGUYEN VAN MAU',
     NameObj: 'Giga',
     LocalTypeName: 'Giga - FTTx (Demo)',
@@ -7111,6 +7366,10 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
         ODCCableType: 'HCM-ODC-01/HO-1/1-G',
         BlockDepName: 'Khu vuc Mau 01',
         PlotsName: 'L01',
+        DeptId: 101,
+        PartnerId: 10,
+        BlockId: 5001,
+        AddressInfo: { LocationId: 64 },
         DescriptionCs: 'Ghi chu CS mau',
         ReasonDelay: 0,
         DescriptionRd: '',
@@ -7138,6 +7397,119 @@ function buildDemoTicketPayload(contractId = 'SGN123456') {
     ],
   };
 }
+
+const DEMO_USER_INFO = {
+  Info: {
+    UserName: 'ktv.quanly.demo',
+    LocationId: 64,
+    SubParentDesc: '64. Khu vuc Mau',
+  },
+  Permissions: {
+    Permission: {
+      Deployment: {
+        IsAssign: true,
+        IsTransferPartner: false,
+      },
+    },
+    Locations: [
+      {
+        LocationId: 64,
+        LocationNameVn: 'Khu vực Mẫu 01 (Demo)',
+        SubParentDesc: '64. Khu vuc Mau',
+      },
+      {
+        LocationId: 48,
+        LocationNameVn: 'Khu vực Mẫu 02 (Demo)',
+        SubParentDesc: '48. Khu vuc Mau 2',
+      },
+    ],
+  },
+};
+
+const DEMO_PARTNER_DATA = {
+  Partners: [
+    {
+      LocationId: 64,
+      Code: 101,
+      Partner: 10,
+      OwnerType: 1,
+      InfdivName: 'DT Mau Khu Vuc A',
+      Supporter: 'TO A',
+      IsSO: 0,
+      OrderBy: 1,
+    },
+    {
+      LocationId: 64,
+      Code: 102,
+      Partner: 20,
+      OwnerType: 2,
+      InfdivName: 'DT Mau Khu Vuc B',
+      Supporter: 'TO B',
+      IsSO: 0,
+      OrderBy: 2,
+    },
+  ],
+  Blocks: [
+    {
+      Id: 5001,
+      PartnerId: 10,
+      SubName: 'Khu vuc Mau 01',
+      DeptId: 101,
+      LocationId: 64,
+      IsSO: 0,
+    },
+    {
+      Id: 5002,
+      PartnerId: 10,
+      SubName: 'Khu vuc Mau 02',
+      DeptId: 101,
+      LocationId: 64,
+      IsSO: 0,
+    },
+    {
+      Id: 5003,
+      PartnerId: 20,
+      SubName: 'Khu vuc Mau 03',
+      DeptId: 102,
+      LocationId: 64,
+      IsSO: 0,
+    },
+  ],
+  Employees: [
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5001,
+      CodeEmployee: 'MAU0001',
+      InsideAccount: 'ktv.mau01',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5001,
+      CodeEmployee: 'MAU0002',
+      InsideAccount: 'ktv.mau02',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 10,
+      BlockId: 5002,
+      CodeEmployee: 'MAU0003',
+      InsideAccount: 'ktv.mau03',
+      Email: '',
+    },
+    {
+      LocationId: 64,
+      PartnerId: 20,
+      BlockId: 5003,
+      CodeEmployee: 'MAU0004',
+      InsideAccount: 'ktv.mau04',
+      Email: '',
+    },
+  ],
+};
 
 const DEMO_EQUIPMENTS = [
   {
@@ -7871,6 +8243,233 @@ async function completeDeploymentTicket({
     message:
       res.json.Message ||
       (res.json.Succeeded ? 'Hoàn tất phiếu triển khai thành công.' : 'Không hoàn tất được phiếu.'),
+  };
+}
+
+function normalizePartnerDataPayload(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    Partners: Array.isArray(src.Partners) ? src.Partners.map((p) => ({ ...p })) : [],
+    Blocks: Array.isArray(src.Blocks) ? src.Blocks.map((b) => ({ ...b })) : [],
+    Employees: Array.isArray(src.Employees) ? src.Employees.map((e) => ({ ...e })) : [],
+  };
+}
+
+/**
+ * Tai thong tin tai khoan, khu vuc & quyen IsAssign tren FOX-ERP (response tra truc tiep, khong boc Succeeded).
+ */
+async function fetchDeploymentUserInfo({ grant = '', forceDemo = false } = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const permDep = DEMO_USER_INFO.Permissions.Permission.Deployment;
+    return {
+      status: 'ok',
+      mode: 'demo',
+      userInfo: {
+        userName: DEMO_USER_INFO.Info.UserName,
+        locationId: DEMO_USER_INFO.Info.LocationId,
+        subParentDesc: DEMO_USER_INFO.Info.SubParentDesc,
+        locations: DEMO_USER_INFO.Permissions.Locations.map((l) => ({ ...l })),
+        canAssign: Boolean(permDep.IsAssign),
+        canTransferPartner: Boolean(permDep.IsTransferPartner),
+      },
+    };
+  }
+
+  const res = await postFoxJson(DEPLOYMENT_ENDPOINTS.getUserInfo, null, { grant });
+  if (res.status !== 'ok') return res;
+  const raw = res.json || {};
+  const info = raw.Info && typeof raw.Info === 'object' ? raw.Info : null;
+  const perms = raw.Permissions && typeof raw.Permissions === 'object' ? raw.Permissions : null;
+  if (!info && !perms) {
+    return {
+      status: 'error',
+      message: raw.Message || 'Không tải được quyền phân tuyến người dùng.',
+    };
+  }
+  const deployPerm =
+    perms && perms.Permission && perms.Permission.Deployment ? perms.Permission.Deployment : {};
+  const locations = perms && Array.isArray(perms.Locations) ? perms.Locations : [];
+  return {
+    status: 'ok',
+    mode: 'live',
+    userInfo: {
+      userName: String((info && info.UserName) || '').trim(),
+      locationId: Number((info && info.LocationId) || 0),
+      subParentDesc: String((info && info.SubParentDesc) || '').trim(),
+      locations,
+      canAssign: deployPerm.IsAssign !== undefined ? Boolean(deployPerm.IsAssign) : null,
+      canTransferPartner: Boolean(deployPerm.IsTransferPartner),
+    },
+  };
+}
+
+/**
+ * Tai danh sach Doi tac, Block/To va KTV theo LocationId.
+ */
+async function fetchDeploymentPartnerData({
+  locationId = 0,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      partnerData: normalizePartnerDataPayload(DEMO_PARTNER_DATA),
+    };
+  }
+
+  const numLocationId = Number(locationId || 0);
+  if (!Number.isInteger(numLocationId) || numLocationId <= 0) {
+    return {
+      status: 'error',
+      message: 'Thiếu mã Tỉnh/Thành phố (LocationId) để tải danh sách KTV.',
+    };
+  }
+
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getPartnerData,
+    { LocationId: numLocationId },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded || !res.json.Data) {
+    return {
+      status: 'error',
+      message: res.json.Message || 'Không tải được danh sách Đối tác / Tổ / KTV.',
+    };
+  }
+  return {
+    status: 'ok',
+    mode: 'live',
+    partnerData: normalizePartnerDataPayload(res.json.Data),
+  };
+}
+
+/**
+ * Gui lenh Phan tuyen (Re-assign employee) cho phieu trien khai FOX-ERP.
+ */
+async function reassignDeploymentEmployee({
+  objId,
+  supId,
+  contract,
+  locationId,
+  partnerData,
+  partner,
+  block,
+  employee,
+  reason,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  const check = validateAndBuildReassignPayload({
+    objId,
+    supId,
+    contract,
+    locationId,
+    partnerData,
+    partner,
+    block,
+    employee,
+    reason,
+  });
+  if (!check.valid) {
+    return { status: 'error', message: check.error };
+  }
+
+  const blockName = String((block && block.SubName) || '').trim();
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: `Phân tuyến thành công cho ${check.payload.EmpAccount} (mẫu mô phỏng).`,
+      empCode: check.payload.EmpCode,
+      empAccount: check.payload.EmpAccount,
+      blockName,
+      payload: check.payload,
+    };
+  }
+
+  const res = await postFoxJson(DEPLOYMENT_ENDPOINTS.reAssignEmployee, check.payload, { grant });
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: res.json.Message || 'Phân tuyến không thành công.',
+    };
+  }
+  return {
+    status: 'ok',
+    mode: 'live',
+    message:
+      res.json.Message || `Phân tuyến thành công cho ${check.payload.EmpAccount}!`,
+    empCode: check.payload.EmpCode,
+    empAccount: check.payload.EmpAccount,
+    blockName,
+    payload: check.payload,
+  };
+}
+
+/**
+ * Tai lai danh sach nhan vien dang duoc phan cong tren phieu sau khi phan tuyen.
+ */
+async function fetchDeploymentAssignedEmps({
+  supId,
+  objId,
+  grant = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const demoRaw = [
+      {
+        EmpStatus: 1,
+        EmpAccount: 'ktv.mau01',
+        EmpName: 'KTV Mau 01',
+        EmpPhone: '0900000002',
+        Empcode: 'MAU0001',
+      },
+    ];
+    return {
+      status: 'ok',
+      mode: 'demo',
+      mainEmp: mapAssignedEmployee(demoRaw[0]),
+      supportEmps: [],
+      raw: demoRaw,
+    };
+  }
+
+  const numSupId = Number(supId || 0);
+  const numObjId = Number(objId || 0);
+  if (!numSupId || !numObjId) {
+    return {
+      status: 'error',
+      message: 'Thiếu ObjId hoặc SupId để tải lại nhân viên phân công.',
+    };
+  }
+
+  const res = await postFoxJson(
+    DEPLOYMENT_ENDPOINTS.getAssignmentEmp,
+    { DeploymentId: numSupId, ContractId: numObjId },
+    { grant }
+  );
+  if (res.status !== 'ok') return res;
+  if (!res.json.Succeeded) {
+    return {
+      status: 'error',
+      message: res.json.Message || 'Không tải lại được nhân viên phân công của phiếu.',
+    };
+  }
+  const rows = Array.isArray(res.json.Data) ? res.json.Data : [];
+  const mainRaw = rows.find((e) => Number(e && e.EmpStatus) === 1) || null;
+  const supportRaws = rows.filter((e) => Number(e && e.EmpStatus) === 2);
+  return {
+    status: 'ok',
+    mode: 'live',
+    mainEmp: mapAssignedEmployee(mainRaw),
+    supportEmps: supportRaws.map(mapAssignedEmployee).filter(Boolean),
+    raw: rows,
   };
 }
 
@@ -14045,6 +14644,16 @@ function mountRemoteInside({
     deployReasonUnuseCapLan: '0',
     deployBusyAction: '',
     deployArmedAction: '',
+    deployUserInfo: null,
+    deployReassignLoading: false,
+    deployReassignError: '',
+    deployReassignLocationId: '',
+    deployReassignPartnerData: null,
+    deployReassignPartnerId: '',
+    deployReassignBlockId: '',
+    deployReassignEmpCode: '',
+    deployReassignReasonId: '',
+    deployReassignSearch: '',
     recallLoading: false,
     recallProgress: '',
     recallError: '',
@@ -14476,6 +15085,16 @@ function mountRemoteInside({
     state.deployReasonUnuseCapLan = '0';
     state.deployBusyAction = '';
     state.deployArmedAction = '';
+    state.deployUserInfo = null;
+    state.deployReassignLoading = false;
+    state.deployReassignError = '';
+    state.deployReassignLocationId = '';
+    state.deployReassignPartnerData = null;
+    state.deployReassignPartnerId = '';
+    state.deployReassignBlockId = '';
+    state.deployReassignEmpCode = '';
+    state.deployReassignReasonId = '';
+    state.deployReassignSearch = '';
   }
 
   function resetRecallModalState() {
@@ -14981,6 +15600,113 @@ function mountRemoteInside({
     renderConfirm();
   }
 
+  function applyDefaultDeployReassignSelection(partnerData, ticket) {
+    const partners =
+      partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+    const byDept =
+      ticket && ticket.deptId ? findPartnerByDeptId(partners, ticket.deptId) : null;
+    const byTicketPartner =
+      !byDept && ticket && ticket.partnerId
+        ? partners.find((p) => p && Number(p.Partner) === Number(ticket.partnerId))
+        : null;
+    const fallbackSingle =
+      !byDept && !byTicketPartner && partners.length === 1 ? partners[0] : null;
+    const chosenPartner = byDept || byTicketPartner || fallbackSingle || null;
+    state.deployReassignPartnerId = chosenPartner ? String(chosenPartner.Partner) : '';
+
+    if (chosenPartner) {
+      const blocks = filterBlocksByPartner(partnerData, chosenPartner.Partner);
+      let chosenBlock = null;
+      if (ticket && ticket.blockId) {
+        chosenBlock = blocks.find((b) => b && Number(b.Id) === Number(ticket.blockId)) || null;
+      }
+      if (!chosenBlock && ticket && ticket.blockDepName) {
+        const targetName = String(ticket.blockDepName).trim().toLowerCase();
+        chosenBlock =
+          blocks.find(
+            (b) => b && String(b.SubName || '').trim().toLowerCase() === targetName
+          ) || null;
+      }
+      if (!chosenBlock && blocks.length === 1) {
+        chosenBlock = blocks[0];
+      }
+      state.deployReassignBlockId = chosenBlock ? String(chosenBlock.Id) : '';
+    } else {
+      state.deployReassignBlockId = '';
+    }
+    state.deployReassignEmpCode = '';
+  }
+
+  async function loadDeployReassignData({ forceReload = false, locationIdOverride = '' } = {}) {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket) return;
+    if (!forceReload && !locationIdOverride && state.deployReassignPartnerData) {
+      return;
+    }
+
+    state.deployReassignLoading = true;
+    state.deployReassignError = '';
+    renderConfirm();
+
+    const grant = state.deployGrant || '';
+    try {
+      let userInfo = state.deployUserInfo;
+      if (!userInfo || forceReload) {
+        const userRes = await fetchDeploymentUserInfo({ grant });
+        if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+        if (userRes.status === 'ok' && userRes.userInfo) {
+          userInfo = userRes.userInfo;
+          state.deployUserInfo = userInfo;
+        } else if (userRes.status === 'iam_expired') {
+          state.deployReassignLoading = false;
+          state.deployReassignError =
+            userRes.message || 'Phiên đăng nhập FOX-ERP chưa sẵn sàng.';
+          state.deployLoginUrl = userRes.loginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage;
+          renderConfirm();
+          return;
+        }
+      }
+
+      const locs = userInfo && Array.isArray(userInfo.locations) ? userInfo.locations : [];
+      const userLocId = userInfo ? userInfo.locationId : 0;
+      const targetLocationId = locationIdOverride
+        ? Number(locationIdOverride)
+        : Number(state.deployReassignLocationId || 0) ||
+          resolveDefaultDeploymentLocationId(ticket, summary, locs, userLocId);
+
+      state.deployReassignLocationId = targetLocationId ? String(targetLocationId) : '';
+      state.deployReassignPartnerData = null;
+      state.deployReassignPartnerId = '';
+      state.deployReassignBlockId = '';
+      state.deployReassignEmpCode = '';
+
+      const partnerRes = await fetchDeploymentPartnerData({
+        locationId: targetLocationId,
+        grant,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployReassignLoading = false;
+
+      if (partnerRes.status !== 'ok') {
+        state.deployReassignError =
+          partnerRes.message || 'Không tải được danh sách Đối tác / Tổ / KTV.';
+        if (partnerRes.loginUrl) {
+          state.deployLoginUrl = partnerRes.loginUrl;
+        }
+      } else {
+        state.deployReassignPartnerData = partnerRes.partnerData || null;
+        applyDefaultDeployReassignSelection(state.deployReassignPartnerData, ticket);
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+      state.deployReassignLoading = false;
+      state.deployReassignError =
+        err && err.message ? err.message : 'Lỗi tải dữ liệu Phân tuyến KTV.';
+    }
+    renderConfirm();
+  }
+
   async function switchDeployTicketSupId(nextSupId) {
     const summary = state.deploySummary;
     if (!summary || !Array.isArray(summary.tickets)) return;
@@ -14991,10 +15717,21 @@ function mountRemoteInside({
     state.deployArmedAction = '';
     state.deployEditingPhoneToken = '';
     state.deployEditingPhoneValue = '';
+    state.deployReassignBlockId = '';
+    state.deployReassignEmpCode = '';
+    state.deployReassignReasonId = '';
+    state.deployReassignSearch = '';
     applyDeployTicketDraftFromSummary(state.deploySummary);
+    if (state.deployReassignPartnerData) {
+      applyDefaultDeployReassignSelection(state.deployReassignPartnerData, target);
+    }
     renderConfirm();
     await Promise.all([refreshDeployEquipmentsInModal(), refreshDeployPaymentInModal()]);
     if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+    if (state.deployTab === 'reassign' && !state.deployReassignPartnerData) {
+      loadDeployReassignData({ forceReload: true });
+      return;
+    }
     renderConfirm();
   }
 
@@ -15052,6 +15789,8 @@ function mountRemoteInside({
 
       if (state.deployTab === 'extras') {
         loadDeployExtrasForModal({ forceReload: true });
+      } else if (state.deployTab === 'reassign') {
+        loadDeployReassignData({ forceReload: true });
       }
     } catch (err) {
       if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') {
@@ -15282,6 +16021,138 @@ function mountRemoteInside({
         state.deployEditingPhoneToken = '';
         state.deployEditingPhoneValue = '';
         await loadDeployExtrasForModal({ forceReload: true });
+      },
+    });
+  }
+
+  function handleDeployReassignSubmit() {
+    const summary = state.deploySummary;
+    const ticket = summary && summary.ticket ? summary.ticket : null;
+    if (!summary || !ticket) return;
+
+    const partnerData = state.deployReassignPartnerData;
+    const partners =
+      partnerData && Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+    const selectedPartner =
+      partners.find((p) => String(p.Partner) === String(state.deployReassignPartnerId)) || null;
+    const blocks = selectedPartner
+      ? filterBlocksByPartner(partnerData, selectedPartner.Partner)
+      : [];
+    const selectedBlock =
+      blocks.find((b) => String(b.Id) === String(state.deployReassignBlockId)) || null;
+    const employees = selectedBlock ? filterEmployeesByBlock(partnerData, selectedBlock.Id) : [];
+    const selectedEmployee =
+      employees.find(
+        (e) => String(e.CodeEmployee) === String(state.deployReassignEmpCode)
+      ) || null;
+    const reasonOptions = parseDataFilterOptions(
+      state.deployDataFilter,
+      DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE
+    );
+    const selectedReason =
+      reasonOptions.find((r) => String(r.id) === String(state.deployReassignReasonId)) || null;
+
+    const check = validateAndBuildReassignPayload({
+      objId: summary.objId,
+      supId: ticket.supId,
+      contract: summary.contract,
+      locationId: state.deployReassignLocationId,
+      partnerData,
+      partner: selectedPartner,
+      block: selectedBlock,
+      employee: selectedEmployee,
+      reason: selectedReason,
+    });
+    if (!check.valid) {
+      state.deployArmedAction = '';
+      state.deployNotice = check.error;
+      state.deployNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+
+    const grant = state.deployGrant || '';
+    const targetSupId = ticket.supId;
+    const targetPartner = selectedPartner;
+    const targetBlock = selectedBlock;
+    const targetEmployee = selectedEmployee;
+
+    return runDeployMutation({
+      busyKey: 'reassign_emp',
+      pendingText: `Đang phân tuyến ${ticket.depCode || summary.contract} cho ${check.payload.EmpAccount}…`,
+      fallbackErr: 'Phân tuyến không thành công.',
+      logAction: 'Phân tuyến KTV',
+      fn: (curSummary, curTicket) =>
+        reassignDeploymentEmployee({
+          objId: curSummary.objId,
+          supId: curTicket.supId,
+          contract: curSummary.contract,
+          locationId: state.deployReassignLocationId,
+          partnerData,
+          partner: targetPartner,
+          block: targetBlock,
+          employee: targetEmployee,
+          reason: selectedReason,
+          grant,
+        }),
+      onOk: async (res) => {
+        let nextMainEmp = {
+          account: targetEmployee.InsideAccount || '',
+          name: targetEmployee.InsideAccount || '',
+          phone: '',
+          code: String(targetEmployee.CodeEmployee ?? ''),
+          status: 1,
+        };
+        let nextSupportEmps = ticket.supportEmps || [];
+        let empRefreshWarn = '';
+
+        if (res.mode !== 'demo') {
+          const empRes = await fetchDeploymentAssignedEmps({
+            supId: targetSupId,
+            objId: summary.objId,
+            grant,
+          });
+          if (!state.confirmAction || state.confirmAction.id !== 'deploy_ticket') return;
+          if (empRes.status === 'ok') {
+            if (empRes.mainEmp) {
+              nextMainEmp = empRes.mainEmp;
+            }
+            nextSupportEmps = empRes.supportEmps || [];
+          } else {
+            empRefreshWarn = empRes.message || '';
+          }
+        }
+
+        if (state.deploySummary && Array.isArray(state.deploySummary.tickets)) {
+          const updatedTickets = state.deploySummary.tickets.map((t) =>
+            Number(t.supId) === Number(targetSupId)
+              ? {
+                  ...t,
+                  mainEmp: nextMainEmp,
+                  supportEmps: nextSupportEmps,
+                  deptId: Number((targetPartner && targetPartner.Code) ?? t.deptId),
+                  partnerId: Number((targetPartner && targetPartner.Partner) ?? t.partnerId),
+                  blockId: Number((targetBlock && targetBlock.Id) ?? t.blockId),
+                  blockDepName: String((targetBlock && targetBlock.SubName) || t.blockDepName || ''),
+                }
+              : t
+          );
+          const updatedActive =
+            updatedTickets.find((t) => Number(t.supId) === Number(targetSupId)) ||
+            state.deploySummary.ticket;
+          state.deploySummary = {
+            ...state.deploySummary,
+            tickets: updatedTickets,
+            ticket: updatedActive,
+          };
+        }
+
+        state.deployReassignEmpCode = '';
+        state.deployReassignReasonId = '';
+        state.deployReassignSearch = '';
+        if (empRefreshWarn) {
+          state.deployNotice = `${res.message} (Lưu ý đồng bộ lại KTV: ${empRefreshWarn})`;
+        }
       },
     });
   }
@@ -20045,6 +20916,17 @@ function mountRemoteInside({
               }),
               el('button', {
                 type: 'button',
+                className: `ri-mode-btn${state.deployTab === 'reassign' ? ' is-active' : ''}`,
+                text: 'Phân tuyến',
+                onClick: () => {
+                  state.deployTab = 'reassign';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                  loadDeployReassignData();
+                },
+              }),
+              el('button', {
+                type: 'button',
                 className: `ri-mode-btn${state.deployTab === 'equipment' ? ' is-active' : ''}`,
                 text: `Vật tư & MAC (${eq.importItems.length})`,
                 onClick: () => {
@@ -20065,7 +20947,7 @@ function mountRemoteInside({
               }),
               el('button', {
                 type: 'button',
-                className: `ri-mode-btn${state.deployTab === 'extras' ? ' is-active' : ''}`,
+                className: `ri-mode-btn ri-mode-btn--wide${state.deployTab === 'extras' ? ' is-active' : ''}`,
                 text: 'SĐT & BBĐT',
                 onClick: () => {
                   state.deployTab = 'extras';
@@ -20171,6 +21053,23 @@ function mountRemoteInside({
               ['Ngày hoàn tất', ticket.finishDate],
               ['Cáp khảo sát', `Indoor: ${ticket.indoor || '0'}m • Outdoor: ${ticket.outdoor || '0'}m`],
               ['Ghi chú CS', csNoteText],
+            ])
+          );
+
+          sheetParts.push(
+            el('div', { className: 'ri-result-actions' }, [
+              el('button', {
+                type: 'button',
+                className: 'ri-primary-btn',
+                disabled: isBusy,
+                text: 'Phân tuyến cho KTV khác',
+                onClick: () => {
+                  state.deployTab = 'reassign';
+                  state.deployArmedAction = '';
+                  renderConfirm();
+                  loadDeployReassignData();
+                },
+              }),
             ])
           );
 
@@ -20659,6 +21558,409 @@ function mountRemoteInside({
                   ]);
                 })
               )
+            );
+          }
+        } else if (state.deployTab === 'reassign') {
+          const currentMainText = ticket.mainEmp
+            ? [
+                ticket.mainEmp.account,
+                ticket.mainEmp.code ? `(${ticket.mainEmp.code})` : '',
+                ticket.mainEmp.phone,
+              ]
+                .filter(Boolean)
+                .join(' ')
+            : 'Chưa phân công';
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', {
+                  className: 'ri-confirm-label',
+                  text: `KTV hiện tại: ${currentMainText}`,
+                }),
+                el('button', {
+                  type: 'button',
+                  className: 'ri-text-btn',
+                  disabled: state.deployReassignLoading || isBusy,
+                  text: 'Tải lại DS KTV',
+                  onClick: () => loadDeployReassignData({ forceReload: true }),
+                }),
+              ]),
+            ])
+          );
+
+          if (state.deployUserInfo && state.deployUserInfo.canAssign === false) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', {
+                  text: 'Tài khoản hiện tại không thấy cờ quyền Phân tuyến (IsAssign=false) trên FOX-ERP — nếu thao tác bị từ chối máy chủ sẽ báo chi tiết.',
+                }),
+              ])
+            );
+          }
+
+          if (Number(ticket.status) === 1) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', {
+                  text: 'Phiếu đang ở trạng thái Hoàn tất — FOX-ERP có thể không cho phân tuyến lại.',
+                }),
+              ])
+            );
+          }
+
+          if (state.deployReassignLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh sách Đối tác / Block / KTV…' }),
+              ])
+            );
+          } else if (state.deployReassignError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+                el('div', { text: state.deployReassignError }),
+                el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-primary-btn',
+                    text: 'Thử lại',
+                    onClick: () => loadDeployReassignData({ forceReload: true }),
+                  }),
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-secondary-btn',
+                    text: 'Đăng nhập FOX-ERP',
+                    onClick: () => {
+                      openExternalOrPortalUrl(
+                        state.deployLoginUrl || DEPLOYMENT_ENDPOINTS.foxTicketPage,
+                        {
+                          mode: 'login',
+                          title: 'Đăng nhập FOX-ERP',
+                          pageWindow,
+                        }
+                      );
+                    },
+                  }),
+                ]),
+              ])
+            );
+          } else if (state.deployReassignPartnerData) {
+            const partnerData = state.deployReassignPartnerData;
+            const locations =
+              state.deployUserInfo && Array.isArray(state.deployUserInfo.locations)
+                ? state.deployUserInfo.locations
+                : [];
+            const activeLocObj = locations.find(
+              (l) => String(l.LocationId) === String(state.deployReassignLocationId)
+            );
+            const showLocationSelect = locations.length > 1 || Boolean(ticket.isGsafe);
+
+            if (showLocationSelect && locations.length > 0) {
+              const locSelect = el(
+                'select',
+                { className: 'ri-select', id: 'ri-deploy-reassign-location' },
+                locations.map((loc) =>
+                  el('option', {
+                    value: String(loc.LocationId),
+                    text: String(loc.LocationNameVn || loc.SubParentDesc || loc.LocationId),
+                  })
+                )
+              );
+              locSelect.value = String(state.deployReassignLocationId || '');
+              locSelect.addEventListener('change', (e) => {
+                state.deployArmedAction = '';
+                loadDeployReassignData({
+                  forceReload: true,
+                  locationIdOverride: e.target.value,
+                });
+              });
+              sheetParts.push(
+                el('div', { className: 'ri-confirm-input-wrap' }, [
+                  el('label', {
+                    className: 'ri-confirm-label',
+                    for: 'ri-deploy-reassign-location',
+                    text: 'Tỉnh / Khu vực',
+                  }),
+                  locSelect,
+                ])
+              );
+            } else {
+              const locLabel =
+                (activeLocObj && (activeLocObj.LocationNameVn || activeLocObj.SubParentDesc)) ||
+                (state.deployUserInfo && state.deployUserInfo.subParentDesc) ||
+                (state.deployReassignLocationId ? `Khu vực #${state.deployReassignLocationId}` : 'Khu vực mặc định');
+              sheetParts.push(
+                el('div', { className: 'ri-field-hint' }, [
+                  document.createTextNode(`Khu vực: ${locLabel}`),
+                ])
+              );
+            }
+
+            const partners = Array.isArray(partnerData.Partners) ? partnerData.Partners : [];
+            const selectedPartner =
+              partners.find((p) => String(p.Partner) === String(state.deployReassignPartnerId)) ||
+              null;
+            const blocks = selectedPartner
+              ? filterBlocksByPartner(partnerData, selectedPartner.Partner)
+              : [];
+            const selectedBlock =
+              blocks.find((b) => String(b.Id) === String(state.deployReassignBlockId)) || null;
+            const employees = selectedBlock
+              ? filterEmployeesByBlock(partnerData, selectedBlock.Id)
+              : [];
+            const selectedEmployee =
+              employees.find(
+                (e) => String(e.CodeEmployee) === String(state.deployReassignEmpCode)
+              ) || null;
+            const reasonOptions = parseDataFilterOptions(
+              state.deployDataFilter,
+              DEPLOYMENT_CATALOG_KEYS.REASON_CHANGE_EMPLOYEE
+            );
+
+            const resultsHost = el('div', {
+              className: 'ri-reassign-results',
+              id: 'ri-deploy-reassign-results',
+            });
+
+            function renderQuickSearchResults(rawQuery) {
+              while (resultsHost.firstChild) {
+                resultsHost.removeChild(resultsHost.firstChild);
+              }
+              const trimmed = String(rawQuery || '').trim();
+              if (!trimmed) return;
+              const hits = searchDeploymentEmployees(partnerData, trimmed, {
+                partnerId: Number(state.deployReassignPartnerId || 0),
+                limit: 12,
+              });
+              if (hits.length === 0) {
+                resultsHost.appendChild(
+                  el('div', {
+                    className: 'ri-field-hint',
+                    text: 'Không tìm thấy KTV khớp từ khóa trong khu vực hiện tại.',
+                  })
+                );
+                return;
+              }
+              for (const hit of hits) {
+                const emp = hit.employee;
+                const blk = hit.block;
+                const prt = hit.partner;
+                const empLabel = [emp.InsideAccount || emp.CodeEmployee, emp.CodeEmployee ? `(${emp.CodeEmployee})` : '']
+                  .filter(Boolean)
+                  .join(' ');
+                const metaLabel = [
+                  (blk && blk.SubName) || '',
+                  (prt && prt.InfdivName) || '',
+                ]
+                  .filter(Boolean)
+                  .join(' • ');
+                resultsHost.appendChild(
+                  el(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ri-reassign-emp-btn',
+                      onClick: () => {
+                        state.deployReassignPartnerId = String(
+                          (prt && prt.Partner) || emp.PartnerId || (blk && blk.PartnerId) || ''
+                        );
+                        state.deployReassignBlockId = String(
+                          (blk && blk.Id) || emp.BlockId || ''
+                        );
+                        state.deployReassignEmpCode = String(emp.CodeEmployee || '');
+                        state.deployReassignSearch = '';
+                        state.deployArmedAction = '';
+                        state.deployNotice = '';
+                        renderConfirm();
+                      },
+                    },
+                    [
+                      el('span', { className: 'ri-reassign-emp-title', text: empLabel }),
+                      metaLabel
+                        ? el('span', { className: 'ri-reassign-emp-meta', text: metaLabel })
+                        : null,
+                    ]
+                  )
+                );
+              }
+            }
+
+            const searchInput = el('input', {
+              type: 'search',
+              className: 'ri-confirm-input',
+              id: 'ri-deploy-reassign-search',
+              placeholder: 'Gõ tên account, mã KTV hoặc tên tổ để chọn nhanh…',
+              autocomplete: 'off',
+              value: state.deployReassignSearch || '',
+            });
+            searchInput.value = state.deployReassignSearch || '';
+            searchInput.addEventListener('input', (e) => {
+              state.deployReassignSearch = e.target.value;
+              renderQuickSearchResults(e.target.value);
+            });
+            renderQuickSearchResults(state.deployReassignSearch || '');
+
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-search',
+                  text: `Tìm nhanh KTV (${Array.isArray(partnerData.Employees) ? partnerData.Employees.length : 0} người)`,
+                }),
+                searchInput,
+                resultsHost,
+              ])
+            );
+
+            const partnerSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-partner' },
+              [
+                el('option', { value: '', text: '-- Chọn Đối tác --' }),
+                ...partners.map((p) =>
+                  el('option', {
+                    value: String(p.Partner),
+                    text: String(p.InfdivName || `Đối tác #${p.Partner}`),
+                  })
+                ),
+              ]
+            );
+            partnerSel.value = String(state.deployReassignPartnerId || '');
+            partnerSel.addEventListener('change', (e) => {
+              state.deployReassignPartnerId = e.target.value;
+              state.deployReassignBlockId = '';
+              state.deployReassignEmpCode = '';
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const blockSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-block' },
+              [
+                el('option', {
+                  value: '',
+                  text: selectedPartner ? '-- Chọn Block / Tổ --' : '-- Chọn Đối tác trước --',
+                }),
+                ...blocks.map((b) =>
+                  el('option', {
+                    value: String(b.Id),
+                    text: String(b.SubName || `Block #${b.Id}`),
+                  })
+                ),
+              ]
+            );
+            blockSel.value = String(state.deployReassignBlockId || '');
+            blockSel.disabled = !selectedPartner;
+            blockSel.addEventListener('change', (e) => {
+              state.deployReassignBlockId = e.target.value;
+              state.deployReassignEmpCode = '';
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const empSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-emp' },
+              [
+                el('option', {
+                  value: '',
+                  text: selectedBlock
+                    ? `-- Chọn KTV (${employees.length} người) --`
+                    : '-- Chọn Block trước --',
+                }),
+                ...employees.map((emp) =>
+                  el('option', {
+                    value: String(emp.CodeEmployee || ''),
+                    text: [emp.InsideAccount || emp.CodeEmployee, emp.CodeEmployee ? `• ${emp.CodeEmployee}` : '']
+                      .filter(Boolean)
+                      .join(' '),
+                  })
+                ),
+              ]
+            );
+            empSel.value = String(state.deployReassignEmpCode || '');
+            empSel.disabled = !selectedBlock;
+            empSel.addEventListener('change', (e) => {
+              state.deployReassignEmpCode = e.target.value;
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            const reasonSel = el(
+              'select',
+              { className: 'ri-select', id: 'ri-deploy-reassign-reason' },
+              [
+                el('option', { value: '', text: '-- Chọn nguyên nhân phân công lại --' }),
+                ...reasonOptions.map((opt) =>
+                  el('option', { value: opt.id, text: opt.text })
+                ),
+              ]
+            );
+            reasonSel.value = String(state.deployReassignReasonId || '');
+            reasonSel.addEventListener('change', (e) => {
+              state.deployReassignReasonId = e.target.value;
+              state.deployArmedAction = '';
+              renderConfirm();
+            });
+
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-partner',
+                  text: 'Đối tác',
+                }),
+                partnerSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-block',
+                  text: 'Block / Tổ',
+                }),
+                blockSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-emp',
+                  text: 'Nhân viên (KTV)',
+                }),
+                empSel,
+              ]),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', {
+                  className: 'ri-confirm-label',
+                  for: 'ri-deploy-reassign-reason',
+                  text: 'Nguyên nhân phân công lại',
+                }),
+                reasonSel,
+              ])
+            );
+
+            if (selectedEmployee) {
+              sheetParts.push(
+                el('div', { className: 'ri-reassign-preview' }, [
+                  el('div', {
+                    text: `Chuyển phiếu ${ticket.depCode || summary.contract} → ${selectedEmployee.InsideAccount || ''} (${selectedEmployee.CodeEmployee || ''})${selectedBlock && selectedBlock.SubName ? ` • ${selectedBlock.SubName}` : ''}`,
+                  }),
+                ])
+              );
+            }
+
+            sheetParts.push(
+              el('div', { className: 'ri-result-actions' }, [
+                buildArmedConfirmRow({
+                  armKey: 'reassign_emp',
+                  idleLabel: 'Phân tuyến cho KTV này',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận phân tuyến',
+                  busyKey: 'reassign_emp',
+                  onConfirm: handleDeployReassignSubmit,
+                }),
+              ])
             );
           }
         }

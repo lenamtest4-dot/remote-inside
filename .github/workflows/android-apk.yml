@@ -115,6 +115,8 @@ jobs:
           ## Remote Inside ${TAG} (${{ steps.pkg.outputs.build_kind }})
 
           - **App Android (.apk):** Tải \`remote-inside-${TAG}.apk\` bên dưới về điện thoại Android để cài đặt trực tiếp.
+          - **App iPhone / iOS (.ipa):** Tải \`remote-inside-${TAG}-ios.ipa\` (build không ký, cài miễn phí bằng SideStore / Sideloadly / AltStore / TrollStore).
+          - **Safari iPhone (không cần máy tính):** Mở \`dist/remote-inside.user.js\` qua app miễn phí **Userscripts** / **Stay** trên App Store.
           - **Bản PC (Userscript 1-link tự cập nhật):** \`dist/remote-inside.user.js\`
           - **Tính năng đã chạy thật (đã xếp lên đầu tab):**
             - Đăng nhập IAM (Azure AD) **1 lần duy nhất** và tự đồng bộ phiên SSO sang toàn bộ cổng Inside, Partner/FOX-ERP, Port, Vật tư, Radius
@@ -128,5 +130,8 @@ jobs:
             gh release upload "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --clobber
             gh release edit "$TAG" --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE"
           else
-            gh release create "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE" --target "${{ github.sha }}"
+            gh release create "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE" --target "${{ github.sha }}" || (
+              gh release upload "$TAG" "$APK_FILE" dist/remote-inside.user.js dist/remote-inside.meta.js --clobber &&
+              gh release edit "$TAG" --title "Remote Inside ${TAG}" --notes-file "$NOTES_FILE"
+            )
           fi

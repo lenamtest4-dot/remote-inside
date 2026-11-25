@@ -37,9 +37,11 @@ import {
   clearWarmSessionCache,
   detectIamRedirect,
   isAndroidAppEnv,
+  isIosAppEnv,
   isNextGenSessionExpiredDocument,
   isUserscriptEnv,
   openExternalOrPortalUrl,
+  readNativeClipboardAsync,
   requestPortal,
   showAndroidPortalOverlay,
   syncIamSsoSessions,
@@ -240,6 +242,10 @@ async function copyTextSafe(text) {
   try {
     if (typeof GM_setClipboard === 'function') {
       GM_setClipboard(text, 'text');
+      return true;
+    }
+    if (typeof GM !== 'undefined' && GM && typeof GM.setClipboard === 'function') {
+      await GM.setClipboard(text, 'text');
       return true;
     }
   } catch {
@@ -854,6 +860,19 @@ export function mountRemoteInside({
 
   async function handlePasteContract() {
     try {
+      if (
+        isAndroidAppEnv() &&
+        typeof window !== 'undefined' &&
+        window.RemoteInsideNative &&
+        typeof window.RemoteInsideNative.readClipboardAsync === 'function'
+      ) {
+        const asyncText = await readNativeClipboardAsync();
+        const asyncCleaned = normalizeContractId(asyncText);
+        if (asyncCleaned) {
+          setContractValue(asyncCleaned);
+          return;
+        }
+      }
       if (
         isAndroidAppEnv() &&
         typeof window !== 'undefined' &&
@@ -11143,7 +11162,7 @@ export function mountRemoteInside({
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
-            text: 'Kiểm tra / Tải bản mới (.apk)',
+            text: isIosAppEnv() ? 'Kiểm tra / Tải bản mới (.ipa)' : 'Kiểm tra / Tải bản mới (.apk)',
             onClick: () => {
               if (
                 typeof window !== 'undefined' &&

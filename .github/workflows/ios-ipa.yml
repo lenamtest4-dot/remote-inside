@@ -1,0 +1,119 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build web, Android & iOS assets
+        run: npm run build
+
+      - name: Run verification suite
+        run: npm test
+
+      - name: Install XcodeGen
+        run: |
+          if ! command -v xcodegen >/dev/null 2>&1; then
+            brew install xcodegen
+          fi
+
+      - name: Generate Xcode project
+        id: meta
+        run: |
+          APP_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json','utf8')).version")"
+          BUILD_NUMBER="$(node -e "const v=JSON.parse(require('fs').readFileSync('package.json','utf8')).version.split('.').map(Number); console.log((v[0]||0)*10000+(v[1]||0)*100+(v[2]||0))")"
+          echo "version=${APP_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          cd ios
+          xcodegen generate
+
+      - name: Check optional iOS signing secrets
+        id: signing
+        env:
+          IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_CERTIFICATE_BASE64 }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$IOS_CERTIFICATE_BASE64" ] && [ -n "$IOS_PROVISIONING_PROFILE_BASE64" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build iOS Release app bundle
+        run: |
+          xcodebuild \
+            -project ios/RemoteInside.xcodeproj \
+            -scheme RemoteInside \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "${RUNNER_TEMP}/ios-derived" \
+            CONFIGURATION_BUILD_DIR="${RUNNER_TEMP}/ios-build" \
+            MARKETING_VERSION="${{ steps.meta.outputs.version }}" \
+            CURRENT_PROJECT_VERSION="${{ steps.meta.outputs.build_number }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            build
+
+      - name: Package IPA artifact
+        id: pkg
+        run: |
+          APP_PATH="${RUNNER_TEMP}/ios-build/RemoteInside.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Built .app not found at: $APP_PATH"
+            exit 1
+          fi
+          STAGE_DIR="${RUNNER_TEMP}/ipa-stage"
+          rm -rf "$STAGE_DIR"
+          mkdir -p "${STAGE_DIR}/Payload" release-artifacts
+          cp -R "$APP_PATH" "${STAGE_DIR}/Payload/RemoteInside.app"
+          rm -rf "${STAGE_DIR}/Payload/RemoteInside.app/_CodeSignature"
+          IPA_NAME="remote-inside-v${{ steps.meta.outputs.version }}-ios.ipa"
+          IPA_ABS="${PWD}/release-artifacts/${IPA_NAME}"
+          (cd "$STAGE_DIR" && zip -qry "$IPA_ABS" Payload)
+          echo "ipa_file=release-artifacts/${IPA_NAME}" >> "$GITHUB_OUTPUT"
+          unzip -l "$IPA_ABS" | grep -E "RemoteInside$|remote-inside\.html$"
+          lipo -info "${STAGE_DIR}/Payload/RemoteInside.app/RemoteInside"
+          plutil -p "${STAGE_DIR}/Payload/RemoteInside.app/Info.plist" | grep -q "fpt.net"
+
+      - name: Upload iOS IPA build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-inside-ios-ipa
+          path: ${{ steps.pkg.outputs.ipa_file }}
+          retention-days: 90
+
+      - name: Attach iOS IPA to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v${{ steps.meta.outputs.version }}"
+          IPA_FILE="${{ steps.pkg.outputs.ipa_file }}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$IPA_FILE" --clobber
+          else
+            gh release create "$TAG" "$IPA_FILE" \
+              --title "Remote Inside ${TAG}" \
+              --notes "Remote Inside ${TAG} — iOS .ipa (unsigned for SideStore / Sideloadly / AltStore / TrollStore)" \
+              --target "${{ github.sha }}" || gh release upload "$TAG" "$IPA_FILE" --clobber
+          fi

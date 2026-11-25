@@ -15,6 +15,16 @@ let androidReqSeq = 0;
 const warmCacheByHost = new Map();
 const inFlightWarmByHost = new Map();
 
+function getGmXhr() {
+  if (typeof GM_xmlhttpRequest === 'function') {
+    return GM_xmlhttpRequest;
+  }
+  if (typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function') {
+    return GM.xmlHttpRequest.bind(GM);
+  }
+  return null;
+}
+
 export function isAndroidAppEnv() {
   return (
     typeof window !== 'undefined' &&
@@ -23,18 +33,45 @@ export function isAndroidAppEnv() {
   );
 }
 
+export function getNativeAppPlatform() {
+  if (!isAndroidAppEnv()) return '';
+  try {
+    if (
+      window.RemoteInsideNative &&
+      typeof window.RemoteInsideNative.getPlatform === 'function'
+    ) {
+      const p = String(window.RemoteInsideNative.getPlatform() || '').trim().toLowerCase();
+      if (p === 'ios' || p === 'android') return p;
+    }
+    if (
+      window.RemoteInsideNative &&
+      typeof window.RemoteInsideNative.platform === 'string'
+    ) {
+      const p = window.RemoteInsideNative.platform.trim().toLowerCase();
+      if (p === 'ios' || p === 'android') return p;
+    }
+  } catch {
+    // ignore
+  }
+  return 'android';
+}
+
+export function isIosAppEnv() {
+  return getNativeAppPlatform() === 'ios';
+}
+
 export function getRuntimeEnv() {
   if (isAndroidAppEnv()) {
-    return 'android';
+    return getNativeAppPlatform() === 'ios' ? 'ios' : 'android';
   }
-  if (typeof GM_xmlhttpRequest === 'function') {
+  if (getGmXhr()) {
     return 'userscript';
   }
   return 'preview';
 }
 
 export function isUserscriptEnv() {
-  return typeof GM_xmlhttpRequest === 'function' || isAndroidAppEnv();
+  return Boolean(getGmXhr()) || isAndroidAppEnv();
 }
 
 export function openExternalOrPortalUrl(
@@ -124,6 +161,7 @@ function ensureNativePendingBridge() {
         entry.kind === 'warm' ||
         entry.kind === 'portal_bg' ||
         entry.kind === 'portal_eval' ||
+        entry.kind === 'clipboard' ||
         typeof parsed.status === 'string'
       ) {
         entry.resolve({
@@ -267,6 +305,50 @@ export function showAndroidPortalOverlay(title = '') {
   } catch {
     return false;
   }
+}
+
+export function readNativeClipboardAsync({ timeout = 4000 } = {}) {
+  if (
+    !isAndroidAppEnv() ||
+    typeof window === 'undefined' ||
+    !window.RemoteInsideNative ||
+    typeof window.RemoteInsideNative.readClipboardAsync !== 'function'
+  ) {
+    return Promise.resolve('');
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_clip_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1000, Math.min(10000, Number(timeout) || 4000));
+
+  return new Promise((resolve) => {
+    const finish = (outcome) => {
+      resolve(outcome && outcome.ok && outcome.value !== null && outcome.value !== undefined ? String(outcome.value) : '');
+    };
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      resolve('');
+    }, numericTimeout);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'clipboard',
+      resolve: finish,
+      timer,
+      url: '',
+    });
+
+    try {
+      window.RemoteInsideNative.readClipboardAsync(JSON.stringify({ reqId }));
+    } catch {
+      if (window.__riNativePending) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      resolve('');
+    }
+  });
 }
 
 export function loadAndroidPortalBackground(
@@ -818,7 +900,8 @@ export function requestPortal({
     return requestViaAndroidNative({ url, method, headers, data, timeout, useRadiusBearer });
   }
 
-  if (typeof GM_xmlhttpRequest !== 'function') {
+  const gmXhr = getGmXhr();
+  if (!gmXhr) {
     return Promise.resolve({
       ok: false,
       mode: 'preview',
@@ -830,8 +913,14 @@ export function requestPortal({
   }
 
   return new Promise((resolve) => {
+    let settled = false;
+    const settle = (val) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+    };
     try {
-      GM_xmlhttpRequest({
+      const maybePromise = gmXhr({
         method,
         url,
         headers,
@@ -839,7 +928,7 @@ export function requestPortal({
         timeout,
         anonymous: false,
         onload(res) {
-          resolve({
+          settle({
             ok: res.status >= 200 && res.status < 400,
             mode: 'userscript',
             status: res.status,
@@ -849,7 +938,7 @@ export function requestPortal({
           });
         },
         onerror() {
-          resolve({
+          settle({
             ok: false,
             mode: 'userscript',
             status: 0,
@@ -859,7 +948,7 @@ export function requestPortal({
           });
         },
         ontimeout() {
-          resolve({
+          settle({
             ok: false,
             mode: 'userscript',
             status: 0,
@@ -869,8 +958,34 @@ export function requestPortal({
           });
         },
       });
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        maybePromise.then(
+          (res) => {
+            if (res && typeof res.status === 'number') {
+              settle({
+                ok: res.status >= 200 && res.status < 400,
+                mode: 'userscript',
+                status: res.status,
+                finalUrl: res.finalUrl || url,
+                responseText: res.responseText || '',
+                responseHeaders: res.responseHeaders || '',
+              });
+            }
+          },
+          (err) => {
+            settle({
+              ok: false,
+              mode: 'userscript',
+              status: 0,
+              finalUrl: url,
+              responseText: '',
+              error: err && err.message ? err.message : 'NETWORK_ERROR',
+            });
+          }
+        );
+      }
     } catch (err) {
-      resolve({
+      settle({
         ok: false,
         mode: 'userscript',
         status: 0,

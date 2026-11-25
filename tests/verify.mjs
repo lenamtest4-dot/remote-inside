@@ -39,12 +39,15 @@ import {
   clearWarmSessionCache,
   detectIamRedirect,
   evalAndroidPortalJs,
+  getNativeAppPlatform,
   getRuntimeEnv,
   isAndroidAppEnv,
+  isIosAppEnv,
   isNextGenSessionExpiredDocument,
   isUserscriptEnv,
   loadAndroidPortalBackground,
   openExternalOrPortalUrl,
+  readNativeClipboardAsync,
   requestPortal,
   showAndroidPortalOverlay,
   syncIamSsoSessions,
@@ -6026,6 +6029,166 @@ async function runTests() {
     'Built recall staff editor bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: Vật tư thu hồi — Đổi / Cập nhật tên KTV & Radzen v4 / Keyboard inset tests passed.');
+
+  console.log('25. Testing iOS Native App (WKWebView bridge + IPA packaging) & Safari Userscript compatibility...');
+  assert.equal(getNativeAppPlatform(), '');
+  assert.equal(isIosAppEnv(), false);
+
+  const hadWin25 = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+  const prevWin25 = globalThis.window;
+  const hadGm25 = Object.prototype.hasOwnProperty.call(globalThis, 'GM');
+  const prevGm25 = globalThis.GM;
+  try {
+    // 1. iOS WKWebView bridge platform detection & async clipboard
+    globalThis.window = {
+      location: { href: 'riapp://console/remote-inside.html', hostname: 'console', pathname: '/remote-inside.html' },
+      __riNativePending: new Map(),
+      RemoteInsideNative: {
+        platform: 'ios',
+        getPlatform: () => 'ios',
+        httpRequest() {},
+        readClipboardAsync(payloadJson) {
+          const parsed = JSON.parse(payloadJson || '{}');
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', value: 'SGN888999' })
+            );
+          });
+        },
+      },
+    };
+    assert.equal(isAndroidAppEnv(), true);
+    assert.equal(getNativeAppPlatform(), 'ios');
+    assert.equal(isIosAppEnv(), true);
+    assert.equal(getRuntimeEnv(), 'ios');
+    assert.equal(isUserscriptEnv(), true);
+    assert.equal(await readNativeClipboardAsync(), 'SGN888999');
+
+    // 2. Android bridge defaults cleanly to 'android'
+    globalThis.window.RemoteInsideNative = { httpRequest() {} };
+    assert.equal(getNativeAppPlatform(), 'android');
+    assert.equal(isIosAppEnv(), false);
+    assert.equal(getRuntimeEnv(), 'android');
+
+    // 3. Safari Userscripts / Greasemonkey 4 GM.xmlHttpRequest fallback
+    delete globalThis.window;
+    let gm4CalledUrl = '';
+    globalThis.GM = {
+      xmlHttpRequest(opts) {
+        gm4CalledUrl = opts.url;
+        opts.onload({
+          status: 200,
+          finalUrl: opts.url,
+          responseText: 'GM4_OK',
+          responseHeaders: '',
+        });
+      },
+    };
+    assert.equal(getRuntimeEnv(), 'userscript');
+    assert.equal(isUserscriptEnv(), true);
+    const gm4Res = await requestPortal({ url: 'https://inside.fpt.net/test' });
+    assert.equal(gm4Res.ok, true);
+    assert.equal(gm4Res.mode, 'userscript');
+    assert.equal(gm4Res.responseText, 'GM4_OK');
+    assert.equal(gm4CalledUrl, 'https://inside.fpt.net/test');
+  } finally {
+    if (hadWin25) {
+      globalThis.window = prevWin25;
+    } else {
+      delete globalThis.window;
+    }
+    if (hadGm25) {
+      globalThis.GM = prevGm25;
+    } else {
+      delete globalThis.GM;
+    }
+  }
+
+  // Verify synced iOS bundled HTML & Xcode project files
+  const iosDir = path.join(ROOT_DIR, 'ios');
+  const iosAssetPath = path.join(iosDir, 'RemoteInside', 'Resources', 'remote-inside.html');
+  const androidDistHtml = fs.readFileSync(path.join(DIST_DIR, 'android-app.html'), 'utf8');
+  assert.ok(fs.existsSync(iosAssetPath), 'ios/RemoteInside/Resources/remote-inside.html must exist');
+  const iosAssetContent = fs.readFileSync(iosAssetPath, 'utf8');
+  assert.equal(
+    iosAssetContent,
+    androidDistHtml,
+    'ios/RemoteInside/Resources/remote-inside.html must stay synced with dist/android-app.html'
+  );
+
+  const iosProjectYml = fs.readFileSync(path.join(iosDir, 'project.yml'), 'utf8');
+  assert.ok(iosProjectYml.includes('com.remoteinside.app'));
+  assert.ok(iosProjectYml.includes('IPHONEOS_DEPLOYMENT_TARGET: "15.0"'));
+  assert.ok(iosProjectYml.includes('INFOPLIST_FILE: RemoteInside/Info.plist'));
+  assert.equal(
+    iosProjectYml.includes('\n    info:\n'),
+    false,
+    'ios/project.yml must use INFOPLIST_FILE instead of info: so xcodegen does not overwrite Info.plist'
+  );
+
+  const iosInfoPlist = fs.readFileSync(path.join(iosDir, 'RemoteInside', 'Info.plist'), 'utf8');
+  assert.ok(iosInfoPlist.includes('NSAllowsArbitraryLoads'));
+  assert.ok(iosInfoPlist.includes('<key>fpt.net</key>'));
+  assert.ok(iosInfoPlist.includes('<key>fcam.vn</key>'));
+
+  const iosIconHeader = fs
+    .readFileSync(
+      path.join(iosDir, 'RemoteInside', 'Assets.xcassets', 'AppIcon.appiconset', 'AppIcon-1024.png')
+    )
+    .subarray(0, 4)
+    .toString('hex');
+  assert.equal(iosIconHeader, '89504e47', 'iOS AppIcon-1024.png must be a valid PNG');
+
+  const iosWorkflow = fs.readFileSync(
+    path.join(ROOT_DIR, '.github', 'workflows', 'ios-ipa.yml'),
+    'utf8'
+  );
+  assert.ok(iosWorkflow.includes('xcodegen generate'));
+  assert.ok(iosWorkflow.includes('generic/platform=iOS'));
+  assert.ok(iosWorkflow.includes('-ios.ipa'));
+
+  const swiftSourcesDir = path.join(iosDir, 'RemoteInside', 'Sources');
+  const swiftFiles = [
+    'AppDelegate.swift',
+    'PortalPolicy.swift',
+    'PortalHttpClient.swift',
+    'MainViewController.swift',
+  ];
+  let combinedSwift = '';
+  for (const sf of swiftFiles) {
+    const sfPath = path.join(swiftSourcesDir, sf);
+    assert.ok(fs.existsSync(sfPath), `iOS Swift source ${sf} must exist`);
+    combinedSwift += '\n' + fs.readFileSync(sfPath, 'utf8');
+  }
+  for (const iosToken of [
+    'WKURLSchemeHandler',
+    'keyboardLayoutGuide',
+    'accesstoken_iam_radius',
+    'readClipboardAsync',
+    'clearSessionCookies',
+    'evalPortalJs',
+    'loadPortalBackground',
+    'warmPortalSession',
+    'httpRequest',
+  ]) {
+    assert.ok(combinedSwift.includes(iosToken), `iOS Swift codebase must include ${iosToken}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(combinedSwift) || forbiddenDemoDataRe.test(iosAssetContent),
+    false,
+    'iOS Swift sources and bundled HTML must pass forbiddenDemoDataRe with 0 matches'
+  );
+
+  assert.ok(
+    userscriptContent.includes('@grant        GM.xmlHttpRequest'),
+    'Userscript header must declare GM.xmlHttpRequest for Safari iOS compatibility'
+  );
+  for (const token of ['isIosAppEnv', 'readNativeClipboardAsync', '-webkit-touch-callout']) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Mobile bundle must include ${token}`);
+  }
+  console.log('   OK: iOS Native App & Safari Userscript compatibility tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

@@ -162,6 +162,8 @@ function bootstrapRemoteInside() {
 
   if (typeof GM_registerMenuCommand === 'function') {
     GM_registerMenuCommand('Mở Remote Inside', () => app.open());
+  } else if (typeof GM !== 'undefined' && GM && typeof GM.registerMenuCommand === 'function') {
+    GM.registerMenuCommand('Mở Remote Inside', () => app.open());
   }
 
   if (window.location && window.location.hash === '#remote-inside') {

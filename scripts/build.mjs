@@ -15,6 +15,12 @@ const ANDROID_ASSETS_DIR = path.join(
   'main',
   'assets'
 );
+const IOS_RESOURCES_DIR = path.join(
+  ROOT_DIR,
+  'ios',
+  'RemoteInside',
+  'Resources'
+);
 const PKG = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8'));
 const APP_VERSION = String(PKG.version || '0.10.0').trim();
 
@@ -78,6 +84,7 @@ const USERSCRIPT_HEADER = `// ==UserScript==
 // @connect      iam.fpt.net
 // @connect      login.microsoftonline.com
 // @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_setClipboard
@@ -159,6 +166,7 @@ function buildAndroidHtml(bundleJs) {
 function main() {
   fs.mkdirSync(DIST_DIR, { recursive: true });
   fs.mkdirSync(ANDROID_ASSETS_DIR, { recursive: true });
+  fs.mkdirSync(IOS_RESOURCES_DIR, { recursive: true });
   const cssText = fs.readFileSync(path.join(SRC_DIR, 'styles/theme.css'), 'utf8');
   const iife = buildIifeBundle(cssText);
 
@@ -176,8 +184,10 @@ function main() {
   const androidHtmlOut = buildAndroidHtml(iife);
   const androidDistPath = path.join(DIST_DIR, 'android-app.html');
   const androidAssetPath = path.join(ANDROID_ASSETS_DIR, 'remote-inside.html');
+  const iosAssetPath = path.join(IOS_RESOURCES_DIR, 'remote-inside.html');
   fs.writeFileSync(androidDistPath, androidHtmlOut, 'utf8');
   fs.writeFileSync(androidAssetPath, androidHtmlOut, 'utf8');
+  fs.writeFileSync(iosAssetPath, androidHtmlOut, 'utf8');
 
   const userSize = Buffer.byteLength(userscriptOut, 'utf8');
   const metaSize = Buffer.byteLength(USERSCRIPT_HEADER, 'utf8');
@@ -186,7 +196,7 @@ function main() {
   console.log(`Built dist/remote-inside.user.js (${userSize} bytes)`);
   console.log(`Built dist/remote-inside.meta.js (${metaSize} bytes)`);
   console.log(`Built dist/preview.html (${htmlSize} bytes)`);
-  console.log(`Built dist/android-app.html & synced android asset (${androidSize} bytes)`);
+  console.log(`Built dist/android-app.html & synced Android + iOS assets (${androidSize} bytes)`);
 }
 
 main();

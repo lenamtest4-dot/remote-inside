@@ -23,6 +23,7 @@
   color: var(--ink-primary);
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 
 .ri-root *,
@@ -56,6 +57,7 @@
   justify-content: center;
   align-items: flex-start;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0;
 }
 
@@ -926,6 +928,7 @@
   max-width: 480px;
   max-height: 88dvh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg-surface);
   border-top-left-radius: 16px;
   border-top-right-radius: 16px;
@@ -2020,5 +2023,14 @@
   .ri-primary-btn:active,
   .ri-action-btn:active {
     transform: none;
+  }
+}
+
+/* Prevent iOS Safari / WKWebView auto-zoom when focusing inputs < 16px */
+@supports (-webkit-touch-callout: none) {
+  .ri-root input,
+  .ri-root select,
+  .ri-root textarea {
+    font-size: 16px;
   }
 }

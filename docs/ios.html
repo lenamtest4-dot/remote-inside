@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#E85D04" />
+  <title>Cài nhanh Remote Inside cho iPhone (v0.17.4)</title>
+  <style>
+    :root {
+      --bg: #F2F4F7;
+      --card: #FFFFFF;
+      --subtle: #E9EEF4;
+      --ink: #141B24;
+      --muted: #526072;
+      --accent: #E85D04;
+      --accent-hover: #C94E02;
+      --accent-soft: #FFF3EB;
+      --ok: #0F8A5F;
+      --ok-soft: #E9F7F1;
+      --warn: #92400E;
+      --warn-soft: #FEF3C7;
+      --border: #D5DCE4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px 14px max(32px, env(safe-area-inset-bottom));
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.48;
+      -webkit-text-size-adjust: 100%;
+    }
+    .wrap {
+      max-width: 520px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .hero-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 14px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(232, 93, 4, 0.25);
+    }
+    .hero h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+    .hero-sub {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: var(--ok);
+      font-weight: 600;
+    }
+    .banner-warn {
+      display: none;
+      background: var(--warn-soft);
+      border: 1px solid #F59E0B;
+      color: var(--warn);
+      border-radius: 14px;
+      padding: 14px;
+      font-size: 13.5px;
+    }
+    .banner-warn.is-visible { display: block; }
+    .banner-warn strong { display: block; margin-bottom: 4px; font-size: 14px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .card.is-done {
+      border-color: #9ED9C3;
+      background: #FAFFFD;
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 800;
+      font-size: 15px;
+    }
+    .badge-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #FFF;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+    .card.is-done .badge-num {
+      background: var(--ok);
+    }
+    .step-status {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--subtle);
+    }
+    .card.is-done .step-status {
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+    .step-desc {
+      margin: 0 0 10px;
+      font-size: 13.5px;
+      color: var(--muted);
+    }
+    .step-desc b, .step-desc strong { color: var(--ink); }
+    .btn-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-primary, .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      min-height: 48px;
+      padding: 10px 14px;
+      border-radius: 11px;
+      font-size: 14.5px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      border: none;
+      width: 100%;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: #FFF;
+    }
+    .btn-primary:active { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--subtle);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      min-height: 42px;
+      font-size: 13px;
+      flex: 1;
+      min-width: 140px;
+    }
+    .btn-ok {
+      background: var(--ok);
+      color: #FFF;
+    }
+    .mini-note {
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .checklist {
+      margin: 6px 0 10px;
+      padding-left: 18px;
+      font-size: 13.5px;
+      color: var(--ink);
+    }
+    .checklist li { margin-bottom: 6px; }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: max(20px, env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      background: #141B24;
+      color: #FFF;
+      padding: 10px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+      z-index: 99;
+      max-width: 90vw;
+      text-align: center;
+    }
+    .toast.is-shown { opacity: 1; }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="hero">
+      <img class="hero-icon" alt="Remote Inside" src="data:image/png;base64,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AAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAEgE8AAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAIAF8BAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAL4CAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAA+AQAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAOCUD6VJMj8LRSXIAAAAAElFTkSuQmCC" />
+      <div>
+        <h1>Cài nhanh Remote Inside cho iPhone (v0.17.4)</h1>
+        <p class="hero-sub">Miễn phí 100% • Dùng vĩnh viễn • Không cần máy tính • Không hết hạn 7 ngày</p>
+      </div>
+    </header>
+
+    <section id="ri-inapp-warn" class="banner-warn" role="alert">
+      <strong>Bạn đang mở link bên trong ứng dụng khác (Zalo / Facebook / Chrome...)</strong>
+      Để tự cài tiện ích và tạo Icon màn hình chính, hãy bấm nút <b>Chia sẻ / ⋯</b> và chọn <b>Mở bằng Safari</b>, hoặc sao chép link dưới đây dán vào Safari:
+      <div class="btn-row" style="margin-top: 10px;">
+        <button id="ri-copy-page-btn" type="button" class="btn-secondary">Sao chép link trang này</button>
+      </div>
+    </section>
+
+    <section id="step-1" class="card">
+      <div class="step-head">
+        <div class="step-num"><span class="badge-num">1</span><span>Tải ứng dụng Userscripts (App Store)</span></div>
+        <span class="step-status" data-status-for="1">Chưa làm</span>
+      </div>
+      <p class="step-desc">Ứng dụng mã nguồn mở miễn phí của Apple App Store giúp Safari iPhone chạy được Remote Inside như app gốc.</p>
+      <div class="btn-col">
+        <a id="ri-btn-appstore" class="btn-primary" href="https://apps.apple.com/app/userscripts/id1463298887" target="_blank" rel="noopener">1. Tải app Userscripts miễn phí (App Store)</a>
+        <div class="btn-row">
+          <a class="btn-secondary" href="https://apps.apple.com/app/stay-for-safari/id1591620171" target="_blank" rel="noopener">Hoặc dùng Stay for Safari</a>
+          <button type="button" class="btn-secondary" data-mark-step="1">Đánh dấu đã cài ✓</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="step-2" class="card">
+      <div class="step-head">
+        <div class="step-num"><span class="badge-num">2</span><span>Bật 1 lần trong Cài đặt iPhone</span></div>
+        <span class="step-status" data-status-for="2">Chưa làm</span>
+      </div>
+      <ul class="checklist">
+        <li><b>iOS 18+ (iPhone 15 / 16...):</b> Mở <b>Cài đặt → Ứng dụng → Safari → Phần mở rộng</b>.<br/><b>iOS 17:</b> Mở <b>Cài đặt → Safari → Phần mở rộng</b>.</li>
+        <li>Gạt <b>BẬT Userscripts</b> → chọn <b>Tất cả các trang web → Luôn cho phép</b>.</li>
+        <li>Quay ra mục <b>Safari → Quyền riêng tư &amp; Bảo mật</b> → gạt <b>TẮT Ngăn chặn theo dõi chéo trang</b> (để SSO FPT không bị chặn), rồi mở app <b>Userscripts</b> lên 1 lần.</li>
+      </ul>
+      <div class="btn-col">
+        <button id="ri-btn-step2" type="button" class="btn-primary" data-mark-step="2">2. Đã bật xong trong Cài đặt ✓</button>
+      </div>
+    </section>
+
+    <section id="step-3" class="card">
+      <div class="step-head">
+        <div class="step-num"><span class="badge-num">3</span><span>Cài tự động Remote Inside (v0.17.4)</span></div>
+        <span class="step-status" data-status-for="3">Chưa làm</span>
+      </div>
+      <p class="step-desc">Bấm nút dưới đây để mở file script gốc trên Safari. Khi màn hình chữ/code hiện ra, bấm biểu tượng <b>🧩 / AA</b> ở góc trái thanh địa chỉ → chọn <b>Userscripts</b> → bấm <b>Install / Lưu</b> là xong.</p>
+      <div class="btn-col">
+        <a id="ri-btn-install-script" class="btn-primary" href="https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js">3. Cài tự động Remote Inside (v0.17.4)</a>
+        <div class="btn-row">
+          <a class="btn-secondary" href="https://github.com/lenamtest4-dot/remote-inside/releases/download/v0.17.4/remote-inside.user.js">Tải file .user.js về Tệp</a>
+          <button id="ri-btn-copy-script" type="button" class="btn-secondary">Sao chép link cài (dán vào Stay)</button>
+        </div>
+      </div>
+      <p class="mini-note">Khi đã cài 1 lần, mọi bản cập nhật mới sau này sẽ tự động nhắc cập nhật qua <code>remote-inside.meta.js</code>.</p>
+    </section>
+
+    <section id="step-4" class="card">
+      <div class="step-head">
+        <div class="step-num"><span class="badge-num">4</span><span>Tạo Icon App ngoài màn hình chính</span></div>
+        <span class="step-status" data-status-for="4">Tùy chọn</span>
+      </div>
+      <p class="step-desc">Tạo icon <b>Remote Inside</b> màu cam y hệt file APK ngoài màn hình chính (nhấn 1 chạm là mở thẳng Safari với đủ Extension &amp; IAM FPT).</p>
+      <div class="btn-col">
+        <button id="ri-btn-install-profile" type="button" class="btn-primary">4. Tạo Icon App Remote Inside ngoài màn hình chính</button>
+        <div class="btn-row">
+          <a class="btn-secondary" href="./remote-inside-ios-icon.mobileconfig" download="remote-inside-ios-icon.mobileconfig">Tải file .mobileconfig vào Tệp</a>
+          <button type="button" class="btn-secondary" data-mark-step="4">Đánh dấu hoàn tất ✓</button>
+        </div>
+      </div>
+      <p class="mini-note">Bấm nút cam xong chọn <b>Cho phép</b> → mở <b>Cài đặt iPhone → Đã tải về hồ sơ → Cài đặt</b>. <i>(Hoặc mở inside.fpt.net rồi bấm Chia sẻ → Thêm vào MH chính).</i></p>
+    </section>
+
+    <section class="card">
+      <div class="btn-col">
+        <a class="btn-primary btn-ok" href="http://inside.fpt.net/default.asp#remote-inside">Mở Remote Inside ngay (nhớ bật VPN công ty)</a>
+      </div>
+      <p class="mini-note">An toàn thông tin: Hồ sơ tạo icon chỉ chứa đường dẫn <code>inside.fpt.net</code> và hình biểu tượng — tuyệt đối không chứa MDM, không cài chứng chỉ quản trị và xóa được bất kỳ lúc nào.</p>
+    </section>
+  </main>
+
+  <div id="ri-toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var MOBILECONFIG_XML = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n\t<key>PayloadContent</key>\n\t<array>\n\t\t<dict>\n\t\t\t<key>FullScreen</key>\n\t\t\t<false/>\n\t\t\t<key>Icon</key>\n\t\t\t<data>\n\t\t\t\tiVBORw0KGgoAAAANSUhEUgAABAAAAAQACAIAAADwf7zUAAAaqUlEQVR42u3aMa7iQABEQQdck/sj\n\t\t\t\tEXIAiMhNguR+NaoTeIavfto9HvcbAAAQcfgEAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAA\n\t\t\t\tAAAABAAAACAAAAAAAQAAAAgAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAA\n\t\t\t\tAACAAAAAAAQAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIA\n\t\t\t\tAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAACAAAAEAAA\n\t\t\t\tAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAAAAgAA\n\t\t\t\tABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAABAAAACAAAAAAAQAAAAgAAABAAAAA\n\t\t\t\tAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAA\n\t\t\t\tQAAAAAACAAAAEAAAAIAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAA\n\t\t\t\tCAAAAEAAAACAAPAVAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAA\n\t\t\t\tABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAAAA\n\t\t\t\tgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAIAAAAQAAAAAACAAAA\n\t\t\t\tEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAA\n\t\t\t\tAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABA\n\t\t\t\tAAAAAAIAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAI\n\t\t\t\tAAAAQAAAAAACAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAAB\n\t\t\t\tAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAAAeArAACA\n\t\t\t\tAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQ\n\t\t\t\tAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAAC\n\t\t\t\tAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAA\n\t\t\t\tAAAAAgAAABAAAACAAAAAAAQAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgA\n\t\t\t\tAABAAAAAAAIAAAAEgE8AAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQ\n\t\t\t\tAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAA\n\t\t\t\tAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAAAAAAAgAAABAA\n\t\t\t\tAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAACAAAAAAAQAAAAgAAABAAAAAAAIA\n\t\t\t\tAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAA\n\t\t\t\tAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAgN+8X8/zfC5A\n\t\t\t\tAADA+OgXA4AAAIDu7lcCgAAAgOj0lwEgAHwFAMhNfxkAAgAAyE1/GQACAADITX8NAAIAAMitfxkA\n\t\t\t\tAgAAyK1/DQACAAAITX8NAAIAAMitfxkAAgAAyK1/DQACAABorX8NAAIAAGitfwEAAgAAaAWABgAB\n\t\t\t\tAACE1r8GAAEAALTWvwYAAQAAtNa/BgABAAAIAEAAAH9eFY7zPX4O1r8GAAQACABHFfiZCAABAAgA\n\t\t\t\t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\n\t\t\t\tT0sA+HqAAACsCryuxffm0wECALAqrAoPLPTkfDdAAABWhVXhgQkA3w0QAIBVgTe2+Op8NEAAAFaF\n\t\t\t\tVeGNCQAfDRAAgFWBZ7b48HwxQAAAVoVV4ZmF3p7PBQgAwKqwKrw0AeBzAQIAsCrw0hafn28FCADA\n\t\t\t\tqrAqPLbQC/ShAAEAWBVWhfcmAHwoQAAAVgXe2+Ij9JUAAQBYFVaFJycAfCVAAABWBZ7c4jv0iQAB\n\t\t\t\tAFgVVoVXF3qKvg8gAACrwqrw6gSA7wMIAAAAQAAAAAACAAAAEAAAAIAAAAAAAeArAACAAAAAAAQA\n\t\t\t\tAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQAAAAgAAA\n\t\t\t\tAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAA\n\t\t\t\tAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAA\n\t\t\t\tABAAAACAAAAAAAQAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAA\n\t\t\t\tAAIAAAAEgE8AAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAA\n\t\t\t\tAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAAAAAABAAA\n\t\t\t\tACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAAAAAAAgAAABAAAACAAAAA\n\t\t\t\tAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAA\n\t\t\t\tgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAA\n\t\t\t\tEAAAAIAAAAAABAAAACAAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAA\n\t\t\t\tAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQ\n\t\t\t\tAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAIAF8BAAAEAAAA\n\t\t\t\tIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAIAAAAAA\n\t\t\t\tBAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACA\n\t\t\t\tAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQ\n\t\t\t\tAAAAgAAAAAAEAAAAIAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAAC\n\t\t\t\tAAAAEAAAAIAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAA\n\t\t\t\tAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAACAAAABAAAAAAAIA\n\t\t\t\tAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAAAAAgAAAAAAEAAAAIAAAAQAAA\n\t\t\t\tAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAAAQAL4CAAAIAAAAQAAAAAACAAAAEAAAAIAA\n\t\t\t\tAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAEAAAAIAAAAAABAAAACAAAAEAAAAAAAgAAABAA\n\t\t\t\tAACAAAAAAAQAAAAgAAAAAAEAAAACAAAAEAAAAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIA\n\t\t\t\tAAAQAAAAgAAAAAABAAAACAAAAEAAAAAAAgAAABAAAACAAAAAAAQAAAAgAAAAAAEAAAAIAAAAQAAA\n\t\t\t\tAIAAAAAABAAAACAAAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAEAA+AQAACAA\n\t\t\t\tAAAAAQAAAAgAAABAAAAAAAIAAAAQAAAAgAAAAAAEAAAAIAAAAAABAAAACAAAABAAAACAAAAAAAQA\n\t\t\t\tAAAgAAAAAAEAAAAIAAAAQAAAAAACAAAAEAAAAIAAAAAABAAAAAgAAABAAAAAAAIAAAAQAAAAgAAA\n\t\t\t\tAAAEAAAAIAAAAAABAAAACAAAAOCUD6VJMj8LRSXIAAAAAElFTkSuQmCC\n\t\t\t</data>\n\t\t\t<key>IgnoreManifestScope</key>\n\t\t\t<true/>\n\t\t\t<key>IsRemovable</key>\n\t\t\t<true/>\n\t\t\t<key>Label</key>\n\t\t\t<string>Remote Inside</string>\n\t\t\t<key>PayloadDescription</key>\n\t\t\t<string>Tạo biểu tượng Remote Inside màu cam ngoài màn hình chính iPhone</string>\n\t\t\t<key>PayloadDisplayName</key>\n\t\t\t<string>Remote Inside</string>\n\t\t\t<key>PayloadIdentifier</key>\n\t\t\t<string>com.remoteinside.ios.webclip.inside</string>\n\t\t\t<key>PayloadOrganization</key>\n\t\t\t<string>Remote Inside</string>\n\t\t\t<key>PayloadType</key>\n\t\t\t<string>com.apple.webClip.managed</string>\n\t\t\t<key>PayloadUUID</key>\n\t\t\t<string>B2E5F3C1-8D42-4F69-AC53-209F4B7DA123</string>\n\t\t\t<key>PayloadVersion</key>\n\t\t\t<integer>1</integer>\n\t\t\t<key>Precomposed</key>\n\t\t\t<true/>\n\t\t\t<key>URL</key>\n\t\t\t<string>http://inside.fpt.net/default.asp#remote-inside</string>\n\t\t</dict>\n\t</array>\n\t<key>PayloadDescription</key>\n\t<string>Tạo biểu tượng app Remote Inside trên màn hình chính iPhone (mở qua Safari để giữ đầy đủ Userscripts &amp; phiên IAM FPT). Chỉ gồm link và icon, không chứa MDM hay chứng chỉ quản trị.</string>\n\t<key>PayloadDisplayName</key>\n\t<string>Remote Inside — Icon Màn hình chính</string>\n\t<key>PayloadIdentifier</key>\n\t<string>com.remoteinside.ios.webclip.profile</string>\n\t<key>PayloadOrganization</key>\n\t<string>Remote Inside</string>\n\t<key>PayloadRemovalDisallowed</key>\n\t<false/>\n\t<key>PayloadType</key>\n\t<string>Configuration</string>\n\t<key>PayloadUUID</key>\n\t<string>A1D4E2B0-7C31-4E58-9B42-1F8E3A6C9012</string>\n\t<key>PayloadVersion</key>\n\t<integer>1</integer>\n</dict>\n</plist>\n";
+      var USER_JS_URL = "https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js";
+      var STORE_KEY = 'ri_ios_setup_steps_v1';
+
+      function showToast(msg) {
+        var el = document.getElementById('ri-toast');
+        if (!el) return;
+        el.textContent = msg;
+        el.classList.add('is-shown');
+        clearTimeout(el._timer);
+        el._timer = setTimeout(function () {
+          el.classList.remove('is-shown');
+        }, 2600);
+      }
+
+      function loadDoneMap() {
+        try {
+          return JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {};
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function saveDoneStep(stepNum) {
+        var map = loadDoneMap();
+        map[String(stepNum)] = true;
+        try {
+          localStorage.setItem(STORE_KEY, JSON.stringify(map));
+        } catch (e) {}
+        renderSteps();
+      }
+
+      function renderSteps() {
+        var map = loadDoneMap();
+        ['1', '2', '3', '4'].forEach(function (n) {
+          var card = document.getElementById('step-' + n);
+          var badge = document.querySelector('[data-status-for="' + n + '"]');
+          var done = Boolean(map[n]);
+          if (card) card.classList.toggle('is-done', done);
+          if (badge) badge.textContent = done ? 'Đã xong ✓' : (n === '4' ? 'Tùy chọn' : 'Chưa làm');
+        });
+      }
+
+      function copyText(text, okMsg) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(
+            function () { showToast(okMsg); },
+            function () { showToast('Hãy giữ tay vào link để sao chép.'); }
+          );
+          return;
+        }
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = text;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast(okMsg);
+        } catch (e) {
+          showToast('Hãy giữ tay vào link để sao chép.');
+        }
+      }
+
+      var ua = String((navigator && navigator.userAgent) || '');
+      var isIos = /iPhone|iPad|iPod/i.test(ua);
+      var isNotSafari = /CriOS|FxiOS|EdgiOS|Zalo|FBAN|FBAV|Messenger|Line\//i.test(ua) || (isIos && !/Safari/i.test(ua));
+      if (isNotSafari) {
+        var warnEl = document.getElementById('ri-inapp-warn');
+        if (warnEl) warnEl.classList.add('is-visible');
+      }
+
+      var copyPageBtn = document.getElementById('ri-copy-page-btn');
+      if (copyPageBtn) {
+        copyPageBtn.addEventListener('click', function () {
+          copyText(window.location.href, 'Đã sao chép link trang cài đặt!');
+        });
+      }
+
+      var copyScriptBtn = document.getElementById('ri-btn-copy-script');
+      if (copyScriptBtn) {
+        copyScriptBtn.addEventListener('click', function () {
+          copyText(USER_JS_URL, 'Đã sao chép link .user.js (hãy dán vào app Stay)!');
+        });
+      }
+
+      var appStoreBtn = document.getElementById('ri-btn-appstore');
+      if (appStoreBtn) {
+        appStoreBtn.addEventListener('click', function () { saveDoneStep('1'); });
+      }
+      var scriptBtn = document.getElementById('ri-btn-install-script');
+      if (scriptBtn) {
+        scriptBtn.addEventListener('click', function () { saveDoneStep('3'); });
+      }
+
+      document.querySelectorAll('[data-mark-step]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          saveDoneStep(btn.getAttribute('data-mark-step'));
+          showToast('Đã lưu tiến độ Bước ' + btn.getAttribute('data-mark-step') + '!');
+        });
+      });
+
+      var profileBtn = document.getElementById('ri-btn-install-profile');
+      if (profileBtn) {
+        profileBtn.addEventListener('click', function () {
+          saveDoneStep('4');
+          try {
+            var blob = new Blob([MOBILECONFIG_XML], {
+              type: 'application/x-apple-aspen-config'
+            });
+            var blobUrl = URL.createObjectURL(blob);
+            window.location.href = blobUrl;
+            showToast('Hãy bấm Cho phép → vào Cài đặt → Đã tải về hồ sơ → Cài đặt!');
+          } catch (err) {
+            window.location.href = './remote-inside-ios-icon.mobileconfig';
+          }
+        });
+      }
+
+      renderSteps();
+    })();
+  </script>
+</body>
+</html>

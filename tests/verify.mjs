@@ -253,6 +253,7 @@ import {
   validateRadiusNote,
 } from '../src/adapters/radius.js';
 import { executePortalAction } from '../src/adapters/portals.js';
+import { parseRemoteInsideHashIntent } from '../src/main.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -307,10 +308,15 @@ async function runTests() {
 
   const expectedGrants = [
     'GM_xmlhttpRequest',
+    'GM.xmlHttpRequest',
     'GM_getValue',
+    'GM.getValue',
     'GM_setValue',
+    'GM.setValue',
     'GM_setClipboard',
+    'GM.setClipboard',
     'GM_registerMenuCommand',
+    'GM.registerMenuCommand',
     'unsafeWindow',
   ];
   for (const grant of expectedGrants) {
@@ -6603,11 +6609,110 @@ async function runTests() {
     'isolatedLoginPortalId',
     'is-locked',
     '🔒 Camera (Chưa có dữ liệu)',
+    'isIosSafariBrowser',
+    'renderIosSafariMenuSheet',
+    'parseRemoteInsideHashIntent',
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
     assert.ok(androidAssetContent.includes(token), `Mobile bundle must include ${token}`);
     assert.ok(iosAssetContent.includes(token), `iOS bundle must include ${token}`);
   }
+
+  assert.deepEqual(parseRemoteInsideHashIntent(''), {
+    open: false,
+    portalId: '',
+    contractId: '',
+  });
+  assert.deepEqual(parseRemoteInsideHashIntent('#other-hash'), {
+    open: false,
+    portalId: '',
+    contractId: '',
+  });
+  assert.deepEqual(parseRemoteInsideHashIntent('#remote-inside'), {
+    open: true,
+    portalId: '',
+    contractId: '',
+  });
+  assert.deepEqual(
+    parseRemoteInsideHashIntent('#remote-inside&portal=RADIUS&contract=%20sgn123456%20'),
+    {
+      open: true,
+      portalId: 'radius',
+      contractId: 'SGN123456',
+    }
+  );
+
+  const docsDir = path.join(ROOT_DIR, 'docs');
+  const distProfilePath = path.join(DIST_DIR, 'remote-inside-ios-icon.mobileconfig');
+  const docsProfilePath = path.join(docsDir, 'remote-inside-ios-icon.mobileconfig');
+  const distIosSetupPath = path.join(DIST_DIR, 'remote-inside-ios-setup.html');
+  const docsIosSetupPath = path.join(docsDir, 'ios.html');
+  const docsIndexPath = path.join(docsDir, 'index.html');
+  const docsNoJekyllPath = path.join(docsDir, '.nojekyll');
+
+  for (const requiredFile of [
+    distProfilePath,
+    docsProfilePath,
+    distIosSetupPath,
+    docsIosSetupPath,
+    docsIndexPath,
+    docsNoJekyllPath,
+  ]) {
+    assert.ok(fs.existsSync(requiredFile), `iOS Safari setup artifact must exist: ${requiredFile}`);
+  }
+
+  const distProfileContent = fs.readFileSync(distProfilePath, 'utf8');
+  const docsProfileContent = fs.readFileSync(docsProfilePath, 'utf8');
+  assert.equal(
+    distProfileContent,
+    docsProfileContent,
+    'dist and docs .mobileconfig WebClip profiles must match identically'
+  );
+  assert.ok(distProfileContent.includes('com.apple.webClip.managed'));
+  assert.ok(distProfileContent.includes('<key>FullScreen</key>\n\t\t\t<false/>'));
+  assert.ok(distProfileContent.includes('http://inside.fpt.net/default.asp#remote-inside'));
+  assert.ok(
+    distProfileContent.includes('<data>') &&
+      Buffer.from(
+        distProfileContent.match(/<data>([\s\S]*?)<\/data>/)?.[1]?.replace(/\s+/g, '') || '',
+        'base64'
+      )
+        .subarray(0, 4)
+        .toString('hex') === '89504e47',
+    '.mobileconfig Icon <data> must contain valid base64 PNG'
+  );
+
+  const distSetupHtml = fs.readFileSync(distIosSetupPath, 'utf8');
+  const docsSetupHtml = fs.readFileSync(docsIosSetupPath, 'utf8');
+  assert.equal(
+    distSetupHtml,
+    docsSetupHtml,
+    'dist/remote-inside-ios-setup.html and docs/ios.html must match identically'
+  );
+  for (const setupToken of [
+    `v${expectedVersion}`,
+    'application/x-apple-aspen-config',
+    'id1463298887',
+    'id1591620171',
+    'remote-inside.user.js',
+    'com.apple.webClip.managed',
+  ]) {
+    assert.ok(docsSetupHtml.includes(setupToken), `docs/ios.html must include ${setupToken}`);
+  }
+  const setupScriptMatch = docsSetupHtml.match(/<script>([\s\S]*?)<\/script>/i);
+  assert.ok(setupScriptMatch && setupScriptMatch[1], 'docs/ios.html must have inline <script>');
+  new vm.Script(setupScriptMatch[1].replace(/<\\\/script/gi, '</script'), {
+    filename: 'docs-ios-setup.js',
+  });
+  const docsIndexHtml = fs.readFileSync(docsIndexPath, 'utf8');
+  assert.ok(docsIndexHtml.includes('./ios.html'));
+  assert.equal(
+    forbiddenDemoDataRe.test(docsSetupHtml) ||
+      forbiddenDemoDataRe.test(docsIndexHtml) ||
+      forbiddenDemoDataRe.test(docsProfileContent),
+    false,
+    'iOS Safari setup pages & .mobileconfig must pass forbiddenDemoDataRe with 0 matches'
+  );
   console.log('   OK: iOS Native App & Safari Userscript compatibility tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');

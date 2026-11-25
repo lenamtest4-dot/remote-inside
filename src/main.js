@@ -3,8 +3,34 @@
  * hoac che do xem thu doc lap khi mo preview.html).
  */
 
+import { normalizeContractId } from './config/portals.js';
 import { parseRadiusOltFromText } from './adapters/inside.js';
 import { mountRemoteInside } from './ui/app.js';
+
+export function parseRemoteInsideHashIntent(rawHash) {
+  const cleaned = String(rawHash || '').replace(/^#/, '').trim();
+  if (!cleaned) {
+    return { open: false, portalId: '', contractId: '' };
+  }
+  const tokens = cleaned.split('&').filter(Boolean);
+  const head = String(tokens[0] || '').toLowerCase();
+  if (head !== 'remote-inside' && head !== 'ri-open') {
+    return { open: false, portalId: '', contractId: '' };
+  }
+  let portalId = '';
+  let contractId = '';
+  try {
+    const params = new URLSearchParams(tokens.slice(1).join('&'));
+    portalId = String(params.get('portal') || '').trim().toLowerCase();
+    const rawContract = String(params.get('contract') || '').trim();
+    if (rawContract) {
+      contractId = normalizeContractId(rawContract);
+    }
+  } catch {
+    // Bo qua tham so hash loi
+  }
+  return { open: true, portalId, contractId };
+}
 
 function startRadiusParamsBridge() {
   if (typeof window === 'undefined' || typeof document === 'undefined' || !document.body) {
@@ -166,8 +192,23 @@ function bootstrapRemoteInside() {
     GM.registerMenuCommand('Mở Remote Inside', () => app.open());
   }
 
-  if (window.location && window.location.hash === '#remote-inside') {
-    app.open();
+  const hashIntent =
+    window.location && window.location.hash
+      ? parseRemoteInsideHashIntent(window.location.hash)
+      : { open: false, portalId: '', contractId: '' };
+  if (hashIntent.open) {
+    app.open({ portalId: hashIntent.portalId, contractId: hashIntent.contractId });
+    try {
+      if (window.history && typeof window.history.replaceState === 'function') {
+        window.history.replaceState(
+          null,
+          '',
+          (window.location.pathname || '/') + (window.location.search || '')
+        );
+      }
+    } catch {
+      // Bo qua neu trinh duyet chan replaceState
+    }
   }
 }
 

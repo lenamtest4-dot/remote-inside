@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.17.3
+// @version      0.17.4
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
@@ -39,9 +39,13 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM.xmlHttpRequest
 // @grant        GM_getValue
+// @grant        GM.getValue
 // @grant        GM_setValue
+// @grant        GM.setValue
 // @grant        GM_setClipboard
+// @grant        GM.setClipboard
 // @grant        GM_registerMenuCommand
+// @grant        GM.registerMenuCommand
 // @grant        unsafeWindow
 // @run-at       document-idle
 // ==/UserScript==

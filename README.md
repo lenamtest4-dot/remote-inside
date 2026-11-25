@@ -1,6 +1,6 @@
-# Remote Inside (v0.17.3)
+# Remote Inside (v0.17.4)
 
-Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)**, **App iPhone / iOS (`.ipa` + Safari Userscripts)** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
+Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)**, **iPhone 15+ Safari 1 chạm / `.ipa`** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
 
 - **Inside** (`inside.fpt.net` / `fox-erp.fpt.net`) — *Đã ghép đủ 7 lệnh*: Tra thông tin HĐ, **Phiếu triển khai FOX-ERP** (Xem phiếu, **Phân tuyến KTV** kèm tìm nhanh KTV, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User & Sửa SĐT CMR, Biên bản ĐT, Cập nhật Online), ByPass (CheckList ByPass), Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port) *(hỗ trợ làm sạch phiên riêng & đổi tài khoản IAM riêng cho từng cổng)*
 - **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port *(tự động làm sạch cookie/cache riêng của Port như tab ẩn danh + làm mới OIDC IAM `https://iam.fpt.net` và kích hoạt `LeftMenu.aspx` / `mvcport.fpt.net` khi gặp lỗi 401; hỗ trợ đổi tài khoản IAM riêng mà không làm mất phiên cổng khác)*
@@ -15,7 +15,7 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.17.3.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.17.4.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
@@ -27,26 +27,27 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 
 ---
 
-## 2. Cài trên iPhone (iOS) — Miễn phí
+## 2. Cài trên iPhone 15+ (iOS) — Miễn phí
 
-iOS không cho bấm trực tiếp file cài đặt ngoài như Android, nên có **2 cách miễn phí** tùy bạn chọn:
+Trên **iPhone 15 trở lên (iOS 17 / 18+)**, Apple chặn bấm cài trực tiếp file `.ipa` chưa ký và thu hồi chứng chỉ web miễn phí, nên **Cách A (1 link Safari + Icon App ngoài màn hình chính)** là cách đơn giản, ổn định và dùng vĩnh viễn không cần máy tính:
 
-### Cách A: Cài App iOS riêng (`.ipa`) — Giao diện & cách dùng giống hệt App Android 100%
-- Tải file **`remote-inside-v0.17.3-ios.ipa`** từ trang Releases:
+### Cách A: 1 link cài nhanh Safari iPhone + Icon App ngoài màn hình chính (Khuyên dùng)
+- Mở **Safari** trên iPhone truy cập đúng 1 đường link:
+  https://lenamtest4-dot.github.io/remote-inside/ios.html
+  *(Hoặc tải file `remote-inside-ios-setup.html` từ trang Releases.)*
+- Trang hướng dẫn tự động có sẵn 4 nút bấm tuần tự:
+  1. Bấm **1. Tải app Userscripts miễn phí** từ App Store (hoặc dùng Stay for Safari).
+  2. Vào **Cài đặt → Ứng dụng → Safari → Phần mở rộng** (iOS 18+) hoặc **Cài đặt → Safari → Phần mở rộng** (iOS 17) → gạt BẬT **Userscripts** (Luôn cho phép trên tất cả trang web) & TẮT **Ngăn chặn theo dõi chéo trang**.
+  3. Bấm **3. Cài tự động Remote Inside** → bấm biểu tượng `🧩 / AA` trên Safari → **Userscripts** → **Install / Lưu** *(tự cập nhật khi có bản mới, không hết hạn 7 ngày)*.
+  4. Bấm **4. Tạo Icon App Remote Inside ngoài màn hình chính** → **Cho phép** → **Cài đặt → Đã tải về hồ sơ → Cài đặt** để có icon màu cam y hệt file APK ngoài màn hình chính *(chỉ chứa link `inside.fpt.net` và icon, không MDM, bấm vào tự mở Safari + bảng điều khiển Remote Inside kèm nút **Cổng nhanh** chuyển 1 chạm sang Inside / Port / Vật tư / Radius)*.
+
+### Cách B: Cài App iOS riêng (`.ipa`) qua SideStore / Sideloadly / TestFlight
+- Tải file **`remote-inside-v0.17.4-ios.ipa`** từ trang Releases:
   https://github.com/lenamtest4-dot/remote-inside/releases
-- **SideStore (khuyên dùng, miễn phí bằng Apple ID thường):**
-  1. Cài **SideStore** lên iPhone 1 lần đầu qua máy tính Windows/Mac theo hướng dẫn tại https://sidestore.io.
-  2. Trên iPhone, tải `remote-inside-v0.17.3-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
-  3. Dùng giống hệt App Android: bật **VPN công ty** -> mở icon **Remote Inside** -> đăng nhập IAM 1 lần là đồng bộ hết các cổng *(chỉ cần bật WireGuard VPN của SideStore ~5 giây mỗi 7 ngày để gia hạn miễn phí ngay trên iPhone không cần máy tính)*.
-- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.17.3-ios.ipa` vào và nhập Apple ID miễn phí để cài trực tiếp *(cắm cáp cài lại sau mỗi 7 ngày; hoặc cài trực tiếp vĩnh viễn không hết hạn nếu máy có TrollStore / tài khoản Apple Developer)*.
-
-### Cách B: Chạy thẳng trên Safari iPhone (miễn phí từ App Store, KHÔNG cần máy tính, KHÔNG hết hạn 7 ngày)
-1. Lên **App Store** cài app miễn phí **Userscripts** (hoặc **Stay**).
-2. Vào **Cài đặt iPhone → Safari → Phần mở rộng (Extensions)** -> gạt BẬT **Userscripts**.
-3. Vào **Cài đặt iPhone → Safari → Quyền riêng tư & Bảo mật** -> TẮT mục **Ngăn chặn theo dõi chéo trang (Prevent Cross-Site Tracking)** để cookie SSO IAM hoạt động xuyên 5 cổng FPT.
-4. Thêm script từ link cập nhật tự động:
-   https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.user.js
-5. Bật **VPN công ty**, mở **Safari** truy cập `inside.fpt.net` -> nút nổi màu cam **Remote Inside** tự xuất hiện ở góc dưới màn hình.
+- **SideStore (cần máy tính 1 lần đầu, miễn phí bằng Apple ID thường):**
+  1. Cài **SideStore** lên iPhone 1 lần đầu qua máy tính Windows/Mac theo hướng dẫn tại https://sidestore.io (trên iOS 17+ cần bật thêm *Chế độ nhà phát triển* trong Quyền riêng tư & Bảo mật).
+  2. Trên iPhone, tải `remote-inside-v0.17.4-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
+- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.17.4-ios.ipa` vào và nhập Apple ID miễn phí *(gia hạn 7 ngày/lần hoặc dùng TrollStore / chứng chỉ Developer / TestFlight)*.
 
 ---
 

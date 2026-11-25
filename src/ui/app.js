@@ -618,6 +618,15 @@ export function mountRemoteInside({
     return PORTALS.inside.url;
   }
 
+  function isIosSafariBrowser() {
+    if (isAndroidAppEnv() || standalone || typeof navigator === 'undefined') {
+      return false;
+    }
+    const ua = String(navigator.userAgent || '');
+    const maxTouch = Number(navigator.maxTouchPoints || 0);
+    return /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && maxTouch > 1);
+  }
+
   function detectPortalIdFromUrl(url, fallbackId = 'inside') {
     const raw = String(url || '').trim().toLowerCase();
     if (/port\.fpt\.net|mvcport\.fpt\.net|client_id=mvc-port/.test(raw)) return 'port';
@@ -4669,7 +4678,17 @@ export function mountRemoteInside({
     renderScanner();
   }
 
-  function openConsole() {
+  function openConsole({ portalId = '', contractId = '' } = {}) {
+    const cleanPortal = String(portalId || '').trim().toLowerCase();
+    if (cleanPortal && PORTALS[cleanPortal] && !isPortalLocked(cleanPortal)) {
+      state.activePortalId = cleanPortal;
+      setState(STORAGE_KEYS.ACTIVE_PORTAL, cleanPortal);
+    }
+    const cleanContract = normalizeContractId(String(contractId || ''));
+    if (cleanContract) {
+      state.contractInput = cleanContract;
+      setState(STORAGE_KEYS.LAST_CONTRACT, cleanContract);
+    }
     if (state.recallReturnPending) {
       state.recallReturnPending = false;
       state.recallReturnLabel = '';
@@ -4710,6 +4729,7 @@ export function mountRemoteInside({
 
   function renderTopBar() {
     const isAndroid = isAndroidAppEnv();
+    const isIosSafari = !isAndroid && isIosSafariBrowser();
     const pillState = state.iamSyncing ? 'checking' : state.sessionStatus.state;
     const pillLabel = state.iamSyncing
       ? state.iamSyncText || 'Đang đồng bộ IAM…'
@@ -4725,14 +4745,22 @@ export function mountRemoteInside({
           if (state.iamSyncing) {
             return;
           }
-          if (isAndroid && state.sessionStatus.state === 'iam_expired') {
+          if (state.sessionStatus.state === 'iam_expired') {
             const targetUrl = state.sessionStatus.loginUrl || getUnifiedIamLoginUrl();
-            const targetPortalId = detectPortalIdFromUrl(targetUrl, state.activePortalId);
-            openPortalCleanLogin(targetPortalId, {
-              fallbackUrl: targetUrl,
-              title: 'Làm sạch phiên & Đăng nhập IAM',
-              clearIamIdentity: false,
-            });
+            if (isAndroid) {
+              const targetPortalId = detectPortalIdFromUrl(targetUrl, state.activePortalId);
+              openPortalCleanLogin(targetPortalId, {
+                fallbackUrl: targetUrl,
+                title: 'Làm sạch phiên & Đăng nhập IAM',
+                clearIamIdentity: false,
+              });
+            } else {
+              openExternalOrPortalUrl(targetUrl, {
+                mode: 'login',
+                title: 'Đăng nhập IAM',
+                pageWindow,
+              });
+            }
             return;
           }
           refreshSessionStatus();
@@ -4763,6 +4791,17 @@ export function mountRemoteInside({
           type: 'button',
           className: 'ri-icon-btn',
           text: 'Tiện ích',
+          onClick: () => {
+            state.scannerOpen = false;
+            state.appMenuOpen = true;
+            renderScanner();
+          },
+        })
+      : isIosSafari
+      ? el('button', {
+          type: 'button',
+          className: 'ri-icon-btn',
+          text: 'Cổng nhanh',
           onClick: () => {
             state.scannerOpen = false;
             state.appMenuOpen = true;
@@ -11416,6 +11455,134 @@ export function mountRemoteInside({
     ]);
   }
 
+  function renderIosSafariMenuSheet() {
+    const versionStr =
+      typeof __REMOTE_INSIDE_VERSION__ !== 'undefined' ? __REMOTE_INSIDE_VERSION__ : '0.17.4';
+    const closeMenu = () => {
+      state.appMenuOpen = false;
+      renderScanner();
+    };
+    const jumpToPortalTab = (url, portalId = '') => {
+      const cleanContract = normalizeContractId(state.contractInput);
+      if (cleanContract) {
+        setState(STORAGE_KEYS.LAST_CONTRACT, cleanContract);
+      }
+      if (portalId && PORTALS[portalId] && !isPortalLocked(portalId)) {
+        setState(STORAGE_KEYS.ACTIVE_PORTAL, portalId);
+      }
+      state.appMenuOpen = false;
+      renderScanner();
+      if (pageWindow && pageWindow.location) {
+        pageWindow.location.href = url;
+      } else {
+        openExternalOrPortalUrl(url, { mode: 'portal', title: 'Remote Inside', pageWindow });
+      }
+    };
+
+    return el('div', { className: 'ri-sheet-backdrop', role: 'dialog', 'aria-modal': 'true' }, [
+      el('div', { className: 'ri-sheet' }, [
+        el('div', { className: 'ri-log-head' }, [
+          el('h2', { className: 'ri-sheet-title', text: 'Tiện ích Safari iPhone' }),
+          el('button', {
+            type: 'button',
+            className: 'ri-icon-btn',
+            text: 'Đóng',
+            onClick: closeMenu,
+          }),
+        ]),
+        el('p', {
+          className: 'ri-sheet-sub',
+          text: `Phiên bản v${versionStr} — Chạy trực tiếp trên Safari iPhone (không hết hạn 7 ngày).`,
+        }),
+        el('div', { className: 'ri-privacy-note' }, [
+          el('div', {
+            text: 'Trên Safari iPhone, bấm các nút bên dưới để nhảy thẳng sang đúng tab cổng — bảng điều khiển Remote Inside sẽ tự mở lại cùng Mã HĐ đang nhập.',
+          }),
+        ]),
+        el('div', { className: 'ri-result-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Inside (7 lệnh + FOX-ERP)',
+            onClick: () =>
+              jumpToPortalTab('http://inside.fpt.net/default.asp#remote-inside&portal=inside', 'inside'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Port (FTTH NEW)',
+            onClick: () => jumpToPortalTab('http://port.fpt.net/', 'port'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Vật tư — Phiếu thu hồi',
+            onClick: () =>
+              jumpToPortalTab('https://nextgen.fpt.net/resource/recall#remote-inside&portal=recall', 'recall'),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Vật tư — Tồn nợ KTV',
+            onClick: () =>
+              jumpToPortalTab(
+                'https://nextgen.fpt.net/resource/equipment#remote-inside&portal=recall',
+                'recall'
+              ),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Radius (IPNAT & IPv6)',
+            onClick: () =>
+              jumpToPortalTab(
+                'http://radius-portal.fpt.net/networkConnection#remote-inside&portal=radius',
+                'radius'
+              ),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            disabled: true,
+            'aria-disabled': 'true',
+            text: '🔒 Camera (Chưa có dữ liệu)',
+          }),
+        ]),
+        el('div', { className: 'ri-result-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Trang cài đặt / Tạo Icon iPhone',
+            onClick: () =>
+              openExternalOrPortalUrl('https://lenamtest4-dot.github.io/remote-inside/ios.html', {
+                mode: 'portal',
+                title: 'Cài đặt Remote Inside iPhone',
+                pageWindow,
+              }),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Quét cấu trúc (Nâng cao)',
+            onClick: () => {
+              state.appMenuOpen = false;
+              state.scannerOpen = true;
+              renderScanner();
+            },
+          }),
+        ]),
+        el('div', { className: 'ri-sheet-buttons' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Đóng',
+            onClick: closeMenu,
+          }),
+        ]),
+      ]),
+    ]);
+  }
+
   function renderAuthGatePanel() {
     const appVersion =
       typeof __REMOTE_INSIDE_VERSION__ !== 'undefined' ? __REMOTE_INSIDE_VERSION__ : '0.14.3';
@@ -11669,10 +11836,11 @@ export function mountRemoteInside({
       }
       return;
     }
-    const scannerSheet =
-      state.appMenuOpen && isAndroidAppEnv()
+    const scannerSheet = state.appMenuOpen
+      ? isAndroidAppEnv()
         ? renderAndroidAppMenuSheet()
-        : renderScannerSheet();
+        : renderIosSafariMenuSheet()
+      : renderScannerSheet();
     scannerLayer.textContent = '';
     if (scannerSheet) {
       scannerLayer.appendChild(scannerSheet);

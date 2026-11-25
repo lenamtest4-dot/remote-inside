@@ -642,8 +642,10 @@ function buildRadiusAuthErrorResult(detail = '') {
       detail ||
       (onAndroid
         ? 'Chưa có token truy cập Radius (accesstoken_iam_radius). Bấm "Đăng nhập Radius (IAM)" để đồng bộ phiên và thử lại.'
-        : 'Đang chạy ở tab khác nên trình duyệt chưa đọc được cookie Radius. Hãy mở trang http://radius-portal.fpt.net/networkConnection đang đăng nhập IAM rồi bấm lại.'),
-    loginUrl: RADIUS_ENDPOINTS.PORTAL_URL,
+        : 'Đang ở trang khác nên Safari/trình duyệt chưa đọc được cookie Radius. Bấm nút bên dưới để mở thẳng trang Radius với Remote Inside tự bật sẵn.'),
+    loginUrl: onAndroid
+      ? RADIUS_ENDPOINTS.PORTAL_URL
+      : `${RADIUS_ENDPOINTS.PORTAL_URL}#remote-inside&portal=radius`,
   };
 }
 

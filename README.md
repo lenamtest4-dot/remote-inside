@@ -1,9 +1,9 @@
-# Remote Inside (v0.17.0)
+# Remote Inside (v0.17.1)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)**, **App iPhone / iOS (`.ipa` + Safari Userscripts)** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
 
 - **Inside** (`inside.fpt.net` / `fox-erp.fpt.net`) — *Đã ghép đủ 7 lệnh*: Tra thông tin HĐ, **Phiếu triển khai FOX-ERP** (Xem phiếu, **Phân tuyến KTV** kèm tìm nhanh KTV, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User & Sửa SĐT CMR, Biên bản ĐT, Cập nhật Online), ByPass (CheckList ByPass), Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port)
-- **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port
+- **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port *(tự động làm mới token OIDC IAM khi gặp lỗi 401 trên `mvcport.fpt.net`)*
 - **Vật tư** (`nextgen.fpt.net/resource/recall` & `/resource/equipment`) — *Thu hồi & Tồn nợ*: Phiếu thu hồi vật tư NextGen (thêm/sửa thiết bị, **Đổi / Cập nhật tên KTV theo từng dòng vật tư** với lọc danh sách KTV Radzen Blazor, chờ tải đủ phiếu/thiết bị, tạo phiếu `+`, ghi chú) và Tra cứu tồn nợ vật tư theo KTV (Báo cáo nợ); trên App Android & iOS chạy qua WebView nền và tự cấp lại `SessionCode` từ Fox-ERP khi cần
 - **Radius** (`radius-portal.fpt.net`) — *Đã ghép IPNAT & IPv6*: Tra cứu thông số kết nối, chỉnh Tình trạng NAT (`Default NAT` / `Khách hàng dùng Camera` / `ByPass NAT`), chỉnh IPv6 (`Deactivate` / `Active` / `Rule`) kèm ghi chú không dấu & Kill Session
 - **Camera** (`fli-mngt.fcam.vn`) — Kiểm tra lỗi, Khởi động lại Camera *(đang chờ quét ghép tiếp)*
@@ -15,7 +15,7 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.17.0.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.17.1.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
@@ -32,13 +32,13 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 iOS không cho bấm trực tiếp file cài đặt ngoài như Android, nên có **2 cách miễn phí** tùy bạn chọn:
 
 ### Cách A: Cài App iOS riêng (`.ipa`) — Giao diện & cách dùng giống hệt App Android 100%
-- Tải file **`remote-inside-v0.17.0-ios.ipa`** từ trang Releases:
+- Tải file **`remote-inside-v0.17.1-ios.ipa`** từ trang Releases:
   https://github.com/lenamtest4-dot/remote-inside/releases
 - **SideStore (khuyên dùng, miễn phí bằng Apple ID thường):**
   1. Cài **SideStore** lên iPhone 1 lần đầu qua máy tính Windows/Mac theo hướng dẫn tại https://sidestore.io.
-  2. Trên iPhone, tải `remote-inside-v0.17.0-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
+  2. Trên iPhone, tải `remote-inside-v0.17.1-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
   3. Dùng giống hệt App Android: bật **VPN công ty** -> mở icon **Remote Inside** -> đăng nhập IAM 1 lần là đồng bộ hết các cổng *(chỉ cần bật WireGuard VPN của SideStore ~5 giây mỗi 7 ngày để gia hạn miễn phí ngay trên iPhone không cần máy tính)*.
-- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.17.0-ios.ipa` vào và nhập Apple ID miễn phí để cài trực tiếp *(cắm cáp cài lại sau mỗi 7 ngày; hoặc cài trực tiếp vĩnh viễn không hết hạn nếu máy có TrollStore / tài khoản Apple Developer)*.
+- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.17.1-ios.ipa` vào và nhập Apple ID miễn phí để cài trực tiếp *(cắm cáp cài lại sau mỗi 7 ngày; hoặc cài trực tiếp vĩnh viễn không hết hạn nếu máy có TrollStore / tài khoản Apple Developer)*.
 
 ### Cách B: Chạy thẳng trên Safari iPhone (miễn phí từ App Store, KHÔNG cần máy tính, KHÔNG hết hạn 7 ngày)
 1. Lên **App Store** cài app miễn phí **Userscripts** (hoặc **Stay**).

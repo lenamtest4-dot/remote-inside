@@ -682,7 +682,10 @@ export function clearWarmSessionCache() {
   warmCacheByHost.clear();
 }
 
-export function warmPortalSession(url, { timeout = 12000, force = false } = {}) {
+export function warmPortalSession(
+  url,
+  { timeout = 12000, force = false, targetHost = '' } = {}
+) {
   if (!url || typeof url !== 'string') {
     return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: '' });
   }
@@ -690,7 +693,8 @@ export function warmPortalSession(url, { timeout = 12000, force = false } = {}) 
     return Promise.resolve({ ok: false, status: 'unsupported', finalUrl: url });
   }
 
-  const host = extractHost(url);
+  const normalizedTargetHost = String(targetHost || '').trim().toLowerCase();
+  const host = normalizedTargetHost || extractHost(url);
   if (!host) {
     return Promise.resolve({ ok: false, status: 'invalid_url', finalUrl: url });
   }
@@ -744,6 +748,7 @@ export function warmPortalSession(url, { timeout = 12000, force = false } = {}) 
         JSON.stringify({
           reqId,
           url,
+          targetHost: normalizedTargetHost,
           timeout: numericTimeout,
         })
       );
@@ -795,7 +800,15 @@ export async function syncIamSsoSessions({
 
     if (res.ok && typeof afterTarget === 'function') {
       try {
-        await afterTarget(target, res);
+        const hookRes = await afterTarget(target, res);
+        if (hookRes && hookRes.ok === false) {
+          res = {
+            ...res,
+            ok: false,
+            status: String(hookRes.status || 'needs_login'),
+            loginUrl: hookRes.loginUrl || target.loginUrl || target.url,
+          };
+        }
       } catch {
         // ignore follow-up hook errors so remaining SSO targets still sync
       }
@@ -1067,7 +1080,7 @@ export async function checkPortalSession(
     return {
       state: 'iam_expired',
       label: 'Cần đăng nhập IAM',
-      loginUrl: portal.url,
+      loginUrl: portal.loginUrl || portal.url,
       detail: iamCheck.reason,
     };
   }

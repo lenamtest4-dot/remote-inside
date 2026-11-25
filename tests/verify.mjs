@@ -159,6 +159,7 @@ import {
   parseConboxParamsFromLibJs,
   parseDropdownOptions,
   parseMvcPortTokenFromCookieString,
+  parseMvcPortTokenFromSetCookieHeaders,
   parsePortContractDetailHtml,
   parsePortHistoryRows,
   parsePortMutationResponse,
@@ -2943,6 +2944,147 @@ async function runTests() {
     }
   }
 
+  // Port 401 stale mvct token -> silent IAM OIDC recovery & syncIamSsoSessions hook failure tests
+  assert.equal(
+    parseMvcPortTokenFromSetCookieHeaders(
+      'Content-Type: text/html\r\nSet-Cookie: MVCPORT_TOKEN=oldtok; path=/\r\nSet-Cookie: MVCPORT_TOKEN_PROD=newtok99; path=/'
+    ),
+    'newtok99',
+    'parseMvcPortTokenFromSetCookieHeaders must prefer suffixed MVCPORT_TOKEN_<ENV>'
+  );
+  assert.equal(
+    parseMvcPortTokenFromSetCookieHeaders('set-cookie: MVCPORT_TOKEN=onlybase; Path=/'),
+    'onlybase'
+  );
+  assert.ok(
+    PORTALS.port.loginUrl && PORTALS.port.loginUrl.includes('client_id=mvc-port') && PORTALS.port.loginUrl.includes('prompt=login'),
+    'PORTALS.port.loginUrl must force fresh OIDC token exchange (prompt=login)'
+  );
+
+  const prevWinPortOidc = globalThis.window;
+  const hadWinPortOidc = 'window' in globalThis;
+  try {
+    clearWarmSessionCache();
+    let oidcRefreshed = false;
+    let oidcShouldFail = false;
+    let warmPayloads = [];
+
+    globalThis.window = {
+      location: { hostname: 'appassets.androidplatform.net', pathname: '/assets/remote-inside.html' },
+      __riNativePending: new Map(),
+      RemoteInsideNative: {
+        httpRequest(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          queueMicrotask(() => {
+            let status = 200;
+            let finalUrl = parsed.url;
+            let responseText = '<html>OK</html>';
+            let responseHeaders = '';
+
+            if (parsed.url === PORT_ENDPOINTS.portIndexPage) {
+              const mvctVal = oidcRefreshed ? 'freshOidcTok' : 'staleTok401';
+              responseText = `<html><frameset><frame src="LeftMenu.aspx?mvct=${mvctVal}&amp;mvcu=demo" /></frameset></html>`;
+            } else if (parsed.url.startsWith(PORT_ENDPOINTS.indexPage)) {
+              if (!parsed.url.includes('Token=freshOidcTok')) {
+                status = 401;
+                responseText = '401 - Unauthorized: Access is denied due to invalid credentials.';
+              } else {
+                responseText = '<html><div>FTTH NEW OK</div></html>';
+              }
+            }
+
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({
+                ok: status >= 200 && status < 400,
+                status,
+                finalUrl,
+                responseText,
+                responseHeaders,
+              })
+            );
+          });
+        },
+        warmPortalSession(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          warmPayloads.push(parsed);
+          queueMicrotask(() => {
+            if (parsed.url === PORT_ENDPOINTS.oidcSilentAuth && !oidcShouldFail) {
+              oidcRefreshed = true;
+              globalThis.window.__riNativeResolve(
+                parsed.reqId,
+                JSON.stringify({
+                  ok: true,
+                  status: 'ok',
+                  finalUrl: PORT_ENDPOINTS.portIndexPage,
+                  sawAuth: true,
+                })
+              );
+              return;
+            }
+            if (oidcShouldFail) {
+              globalThis.window.__riNativeResolve(
+                parsed.reqId,
+                JSON.stringify({
+                  ok: false,
+                  status: 'needs_login',
+                  finalUrl: 'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth',
+                  sawAuth: true,
+                })
+              );
+              return;
+            }
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', finalUrl: parsed.url, sawAuth: false })
+            );
+          });
+        },
+      },
+    };
+
+    const recoveredBoot = await bootstrapMvcPortSession();
+    assert.equal(recoveredBoot.ok, true, 'bootstrapMvcPortSession must recover 401 via silent OIDC');
+    assert.equal(recoveredBoot.refreshedViaOidc, true);
+    assert.ok(
+      warmPayloads.some(
+        (p) => p.url === PORT_ENDPOINTS.oidcSilentAuth && p.targetHost === 'port.fpt.net'
+      ),
+      'Silent OIDC warmup must pass targetHost=port.fpt.net'
+    );
+
+    // Case 2: silent OIDC needs interactive login -> must return needs_login + prompt=login loginUrl & update syncIamSsoSessions
+    oidcRefreshed = false;
+    oidcShouldFail = true;
+    const failedBoot = await bootstrapMvcPortSession();
+    assert.equal(failedBoot.ok, false);
+    assert.equal(failedBoot.reason, 'needs_login');
+    assert.equal(failedBoot.loginUrl, PORT_ENDPOINTS.oidcPromptLogin);
+
+    clearWarmSessionCache();
+    oidcShouldFail = false;
+    const portTargetOnly = IAM_SSO_TARGETS.filter((t) => t.id === 'port');
+    const hookFailSync = await syncIamSsoSessions({
+      targets: portTargetOnly,
+      force: true,
+      afterTarget: async () => ({
+        ok: false,
+        status: 'needs_login',
+        loginUrl: PORT_ENDPOINTS.oidcPromptLogin,
+      }),
+    });
+    assert.equal(hookFailSync.okTargets.length, 0, 'syncIamSsoSessions must NOT mark target ok when afterTarget returns ok:false');
+    assert.equal(hookFailSync.needsLoginTargets.length, 1);
+    assert.equal(hookFailSync.results[0].res.loginUrl, PORT_ENDPOINTS.oidcPromptLogin);
+  } finally {
+    clearWarmSessionCache();
+    if (hadWinPortOidc) {
+      globalThis.window = prevWinPortOidc;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
   for (const host of ['iam.fpt.net', 'login.microsoftonline.com']) {
     assert.ok(
       userscriptContent.includes(`// @connect      ${host}`),
@@ -2974,6 +3116,9 @@ async function runTests() {
     'clearHttpAuthUsernamePassword',
     'CountDownLatch',
     'saveFormData = false',
+    'redirect_uri',
+    'targetHost',
+    'allowAuthEntry',
   ]) {
     assert.ok(mainActivitySrc.includes(token), `MainActivity.kt must contain ${token}`);
   }
@@ -6171,6 +6316,9 @@ async function runTests() {
     'loadPortalBackground',
     'warmPortalSession',
     'httpRequest',
+    'redirect_uri',
+    'targetHost',
+    'allowAuthEntry',
   ]) {
     assert.ok(combinedSwift.includes(iosToken), `iOS Swift codebase must include ${iosToken}`);
   }

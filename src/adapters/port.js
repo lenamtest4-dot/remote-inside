@@ -20,6 +20,11 @@ export const PORT_ENDPOINTS = {
   assign_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/InsertContract',
   release_port: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert_UpdateContact',
   portIndexPage: 'http://port.fpt.net/Index.aspx',
+  loginPage: 'http://port.fpt.net/LoginPage.aspx',
+  oidcSilentAuth:
+    'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx',
+  oidcPromptLogin:
+    'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login',
   indexPage: 'http://mvcport.fpt.net/ftth_newport/contract/index',
   insertPage: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert',
   search: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
@@ -153,6 +158,21 @@ export function parseMvcPortTokenFromCookieString(rawCookies) {
     }
   }
   return suffixedMatch || baseMatch || '';
+}
+
+export function parseMvcPortTokenFromSetCookieHeaders(rawHeaders) {
+  if (!rawHeaders || typeof rawHeaders !== 'string') {
+    return '';
+  }
+  const pairs = [];
+  for (const line of rawHeaders.split(/\r?\n/)) {
+    const m = line.match(/^\s*set-cookie2?\s*:\s*([^;\r\n]+)/i);
+    if (m && m[1]) {
+      pairs.push(m[1].trim());
+    }
+  }
+  if (pairs.length === 0) return '';
+  return parseMvcPortTokenFromCookieString(pairs.join('; '));
 }
 
 export function extractMvcPortTokenFromText(text) {
@@ -405,10 +425,33 @@ export async function bootstrapMvcPortSession() {
         }
         return '';
       }
-      const extracted = extractMvcPortTokenFromText(idxBody);
+      const extracted =
+        extractMvcPortTokenFromText(idxBody) ||
+        parseMvcPortTokenFromSetCookieHeaders(idxRes.responseHeaders);
       if (extracted) {
         cachedMvcPortToken = extracted;
         return extracted;
+      }
+      const frameMatch = idxBody.match(/<frame[^>]+src\s*=\s*["']([^"']*LeftMenu\.aspx[^"']*)["']/i);
+      if (frameMatch && frameMatch[1]) {
+        try {
+          const menuUrl = new URL(
+            decodeHtmlEntities(frameMatch[1]),
+            idxFinalUrl || PORT_ENDPOINTS.portIndexPage
+          ).toString();
+          const menuRes = await requestPortal({ url: menuUrl, method: 'GET', timeout: 8000 });
+          if (menuRes && menuRes.ok) {
+            const menuToken =
+              extractMvcPortTokenFromText(menuRes.responseText || '') ||
+              parseMvcPortTokenFromSetCookieHeaders(menuRes.responseHeaders);
+            if (menuToken) {
+              cachedMvcPortToken = menuToken;
+              return menuToken;
+            }
+          }
+        } catch {
+          // ignore malformed LeftMenu src URL
+        }
       }
       return '';
     }
@@ -419,29 +462,61 @@ export async function bootstrapMvcPortSession() {
       fetchedIndex = true;
       token = await fetchTokenFromPortIndex();
     }
-    if (!token) {
-      return { ok: false, reason: 'no_token' };
-    }
 
-    const warmUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, token);
-    const warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
-    if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
-      return { ok: true, res: warmRes };
-    }
+    let warmRes = null;
+    if (token) {
+      const warmUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, token);
+      warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
+      if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
+        return { ok: true, res: warmRes };
+      }
 
-    if (!fetchedIndex) {
-      cachedMvcPortToken = '';
-      const freshToken = await fetchTokenFromPortIndex();
-      if (freshToken && freshToken !== token) {
-        const warmUrl2 = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, freshToken);
-        const warmRes2 = await requestPortal({ url: warmUrl2, method: 'GET', timeout: 10000 });
-        if (warmRes2 && warmRes2.ok && !detectPortSessionExpired(warmRes2, warmUrl2).expired) {
-          return { ok: true, res: warmRes2 };
+      if (!fetchedIndex) {
+        cachedMvcPortToken = '';
+        const freshToken = await fetchTokenFromPortIndex();
+        if (freshToken && freshToken !== token) {
+          const warmUrl2 = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, freshToken);
+          const warmRes2 = await requestPortal({ url: warmUrl2, method: 'GET', timeout: 10000 });
+          if (warmRes2 && warmRes2.ok && !detectPortSessionExpired(warmRes2, warmUrl2).expired) {
+            return { ok: true, res: warmRes2 };
+          }
+          warmRes = warmRes2;
         }
       }
     }
 
-    return { ok: false, reason: 'warmup_rejected', res: warmRes };
+    if (canWarmPortalSession()) {
+      cachedMvcPortToken = '';
+      const oidcWarm = await warmPortalSession(PORT_ENDPOINTS.oidcSilentAuth, {
+        targetHost: 'port.fpt.net',
+        timeout: 12000,
+        force: true,
+      });
+      if (oidcWarm && oidcWarm.ok) {
+        const oidcToken = await fetchTokenFromPortIndex(false);
+        if (oidcToken) {
+          const oidcUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, oidcToken);
+          const oidcRes = await requestPortal({ url: oidcUrl, method: 'GET', timeout: 10000 });
+          if (oidcRes && oidcRes.ok && !detectPortSessionExpired(oidcRes, oidcUrl).expired) {
+            return { ok: true, res: oidcRes, refreshedViaOidc: true };
+          }
+          warmRes = oidcRes;
+        }
+      }
+      return {
+        ok: false,
+        reason: oidcWarm && !oidcWarm.ok ? 'needs_login' : 'warmup_rejected',
+        loginUrl: PORT_ENDPOINTS.oidcPromptLogin,
+        res: warmRes,
+      };
+    }
+
+    return {
+      ok: false,
+      reason: token ? 'warmup_rejected' : 'no_token',
+      loginUrl: PORT_ENDPOINTS.oidcPromptLogin,
+      res: warmRes,
+    };
   })().finally(() => {
     portBootstrapInFlight = null;
   });
@@ -539,9 +614,10 @@ async function portRequest({
 
   const expiredCheck = detectPortSessionExpired(res, targetUrl);
   if (expiredCheck.expired) {
+    let lastBoot = null;
     if (!_didBootstrap) {
-      const boot = await bootstrapMvcPortSession();
-      if (boot && boot.ok) {
+      lastBoot = await bootstrapMvcPortSession();
+      if (lastBoot && lastBoot.ok) {
         return portRequest({ url, method, data, headers, timeout, _didBootstrap: true });
       }
     }
@@ -563,8 +639,8 @@ async function portRequest({
       statusType: 'iam_expired',
       message: onLoggedInPortHost
         ? 'Bạn đã đăng nhập port.fpt.net nhưng phiên FTTH NEW (mvcport.fpt.net) chưa được kích hoạt. Bấm nút "Kích hoạt FTTH NEW ngay" bên dưới hoặc chọn menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm thử lại (không cần đăng nhập lại hay F5).'
-        : 'Phiên đăng nhập Port (port.fpt.net) đã hết hạn hoặc chưa kích hoạt FTTH NEW. Bấm nút bên dưới để mở port.fpt.net đăng nhập rồi vào menu FTTH NEW → Hợp đồng → Tìm kiếm 1 lần (không cần F5).',
-      loginUrl: PORTALS.port.url,
+        : 'Phiên FTTH NEW (mvcport.fpt.net) đã hết hạn hoặc token bị từ chối (401). Bấm nút bên dưới để cấp lại phiên IAM mới cho Port.',
+      loginUrl: (lastBoot && lastBoot.loginUrl) || PORT_ENDPOINTS.oidcPromptLogin,
       res,
     };
   }

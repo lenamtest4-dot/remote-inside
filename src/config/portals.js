@@ -4,11 +4,20 @@
 
 export const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 
+const PORT_OIDC_LOGIN_URL =
+  'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login';
+
 export const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
   { id: 'partner', portalId: 'inside', label: 'Partner', url: 'http://partner.fpt.net/pt-portal/monitor' },
   { id: 'fox_erp', portalId: 'inside', label: 'FOX-ERP', url: 'https://fox-erp.fpt.net/app/tkbt/tk/ticket' },
-  { id: 'port', portalId: 'port', label: 'Port (FTTH NEW)', url: 'http://port.fpt.net/' },
+  {
+    id: 'port',
+    portalId: 'port',
+    label: 'Port (FTTH NEW)',
+    url: 'http://port.fpt.net/',
+    loginUrl: PORT_OIDC_LOGIN_URL,
+  },
   { id: 'recall', portalId: 'recall', label: 'Vật tư', url: 'https://nextgen.fpt.net/resource/recall' },
   { id: 'radius', portalId: 'radius', label: 'Radius', url: 'http://radius-portal.fpt.net/networkConnection' },
 ];
@@ -93,6 +102,7 @@ export const PORTALS = {
     label: 'Port',
     fullName: 'port.fpt.net',
     url: 'http://port.fpt.net/',
+    loginUrl: PORT_OIDC_LOGIN_URL,
     sessionCheckUrl: 'http://mvcport.fpt.net/ftth_newport/contract/index',
     hosts: ['port.fpt.net', 'mvcport.fpt.net'],
     iamSso: true,

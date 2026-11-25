@@ -779,8 +779,18 @@ class MainActivity : AppCompatActivity() {
             portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
             portalAutoCloseRunnable = null
             portalLoginActive = (mode == "login")
-            portalLoginTargetHost = parsed.host.orEmpty()
-            portalLoginSawAuthHost = false
+            var initialTargetHost = parsed.host.orEmpty()
+            var sawAuthInitially = false
+            if (portalLoginActive && isAuthHost(initialTargetHost)) {
+                sawAuthInitially = true
+                val redirectParam = parsed.getQueryParameter("redirect_uri").orEmpty()
+                val redirectHost = runCatching { Uri.parse(redirectParam).host }.getOrNull().orEmpty()
+                if (isAllowedPortalHost(redirectHost) && !isAuthHost(redirectHost)) {
+                    initialTargetHost = redirectHost
+                }
+            }
+            portalLoginTargetHost = initialTargetHost
+            portalLoginSawAuthHost = sawAuthInitially
             tvPortalTitle.text = if (title.isNotBlank()) title else fallbackTitle
             tvPortalUrl.text = url
             portalProgress.visibility = View.VISIBLE
@@ -1385,16 +1395,23 @@ class MainActivity : AppCompatActivity() {
             val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
             val reqId = payload.optString("reqId", "")
             val url = payload.optString("url", "")
+            val requestedTargetHost = payload.optString("targetHost", "").trim().lowercase(Locale.US)
             val timeoutMs = payload.optInt("timeout", 12000).coerceIn(3000, 20000)
             if (reqId.isBlank()) return
 
             val uri = runCatching { Uri.parse(url) }.getOrNull()
             val scheme = uri?.scheme?.lowercase(Locale.US).orEmpty()
             val host = uri?.host?.trim()?.lowercase(Locale.US).orEmpty()
+            val allowAuthEntry =
+                isAuthHost(host) &&
+                    requestedTargetHost.isNotEmpty() &&
+                    isAllowedPortalHost(requestedTargetHost) &&
+                    !isAuthHost(requestedTargetHost)
+            val effectiveTargetHost = if (allowAuthEntry) requestedTargetHost else host
             if (uri == null ||
                 (scheme != "http" && scheme != "https") ||
-                !isAllowedPortalHost(host) ||
-                isAuthHost(host)
+                (!isAllowedPortalHost(host) && !allowAuthEntry) ||
+                (isAuthHost(host) && !allowAuthEntry)
             ) {
                 deliverBridgeResponse(
                     reqId,
@@ -1419,7 +1436,7 @@ class MainActivity : AppCompatActivity() {
                     )
                     return@runOnUiThread
                 }
-                ssoQueue.add(SsoWarmupTask(reqId, url, host, timeoutMs))
+                ssoQueue.add(SsoWarmupTask(reqId, url, effectiveTargetHost, timeoutMs))
                 startNextSsoTask()
             }
         }

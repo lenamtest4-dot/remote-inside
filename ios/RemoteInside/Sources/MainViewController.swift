@@ -515,8 +515,23 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         portalAutoCloseWorkItem?.cancel()
         portalAutoCloseWorkItem = nil
         portalLoginActive = (mode == "login")
-        portalLoginTargetHost = parsed.host ?? ""
-        portalLoginSawAuthHost = false
+        var initialTargetHost = parsed.host ?? ""
+        var sawAuthInitially = false
+        if portalLoginActive && PortalPolicy.isAuthHost(initialTargetHost) {
+            sawAuthInitially = true
+            if let redirectParam = URLComponents(url: parsed, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first(where: { $0.name == "redirect_uri" })?
+                .value,
+               let redirectHost = URL(string: redirectParam)?.host,
+               PortalPolicy.isAllowedPortalHost(redirectHost),
+               !PortalPolicy.isAuthHost(redirectHost)
+            {
+                initialTargetHost = redirectHost
+            }
+        }
+        portalLoginTargetHost = initialTargetHost
+        portalLoginSawAuthHost = sawAuthInitially
         tvPortalTitle.text = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallbackTitle : title
         tvPortalUrl.text = url
         portalProgress.isHidden = false
@@ -817,15 +832,16 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
 
     private func handleWarmPortalSession(reqId: String, payload: [String: Any]) {
         let urlStr = (payload["url"] as? String) ?? ""
+        let requestedTargetHost = ((payload["targetHost"] as? String) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
         let rawTimeout = (payload["timeout"] as? NSNumber)?.intValue ?? 12000
         let timeoutMs = min(20000, max(3000, rawTimeout))
 
         guard let uri = URL(string: urlStr),
               let scheme = uri.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
-              let host = uri.host?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
-              PortalPolicy.isAllowedPortalHost(host),
-              !PortalPolicy.isAuthHost(host)
+              let host = uri.host?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         else {
             deliverBridgeResponse(reqId: reqId, result: [
                 "ok": false,
@@ -835,7 +851,24 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             return
         }
 
-        ssoQueue.append(SsoWarmupTask(reqId: reqId, url: urlStr, targetHost: host, timeoutMs: timeoutMs))
+        let allowAuthEntry = PortalPolicy.isAuthHost(host) &&
+            !requestedTargetHost.isEmpty &&
+            PortalPolicy.isAllowedPortalHost(requestedTargetHost) &&
+            !PortalPolicy.isAuthHost(requestedTargetHost)
+        let effectiveTargetHost = allowAuthEntry ? requestedTargetHost : host
+
+        guard (PortalPolicy.isAllowedPortalHost(host) || allowAuthEntry) &&
+            (!PortalPolicy.isAuthHost(host) || allowAuthEntry)
+        else {
+            deliverBridgeResponse(reqId: reqId, result: [
+                "ok": false,
+                "status": "invalid_url",
+                "finalUrl": urlStr
+            ])
+            return
+        }
+
+        ssoQueue.append(SsoWarmupTask(reqId: reqId, url: urlStr, targetHost: effectiveTargetHost, timeoutMs: timeoutMs))
         startNextSsoTask()
     }
 

@@ -85,6 +85,7 @@ import {
   validateByPassPayload,
 } from '../adapters/inside.js';
 import {
+  PORT_ENDPOINTS,
   bootstrapMvcPortSession,
   buildPortUrl,
   fetchPortBranches,
@@ -606,7 +607,7 @@ export function mountRemoteInside({
   function getUnifiedIamLoginUrl() {
     const active = PORTALS[state.activePortalId];
     if (active && active.iamSso && active.url) {
-      return active.url;
+      return active.loginUrl || active.url;
     }
     return PORTALS.inside.url;
   }
@@ -645,8 +646,17 @@ export function mountRemoteInside({
         force: true,
         afterTarget: async (target) => {
           if (target.id === 'port') {
-            await bootstrapMvcPortSession();
+            const boot = await bootstrapMvcPortSession();
+            if (!boot || !boot.ok) {
+              return {
+                ok: false,
+                status: 'needs_login',
+                loginUrl: (boot && boot.loginUrl) || PORT_ENDPOINTS.oidcPromptLogin,
+              };
+            }
+            return { ok: true };
           }
+          return null;
         },
         onProgress: ({ index, total }) => {
           state.iamSyncText = `Đồng bộ IAM (${index}/${total})…`;
@@ -687,7 +697,7 @@ export function mountRemoteInside({
           status: 'ok',
           title: `Đã đồng bộ ${okLabels.length}/${report.results.length} cổng IAM`,
           message: parts.join(' '),
-          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : '',
+          loginUrl: needsLogin.length > 0 ? needsLogin[0].loginUrl || needsLogin[0].url : '',
           showLoginBtn: needsLogin.length > 0,
         };
       } else {
@@ -701,7 +711,10 @@ export function mountRemoteInside({
           status: 'iam_expired',
           title: 'Chưa hoàn tất đăng nhập IAM',
           message: parts.join(' '),
-          loginUrl: needsLogin.length > 0 ? needsLogin[0].url : getUnifiedIamLoginUrl(),
+          loginUrl:
+            needsLogin.length > 0
+              ? needsLogin[0].loginUrl || needsLogin[0].url
+              : getUnifiedIamLoginUrl(),
         };
       }
       renderMain();
@@ -837,13 +850,15 @@ export function mountRemoteInside({
         checked = {
           state: 'ok',
           label: 'IAM ổn',
-          loginUrl: portal.url,
+          loginUrl: portal.loginUrl || portal.url,
           detail: 'Đã tự động kích hoạt và kết nối tốt tới port.fpt.net (FTTH NEW).',
         };
       } else if (isLoggedInPortHost()) {
         checked.label = 'Chưa bật FTTH NEW';
         checked.detail =
           'Bạn đã vào port.fpt.net nhưng FTTH NEW (mvcport.fpt.net) chưa kích hoạt. Bấm menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm lại vào ô trạng thái này.';
+      } else {
+        checked.loginUrl = (boot && boot.loginUrl) || portal.loginUrl || portal.url;
       }
     }
     if (state.activePortalId === portal.id) {
@@ -11198,7 +11213,7 @@ export function mountRemoteInside({
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Port',
-              onClick: () => openLogin(PORTALS.port.url, 'Đăng nhập Port'),
+              onClick: () => openLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (IAM)'),
             }),
             el('button', {
               type: 'button',

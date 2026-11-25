@@ -555,6 +555,325 @@ export function triggerRecallSubmitNote(doc, rawNote) {
   return { ok: true, note };
 }
 
+export const DEMO_RECALL_STAFF_LIST = [
+  'KTV.MAU01',
+  'KTV.MAU02',
+  'KTV.MAU03',
+  'KTV.MAU04',
+  'KTV.MAU05',
+  'KTV.MAU06',
+];
+
+export function findRecallOpenDialog(doc) {
+  if (!doc || typeof doc.querySelector !== 'function') return null;
+  return doc.querySelector('.rz-dialog.rz-open') || doc.querySelector('.rz-dialog') || null;
+}
+
+export function readRecallDialogStaffOptions(panel) {
+  if (!panel || typeof panel.querySelectorAll !== 'function') return [];
+  const items = Array.from(
+    panel.querySelectorAll('.rz-dropdown-item, .rz-autocomplete-list-item, li[role="option"]')
+  );
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    const txt = getRecallElementText(item);
+    if (!txt) continue;
+    const key = txt.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(txt);
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+export function findRecallDialogFieldInfo(doc, dialogEl, labelRe) {
+  if (!dialogEl || typeof dialogEl.querySelectorAll !== 'function' || !labelRe) {
+    return null;
+  }
+  const fields = Array.from(dialogEl.querySelectorAll('.rz-form-field, .mud-input-control'));
+  for (const field of fields) {
+    if (!field || typeof field.querySelector !== 'function') continue;
+    const labelEl = field.querySelector('label, .rz-form-field-label, .mud-input-label');
+    const labelText = getRecallElementText(labelEl);
+    if (!labelRe.test(labelText)) continue;
+
+    const dd = field.querySelector('.rz-dropdown, .rz-multiselect, .rz-autocomplete, .mud-select');
+    const ddId = dd && dd.id ? dd.id : '';
+    let panel = null;
+    if (ddId && doc && typeof doc.getElementById === 'function') {
+      panel = doc.getElementById(`popup-${ddId}`) || doc.getElementById(`popup${ddId}`);
+    }
+    if (!panel && dd && typeof dd.querySelector === 'function') {
+      panel = dd.querySelector('.rz-dropdown-panel');
+    }
+
+    const searchInput =
+      (panel && typeof panel.querySelector === 'function'
+        ? panel.querySelector('.rz-dropdown-filter, input[aria-label="Search"]')
+        : null) ||
+      (ddId && doc && typeof doc.getElementById === 'function'
+        ? doc.getElementById(`search-${ddId}`)
+        : null);
+
+    let valueText = '';
+    let disabled = false;
+    if (dd) {
+      const ddCls = String(dd.className || '');
+      const labelNode =
+        typeof dd.querySelector === 'function'
+          ? dd.querySelector('.rz-dropdown-label, .rz-multiselect-label')
+          : null;
+      const isPlaceholder = Boolean(
+        /rz-state-empty/i.test(ddCls) ||
+          (labelNode && /rz-placeholder/i.test(String(labelNode.className || '')))
+      );
+      valueText = isPlaceholder ? '' : getRecallElementText(labelNode || dd);
+      disabled = /rz-state-disabled|disabled/i.test(ddCls) || Boolean(dd.disabled);
+    } else {
+      const inp = field.querySelector('input, textarea');
+      valueText = inp ? cleanRecallText(inp.value) : '';
+      disabled = Boolean(inp && inp.disabled);
+    }
+
+    const panelOpen = Boolean(panel && (!panel.style || panel.style.display !== 'none'));
+    return {
+      field,
+      labelText,
+      dd,
+      panel,
+      searchInput,
+      valueText,
+      disabled,
+      panelOpen,
+    };
+  }
+  return null;
+}
+
+export function readRecallStaffDialogState(doc) {
+  const snackEl =
+    doc && typeof doc.querySelector === 'function'
+      ? doc.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
+      : null;
+  const snackbarText = getRecallElementText(snackEl);
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl) {
+    return {
+      isOpen: false,
+      title: '',
+      province: '',
+      partner: '',
+      branch: '',
+      currentStaff: '',
+      recallStatus: '',
+      reason: '',
+      hasStaffField: false,
+      staffDisabled: false,
+      staffPanelOpen: false,
+      staffOptions: [],
+      hasUpdateBtn: false,
+      updateBtnDisabled: false,
+      validationErrors: [],
+      snackbarText,
+    };
+  }
+
+  const titleEl =
+    typeof dialogEl.querySelector === 'function'
+      ? dialogEl.querySelector('.rz-dialog-title, .rz-dialog-titlebar')
+      : null;
+  const provinceInfo = findRecallDialogFieldInfo(doc, dialogEl, /tỉnh\s*thành/i);
+  const partnerInfo = findRecallDialogFieldInfo(doc, dialogEl, /đối\s*tác/i);
+  const branchInfo = findRecallDialogFieldInfo(doc, dialogEl, /chi\s*nhánh/i);
+  const staffInfo = findRecallDialogFieldInfo(doc, dialogEl, /^nhân\s*viên\*?$/i);
+  const statusInfo = findRecallDialogFieldInfo(doc, dialogEl, /tình\s*trạng\s*thu\s*hồi/i);
+  const reasonInfo = findRecallDialogFieldInfo(doc, dialogEl, /nguyên\s*nhân/i);
+
+  const btns =
+    typeof dialogEl.querySelectorAll === 'function'
+      ? Array.from(dialogEl.querySelectorAll('button'))
+      : [];
+  const updateBtn = btns.find((b) => /^cập\s*nhật$/i.test(getRecallElementText(b))) || null;
+
+  const valEls =
+    typeof dialogEl.querySelectorAll === 'function'
+      ? Array.from(
+          dialogEl.querySelectorAll(
+            '.rz-message, .validation-message, .mud-input-error, .rz-messages-error'
+          )
+        )
+      : [];
+  const validationErrors = [];
+  for (const ve of valEls) {
+    const txt = getRecallElementText(ve);
+    if (txt && !validationErrors.includes(txt)) {
+      validationErrors.push(txt);
+    }
+  }
+
+  const staffOptions =
+    staffInfo && staffInfo.panel && staffInfo.panelOpen
+      ? readRecallDialogStaffOptions(staffInfo.panel)
+      : [];
+
+  return {
+    isOpen: true,
+    title: getRecallElementText(titleEl),
+    province: provinceInfo ? provinceInfo.valueText : '',
+    partner: partnerInfo ? partnerInfo.valueText : '',
+    branch: branchInfo ? branchInfo.valueText : '',
+    currentStaff: staffInfo ? staffInfo.valueText : '',
+    recallStatus: statusInfo ? statusInfo.valueText : '',
+    reason: reasonInfo ? reasonInfo.valueText : '',
+    hasStaffField: Boolean(staffInfo && staffInfo.dd),
+    staffDisabled: Boolean(staffInfo && staffInfo.disabled),
+    staffPanelOpen: Boolean(staffInfo && staffInfo.panelOpen),
+    staffOptions,
+    hasUpdateBtn: Boolean(updateBtn),
+    updateBtnDisabled: Boolean(updateBtn && updateBtn.disabled),
+    validationErrors,
+    snackbarText,
+  };
+}
+
+export function triggerRecallOpenStaffDropdown(doc) {
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl) {
+    return { ok: false, error: 'Hộp thoại sửa vật tư trên NextGen đang đóng.' };
+  }
+  const staffInfo = findRecallDialogFieldInfo(doc, dialogEl, /^nhân\s*viên\*?$/i);
+  if (!staffInfo || !staffInfo.dd) {
+    return { ok: false, error: 'Không tìm thấy ô chọn "Nhân viên*" trong hộp thoại NextGen.' };
+  }
+  if (staffInfo.disabled) {
+    return { ok: false, error: 'Ô chọn "Nhân viên*" đang bị khóa trên NextGen.' };
+  }
+  const currentItems = staffInfo.panel ? readRecallDialogStaffOptions(staffInfo.panel) : [];
+  if (staffInfo.panelOpen && currentItems.length > 0) {
+    return { ok: true, alreadyOpen: true };
+  }
+  const trigger =
+    typeof staffInfo.dd.querySelector === 'function'
+      ? staffInfo.dd.querySelector('.rz-dropdown-trigger')
+      : null;
+  const clickTarget =
+    trigger && typeof trigger.click === 'function' ? trigger : staffInfo.dd;
+  if (!clickTarget || typeof clickTarget.click !== 'function') {
+    return { ok: false, error: 'Không bấm mở được danh sách Nhân viên.' };
+  }
+  clickTarget.click();
+  return { ok: true, alreadyOpen: false };
+}
+
+export function triggerRecallFilterStaffDropdown(doc, rawQuery = '') {
+  const query = cleanRecallText(rawQuery);
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl) {
+    return { ok: false, error: 'Hộp thoại sửa vật tư trên NextGen đang đóng.' };
+  }
+  const staffInfo = findRecallDialogFieldInfo(doc, dialogEl, /^nhân\s*viên\*?$/i);
+  if (!staffInfo || !staffInfo.dd) {
+    return { ok: false, error: 'Không tìm thấy ô chọn "Nhân viên*".' };
+  }
+  if (!staffInfo.panelOpen) {
+    triggerRecallOpenStaffDropdown(doc);
+  }
+  const refreshedInfo = findRecallDialogFieldInfo(doc, dialogEl, /^nhân\s*viên\*?$/i);
+  const searchInput = (refreshedInfo && refreshedInfo.searchInput) || staffInfo.searchInput;
+  if (!searchInput) {
+    return {
+      ok: false,
+      error: 'Không tìm thấy ô gõ tìm tên KTV bên trong danh sách Nhân viên.',
+    };
+  }
+  setRecallNativeInputValue(searchInput, query);
+  if (typeof searchInput.dispatchEvent === 'function') {
+    try {
+      if (typeof KeyboardEvent === 'function') {
+        searchInput.dispatchEvent(
+          new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+        );
+      } else {
+        searchInput.dispatchEvent({ type: 'keyup', key: 'Enter', bubbles: true });
+      }
+    } catch {
+      // Ignore keyboard event failures on minimal mocks
+    }
+  }
+  return { ok: true, query };
+}
+
+export function triggerRecallPickStaffOption(doc, targetStaff = '') {
+  const cleanTarget = cleanRecallText(targetStaff);
+  if (!cleanTarget) {
+    return { ok: false, error: 'Vui lòng chọn tên KTV cần cập nhật.' };
+  }
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl) {
+    return { ok: false, error: 'Hộp thoại sửa vật tư trên NextGen đang đóng.' };
+  }
+  const staffInfo = findRecallDialogFieldInfo(doc, dialogEl, /^nhân\s*viên\*?$/i);
+  if (!staffInfo || !staffInfo.panel || typeof staffInfo.panel.querySelectorAll !== 'function') {
+    return { ok: false, error: 'Chưa mở được danh sách tùy chọn Nhân viên.' };
+  }
+  const items = Array.from(
+    staffInfo.panel.querySelectorAll(
+      '.rz-dropdown-item, .rz-autocomplete-list-item, li[role="option"]'
+    )
+  );
+  const targetLower = cleanTarget.toLowerCase();
+  const match =
+    items.find((el) => getRecallElementText(el).toLowerCase() === targetLower) ||
+    items.find((el) => getRecallElementText(el).toLowerCase().startsWith(targetLower)) ||
+    items.find((el) => getRecallElementText(el).toLowerCase().includes(targetLower)) ||
+    null;
+  if (!match || typeof match.click !== 'function') {
+    return { ok: false, error: `Không thấy tên KTV "${cleanTarget}" trong danh sách đang mở.` };
+  }
+  const picked = getRecallElementText(match);
+  match.click();
+  return { ok: true, picked };
+}
+
+export function triggerRecallSubmitEditDialog(doc) {
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl || typeof dialogEl.querySelectorAll !== 'function') {
+    return { ok: false, error: 'Hộp thoại sửa vật tư trên NextGen đang đóng.' };
+  }
+  const updateBtn = Array.from(dialogEl.querySelectorAll('button')).find((b) =>
+    /^cập\s*nhật$/i.test(getRecallElementText(b))
+  );
+  if (!updateBtn || typeof updateBtn.click !== 'function') {
+    return { ok: false, error: 'Không tìm thấy nút "Cập nhật" trong hộp thoại NextGen.' };
+  }
+  if (updateBtn.disabled) {
+    return { ok: false, error: 'Nút "Cập nhật" trên NextGen hiện đang bị khóa.' };
+  }
+  updateBtn.click();
+  return { ok: true };
+}
+
+export function triggerRecallCloseEditDialog(doc) {
+  const dialogEl = findRecallOpenDialog(doc);
+  if (!dialogEl || typeof dialogEl.querySelectorAll !== 'function') {
+    return { ok: true, alreadyClosed: true };
+  }
+  const closeBtn =
+    Array.from(dialogEl.querySelectorAll('button')).find((b) =>
+      /^đóng$/i.test(getRecallElementText(b))
+    ) ||
+    (typeof dialogEl.querySelector === 'function'
+      ? dialogEl.querySelector('.rz-dialog-titlebar-close')
+      : null);
+  if (!closeBtn || typeof closeBtn.click !== 'function') {
+    return { ok: false, error: 'Không tìm thấy nút Đóng hộp thoại NextGen.' };
+  }
+  closeBtn.click();
+  return { ok: true, alreadyClosed: false };
+}
+
 export function buildDemoRecallSnapshot(rawContractId = 'SGN123456') {
   const contract = normalizeContractId(rawContractId) || 'SGN123456';
   const activeTicket = {
@@ -704,12 +1023,22 @@ function buildRecallPortalBootstrapJs() {
     triggerRecallAddAccessory,
     triggerRecallEditEquipment,
     triggerRecallSubmitNote,
+    findRecallOpenDialog,
+    readRecallDialogStaffOptions,
+    findRecallDialogFieldInfo,
+    readRecallStaffDialogState,
+    triggerRecallOpenStaffDropdown,
+    triggerRecallFilterStaffDropdown,
+    triggerRecallPickStaffOption,
+    triggerRecallSubmitEditDialog,
+    triggerRecallCloseEditDialog,
   ]
     .map((fn) => fn.toString())
     .join('\n');
 
   return `
-    if (!window.__riRecallDom) {
+    if (!window.__riRecallDom || window.__riRecallDomVersion !== 'v2') {
+      window.__riRecallDomVersion = 'v2';
       window.__riRecallDom = (function() {
         var CONTRACT_REGEX = ${CONTRACT_REGEX.toString()};
         var RECALL_ENDPOINTS = ${JSON.stringify(RECALL_ENDPOINTS)};
@@ -759,6 +1088,16 @@ function buildRecallPortalBootstrapJs() {
             if (actionType === 'add_accessory') return triggerRecallAddAccessory(document, p.rowIndex || 0);
             if (actionType === 'submit_note') return triggerRecallSubmitNote(document, p.note || '');
             return { ok: false, error: 'Thao tác phiếu thu hồi không xác định.' };
+          },
+          runStaffOp: function(op, payload) {
+            var p = payload || {};
+            if (op === 'read_dialog') return readRecallStaffDialogState(document);
+            if (op === 'open_staff_dropdown') return triggerRecallOpenStaffDropdown(document);
+            if (op === 'filter_staff_dropdown') return triggerRecallFilterStaffDropdown(document, p.query || '');
+            if (op === 'pick_staff_option') return triggerRecallPickStaffOption(document, p.targetStaff || '');
+            if (op === 'submit_dialog') return triggerRecallSubmitEditDialog(document);
+            if (op === 'close_dialog') return triggerRecallCloseEditDialog(document);
+            return { ok: false, error: 'Thao tác KTV phiếu thu hồi không xác định.' };
           }
         };
       })();
@@ -769,6 +1108,364 @@ function buildRecallPortalBootstrapJs() {
 async function evalRecallDom(expr) {
   const boot = buildRecallPortalBootstrapJs();
   return evalAndroidPortalJs(`${boot}\nreturn (${expr});`);
+}
+
+function shouldUseLocalRecallDoc(ctx = {}) {
+  const doc = ctx.pageDocument || null;
+  const loc = ctx.pageLocation || (doc && doc.location) || null;
+  return !canControlAndroidPortal() || Boolean(doc && loc && isRecallTicketLocation(loc));
+}
+
+async function callRecallStaffOp(op, payload = {}, ctx = {}) {
+  if (shouldUseLocalRecallDoc(ctx)) {
+    const doc = ctx.pageDocument || null;
+    if (op === 'read_dialog') return readRecallStaffDialogState(doc);
+    if (op === 'open_staff_dropdown') return triggerRecallOpenStaffDropdown(doc);
+    if (op === 'filter_staff_dropdown') {
+      return triggerRecallFilterStaffDropdown(doc, payload.query || '');
+    }
+    if (op === 'pick_staff_option') {
+      return triggerRecallPickStaffOption(doc, payload.targetStaff || '');
+    }
+    if (op === 'submit_dialog') return triggerRecallSubmitEditDialog(doc);
+    if (op === 'close_dialog') return triggerRecallCloseEditDialog(doc);
+    return { ok: false, error: 'Thao tác KTV phiếu thu hồi không xác định.' };
+  }
+
+  const res = await evalRecallDom(
+    `window.__riRecallDom.runStaffOp(${JSON.stringify(op)}, ${JSON.stringify(payload || {})})`
+  );
+  if (!res.ok || !res.value) {
+    return {
+      ok: false,
+      error: res.error || 'Không kết nối được hộp thoại Sửa vật tư NextGen.',
+    };
+  }
+  return res.value;
+}
+
+async function readRecallTicketSnapshotNow(ctx = {}) {
+  if (shouldUseLocalRecallDoc(ctx)) {
+    const doc = ctx.pageDocument || null;
+    const loc = ctx.pageLocation || (doc && doc.location) || null;
+    const snackEl =
+      doc && typeof doc.querySelector === 'function'
+        ? doc.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
+        : null;
+    return {
+      snapshot: doc ? parseRecallTicketFromDocument(doc, loc) : null,
+      snackbarText: getRecallElementText(snackEl),
+    };
+  }
+  const res = await evalRecallDom('window.__riRecallDom.inspectState()');
+  if (res.ok && res.value) {
+    return {
+      snapshot: res.value.snapshot || null,
+      snackbarText: res.value.snackbarText || '',
+    };
+  }
+  return { snapshot: null, snackbarText: '' };
+}
+
+/**
+ * Mo hop thoai Sua vat tu tren NextGen va tai danh sach KTV trong o Nhan vien*.
+ */
+export async function openRecallStaffEditor(
+  { rowIndex = 0, itemName = '', currentCollector = '' } = {},
+  ctx = {}
+) {
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      dialog: {
+        isOpen: true,
+        title: itemName || 'FPT Play Box 650 (Mẫu)',
+        province: 'Khu vực Mẫu 01',
+        partner: 'DT Mau Khu Vuc A',
+        branch: 'Chi nhánh mẫu',
+        currentStaff: currentCollector || 'KTV.MAU01',
+        recallStatus: 'Chưa thu hồi',
+        reason: '',
+        hasStaffField: true,
+        staffDisabled: false,
+        staffPanelOpen: true,
+        staffOptions: [...DEMO_RECALL_STAFF_LIST],
+        hasUpdateBtn: true,
+        updateBtnDisabled: false,
+        validationErrors: [],
+        snackbarText: '',
+      },
+    };
+  }
+
+  const doc = ctx.pageDocument || null;
+  const initialSt = await callRecallStaffOp('read_dialog', {}, ctx);
+  if (initialSt && initialSt.isOpen) {
+    await callRecallStaffOp('close_dialog', {}, ctx);
+    await sleep(220);
+  }
+
+  const openRes = await triggerRecallPortalAction('edit_equipment', { rowIndex }, doc);
+  if (!openRes.ok) {
+    return { status: 'error', mode: 'live', message: openRes.error };
+  }
+
+  let st = null;
+  const openDeadline = Date.now() + 5000;
+  while (Date.now() < openDeadline) {
+    await sleep(200);
+    const cur = await callRecallStaffOp('read_dialog', {}, ctx);
+    if (cur && cur.isOpen && cur.hasStaffField) {
+      st = cur;
+      break;
+    }
+  }
+
+  if (!st || !st.isOpen || !st.hasStaffField) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: 'Không mở được hộp thoại Sửa vật tư hoặc không thấy ô "Nhân viên*" trên NextGen.',
+    };
+  }
+
+  if (!st.staffDisabled) {
+    await callRecallStaffOp('open_staff_dropdown', {}, ctx);
+    const ddDeadline = Date.now() + 2200;
+    while (Date.now() < ddDeadline) {
+      await sleep(180);
+      const nextSt = await callRecallStaffOp('read_dialog', {}, ctx);
+      if (nextSt && nextSt.isOpen) {
+        st = nextSt;
+        if (nextSt.staffPanelOpen && Array.isArray(nextSt.staffOptions) && nextSt.staffOptions.length > 0) {
+          break;
+        }
+      }
+    }
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    dialog: st,
+  };
+}
+
+/**
+ * Loc danh sach KTV trong dropdown Nhan vien* theo tu khoa tim kiem.
+ */
+export async function searchRecallStaffOptions(rawQuery = '', ctx = {}) {
+  const query = cleanRecallText(rawQuery);
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    const qLower = query.toLowerCase();
+    const options = qLower
+      ? DEMO_RECALL_STAFF_LIST.filter((name) => name.toLowerCase().includes(qLower))
+      : [...DEMO_RECALL_STAFF_LIST];
+    return {
+      status: 'ok',
+      mode: 'demo',
+      query,
+      options,
+      currentStaff: '',
+    };
+  }
+
+  let st = await callRecallStaffOp('read_dialog', {}, ctx);
+  if (!st || !st.isOpen) {
+    return {
+      status: 'dialog_closed',
+      mode: 'live',
+      message: 'Hộp thoại sửa vật tư trên NextGen đã đóng. Hãy bấm "Đổi KTV" lại.',
+    };
+  }
+
+  const prevSig = Array.isArray(st.staffOptions) ? st.staffOptions.join('|') : '';
+  if (!st.staffPanelOpen) {
+    await callRecallStaffOp('open_staff_dropdown', {}, ctx);
+    await sleep(200);
+  }
+
+  const filterRes = await callRecallStaffOp('filter_staff_dropdown', { query }, ctx);
+  if (!filterRes.ok) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: filterRes.error || 'Không lọc được danh sách Nhân viên trên NextGen.',
+    };
+  }
+
+  await sleep(350);
+  const qLower = query.toLowerCase();
+  const pollDeadline = Date.now() + 2200;
+  while (Date.now() < pollDeadline) {
+    const cur = await callRecallStaffOp('read_dialog', {}, ctx);
+    if (!cur || !cur.isOpen) {
+      return {
+        status: 'dialog_closed',
+        mode: 'live',
+        message: 'Hộp thoại sửa vật tư trên NextGen đã đóng.',
+      };
+    }
+    st = cur;
+    const opts = Array.isArray(cur.staffOptions) ? cur.staffOptions : [];
+    const curSig = opts.join('|');
+    const allMatch =
+      !qLower || (opts.length > 0 && opts.every((o) => o.toLowerCase().includes(qLower)));
+    if (curSig !== prevSig || allMatch) {
+      break;
+    }
+    await sleep(200);
+  }
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    query,
+    options: Array.isArray(st.staffOptions) ? st.staffOptions : [],
+    currentStaff: st.currentStaff || '',
+  };
+}
+
+/**
+ * Chon KTV muc tieu trong o Nhan vien* va bam nut Cap nhat tren NextGen.
+ */
+export async function submitRecallStaffUpdate(
+  { targetStaff = '', rowIndex = 0 } = {},
+  ctx = {}
+) {
+  const cleanStaff = cleanRecallText(targetStaff);
+  if (!cleanStaff) {
+    return {
+      status: 'validation_error',
+      message: 'Vui lòng chọn tên KTV mới trước khi cập nhật.',
+    };
+  }
+
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      rowIndex,
+      staff: cleanStaff,
+      message: `Đã cập nhật KTV ${cleanStaff} (mẫu mô phỏng).`,
+      snapshot: null,
+    };
+  }
+
+  let st = await callRecallStaffOp('read_dialog', {}, ctx);
+  if (!st || !st.isOpen) {
+    return {
+      status: 'dialog_closed',
+      mode: 'live',
+      message: 'Hộp thoại sửa vật tư trên NextGen đã đóng. Hãy bấm "Đổi KTV" lại.',
+    };
+  }
+
+  const targetLower = cleanStaff.toLowerCase();
+  const currentOpts = Array.isArray(st.staffOptions) ? st.staffOptions : [];
+  const hasVisibleMatch =
+    st.staffPanelOpen &&
+    currentOpts.some((o) => o.toLowerCase() === targetLower || o.toLowerCase().includes(targetLower));
+
+  if (!hasVisibleMatch) {
+    const sr = await searchRecallStaffOptions(cleanStaff, ctx);
+    if (sr.status !== 'ok') {
+      return sr;
+    }
+  }
+
+  let pickRes = await callRecallStaffOp('pick_staff_option', { targetStaff: cleanStaff }, ctx);
+  if (!pickRes.ok) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: pickRes.error || `Không chọn được KTV "${cleanStaff}".`,
+      dialogStillOpen: true,
+    };
+  }
+
+  const pickVerifyDeadline = Date.now() + 1000;
+  let retriedPick = false;
+  while (Date.now() < pickVerifyDeadline) {
+    await sleep(220);
+    const verifySt = await callRecallStaffOp('read_dialog', {}, ctx);
+    if (!verifySt || !verifySt.isOpen) break;
+    if (
+      verifySt.currentStaff &&
+      verifySt.currentStaff.toLowerCase().includes(targetLower)
+    ) {
+      break;
+    }
+    if (!retriedPick && verifySt.staffPanelOpen) {
+      retriedPick = true;
+      await callRecallStaffOp('pick_staff_option', { targetStaff: cleanStaff }, ctx);
+    }
+  }
+
+  const subRes = await callRecallStaffOp('submit_dialog', {}, ctx);
+  if (!subRes.ok) {
+    return {
+      status: 'error',
+      mode: 'live',
+      message: subRes.error || 'Không bấm được nút "Cập nhật" trên hộp thoại NextGen.',
+      dialogStillOpen: true,
+    };
+  }
+
+  const submitDeadline = Date.now() + 5000;
+  while (Date.now() < submitDeadline) {
+    await sleep(250);
+    const nextSt = await callRecallStaffOp('read_dialog', {}, ctx);
+    if (!nextSt || !nextSt.isOpen) {
+      await sleep(350);
+      const after = await readRecallTicketSnapshotNow(ctx);
+      const snapshot = after && 'snapshot' in after ? after.snapshot : after;
+      const snack = (after && after.snackbarText) || (nextSt && nextSt.snackbarText) || '';
+      return {
+        status: 'ok',
+        mode: 'live',
+        rowIndex,
+        staff: cleanStaff,
+        message: snack || `Đã cập nhật KTV ${cleanStaff} thành công!`,
+        snapshot,
+      };
+    }
+    const errList = Array.isArray(nextSt.validationErrors) ? nextSt.validationErrors : [];
+    const snackErr =
+      nextSt.snackbarText &&
+      /vui lòng|bắt buộc|lỗi|không thể|thất bại|chưa chọn/i.test(nextSt.snackbarText)
+        ? nextSt.snackbarText
+        : '';
+    if (errList.length > 0 || snackErr) {
+      return {
+        status: 'validation_error',
+        mode: 'live',
+        message: errList.join(' • ') || snackErr,
+        dialogStillOpen: true,
+      };
+    }
+    st = nextSt;
+  }
+
+  return {
+    status: 'validation_error',
+    mode: 'live',
+    message:
+      (st && st.snackbarText) ||
+      'NextGen chưa đóng hộp thoại sau khi bấm Cập nhật (có thể thiếu trường bắt buộc như Nguyên nhân). Bấm "Mở hộp thoại NextGen gốc" để hoàn tất.',
+    dialogStillOpen: true,
+  };
+}
+
+/**
+ * Dong hop thoai Sua vat tu dang mo tren NextGen.
+ */
+export async function closeRecallStaffEditor(ctx = {}) {
+  if (!isUserscriptEnv() || ctx.forceDemo) {
+    return { ok: true, alreadyClosed: true };
+  }
+  return callRecallStaffOp('close_dialog', {}, ctx);
 }
 
 export async function triggerRecallPortalAction(actionType, payload = {}, doc = null) {

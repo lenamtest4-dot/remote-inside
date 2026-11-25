@@ -127,12 +127,16 @@ import {
 } from '../adapters/deployment.js';
 import {
   RECALL_ENDPOINTS,
+  closeRecallStaffEditor,
   findRecallMobileMenuToggle,
   findRecallSearchControls,
   isRecallPortalLocation,
   isRecallTicketLocation,
   loadRecallTicketContext,
+  openRecallStaffEditor,
   parseRecallTicketFromDocument,
+  searchRecallStaffOptions,
+  submitRecallStaffUpdate,
   triggerRecallAddAccessory,
   triggerRecallAddEquipment,
   triggerRecallCreateTicket,
@@ -502,6 +506,8 @@ export function mountRemoteInside({
     recallArmedCreate: false,
     recallReturnPending: false,
     recallReturnLabel: '',
+    recallStaffEdit: null,
+    recallLastStaff: '',
     equipDebtLoading: false,
     equipDebtProgress: '',
     equipDebtError: '',
@@ -931,7 +937,13 @@ export function mountRemoteInside({
     state.deployReassignSearch = '';
   }
 
+  let recallStaffSearchTimer = null;
+
   function resetRecallModalState() {
+    if (recallStaffSearchTimer) {
+      clearTimeout(recallStaffSearchTimer);
+      recallStaffSearchTimer = null;
+    }
     state.recallLoading = false;
     state.recallProgress = '';
     state.recallError = '';
@@ -946,6 +958,8 @@ export function mountRemoteInside({
     state.recallArmedCreate = false;
     state.recallReturnPending = false;
     state.recallReturnLabel = '';
+    state.recallStaffEdit = null;
+    state.recallLastStaff = '';
   }
 
   function resetEquipDebtModalState() {
@@ -1081,6 +1095,12 @@ export function mountRemoteInside({
     state.portHistoryError = '';
     state.portHistoryRows = [];
     resetDeployModalState();
+    if (state.recallStaffEdit && state.recallMode !== 'demo') {
+      closeRecallStaffEditor({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      }).catch(() => {});
+    }
     resetRecallModalState();
     resetEquipDebtModalState();
     resetRadiusModalState();
@@ -2538,6 +2558,13 @@ export function mountRemoteInside({
     rawContractId = state.contractInput,
     { clearNotice = false, forceReload = false } = {}
   ) {
+    if (forceReload) {
+      if (recallStaffSearchTimer) {
+        clearTimeout(recallStaffSearchTimer);
+        recallStaffSearchTimer = null;
+      }
+      state.recallStaffEdit = null;
+    }
     state.recallLoading = true;
     state.recallProgress = 'Đang đọc danh sách vật tư thu hồi…';
     state.recallError = '';
@@ -2600,7 +2627,338 @@ export function mountRemoteInside({
     renderConfirm();
   }
 
+  function closeRecallStaffPanel({ closeRemote = true } = {}) {
+    if (recallStaffSearchTimer) {
+      clearTimeout(recallStaffSearchTimer);
+      recallStaffSearchTimer = null;
+    }
+    const hadEdit = Boolean(state.recallStaffEdit);
+    state.recallStaffEdit = null;
+    renderConfirm();
+    if (closeRemote && hadEdit && state.recallMode !== 'demo') {
+      closeRecallStaffEditor({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      }).catch(() => {});
+    }
+  }
+
+  function renderRecallStaffOptionsIntoHost(hostEl, edit) {
+    if (!hostEl) return;
+    while (hostEl.firstChild) {
+      hostEl.removeChild(hostEl.firstChild);
+    }
+    if (!edit) return;
+    if (edit.searching) {
+      hostEl.appendChild(
+        el('div', { className: 'ri-field-hint', text: 'Đang lọc danh sách KTV từ NextGen…' })
+      );
+      return;
+    }
+    const opts = Array.isArray(edit.options) ? edit.options : [];
+    if (opts.length === 0) {
+      hostEl.appendChild(
+        el('div', {
+          className: 'ri-field-hint',
+          text: edit.searchQuery
+            ? `Không thấy tên KTV khớp "${edit.searchQuery}". Hãy thử từ khóa khác hoặc bấm Tìm KTV.`
+            : 'Chưa tải được danh sách KTV. Hãy gõ vài ký tự rồi bấm Tìm KTV.',
+        })
+      );
+      return;
+    }
+    for (const staffName of opts) {
+      const isSelected =
+        String(edit.selectedStaff || '').trim().toLowerCase() ===
+        String(staffName).trim().toLowerCase();
+      hostEl.appendChild(
+        el(
+          'button',
+          {
+            type: 'button',
+            className: `ri-reassign-emp-btn${isSelected ? ' is-selected' : ''}`,
+            disabled: edit.submitting,
+            onClick: () => {
+              if (!state.recallStaffEdit) return;
+              state.recallStaffEdit.selectedStaff = staffName;
+              state.recallStaffEdit.armed = false;
+              state.recallStaffEdit.error = '';
+              renderConfirm();
+            },
+          },
+          [
+            el('span', { className: 'ri-reassign-emp-title', text: staffName }),
+            isSelected
+              ? el('span', { className: 'ri-reassign-emp-meta', text: 'Đang chọn để cập nhật' })
+              : null,
+          ]
+        )
+      );
+    }
+  }
+
+  async function handleRecallOpenStaffEdit(item) {
+    if (!item) return;
+    if (recallStaffSearchTimer) {
+      clearTimeout(recallStaffSearchTimer);
+      recallStaffSearchTimer = null;
+    }
+    const isDemo = state.recallMode === 'demo';
+    state.recallArmedCreate = false;
+    state.recallNotice = '';
+    state.recallStaffEdit = {
+      rowIndex: item.rowIndex,
+      itemName: item.name,
+      loading: true,
+      searching: false,
+      submitting: false,
+      armed: false,
+      error: '',
+      dialogStillOpen: false,
+      dialog: null,
+      searchQuery: state.recallLastStaff || '',
+      options: [],
+      selectedStaff: '',
+    };
+    renderConfirm();
+
+    try {
+      const res = await openRecallStaffEditor(
+        {
+          rowIndex: item.rowIndex,
+          itemName: item.name,
+          currentCollector: item.collector || '',
+        },
+        {
+          pageDocument,
+          pageLocation: pageWindow ? pageWindow.location : null,
+          forceDemo: isDemo,
+        }
+      );
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit ||
+        state.recallStaffEdit.rowIndex !== item.rowIndex
+      ) {
+        return;
+      }
+      state.recallStaffEdit.loading = false;
+      if (res.status !== 'ok') {
+        state.recallStaffEdit.error =
+          res.message || 'Không mở được hộp thoại đổi KTV trên NextGen.';
+        renderConfirm();
+        return;
+      }
+
+      const dlg = res.dialog || {};
+      state.recallStaffEdit.dialog = dlg;
+      state.recallStaffEdit.options = Array.isArray(dlg.staffOptions) ? dlg.staffOptions : [];
+
+      if (state.recallLastStaff) {
+        const lastLower = state.recallLastStaff.toLowerCase();
+        const directHit =
+          state.recallStaffEdit.options.find((o) => o.toLowerCase() === lastLower) ||
+          state.recallStaffEdit.options.find((o) => o.toLowerCase().includes(lastLower));
+        if (directHit) {
+          state.recallStaffEdit.selectedStaff = directHit;
+        } else if (!dlg.staffDisabled) {
+          state.recallStaffEdit.searching = true;
+          renderConfirm();
+          const sr = await searchRecallStaffOptions(state.recallLastStaff, {
+            pageDocument,
+            pageLocation: pageWindow ? pageWindow.location : null,
+            forceDemo: isDemo,
+          });
+          if (
+            !state.confirmAction ||
+            state.confirmAction.id !== 'manage_recall' ||
+            !state.recallStaffEdit ||
+            state.recallStaffEdit.rowIndex !== item.rowIndex
+          ) {
+            return;
+          }
+          state.recallStaffEdit.searching = false;
+          if (sr.status === 'ok') {
+            state.recallStaffEdit.options = Array.isArray(sr.options) ? sr.options : [];
+            const hit =
+              state.recallStaffEdit.options.find((o) => o.toLowerCase() === lastLower) ||
+              state.recallStaffEdit.options.find((o) => o.toLowerCase().includes(lastLower));
+            if (hit) {
+              state.recallStaffEdit.selectedStaff = hit;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit
+      ) {
+        return;
+      }
+      state.recallStaffEdit.loading = false;
+      state.recallStaffEdit.searching = false;
+      state.recallStaffEdit.error =
+        err && err.message ? err.message : 'Lỗi mở hộp thoại đổi KTV trên NextGen.';
+    }
+    renderConfirm();
+  }
+
+  async function handleRecallSearchStaff(rawQuery = '', { updateOptionsOnly = false } = {}) {
+    const edit = state.recallStaffEdit;
+    if (!edit || edit.loading || edit.submitting) return;
+    const targetRowIndex = edit.rowIndex;
+    const isDemo = state.recallMode === 'demo';
+    const cleanQuery = String(rawQuery || '').trim();
+    edit.searchQuery = String(rawQuery || '');
+    edit.searching = true;
+    edit.error = '';
+
+    if (updateOptionsOnly && confirmLayer) {
+      renderRecallStaffOptionsIntoHost(
+        confirmLayer.querySelector('#ri-recall-staff-options'),
+        edit
+      );
+    } else {
+      renderConfirm();
+    }
+
+    try {
+      const sr = await searchRecallStaffOptions(cleanQuery, {
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+        forceDemo: isDemo,
+      });
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit ||
+        state.recallStaffEdit.rowIndex !== targetRowIndex
+      ) {
+        return;
+      }
+      state.recallStaffEdit.searching = false;
+      if (sr.status !== 'ok') {
+        state.recallStaffEdit.error = sr.message || 'Không lọc được danh sách KTV.';
+        if (sr.status === 'dialog_closed') {
+          state.recallStaffEdit.dialogStillOpen = false;
+        }
+        renderConfirm();
+        return;
+      }
+      state.recallStaffEdit.options = Array.isArray(sr.options) ? sr.options : [];
+      if (updateOptionsOnly && confirmLayer) {
+        renderRecallStaffOptionsIntoHost(
+          confirmLayer.querySelector('#ri-recall-staff-options'),
+          state.recallStaffEdit
+        );
+        return;
+      }
+    } catch (err) {
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit
+      ) {
+        return;
+      }
+      state.recallStaffEdit.searching = false;
+      state.recallStaffEdit.error = err && err.message ? err.message : 'Lỗi tìm kiếm tên KTV.';
+    }
+    renderConfirm();
+  }
+
+  async function handleRecallSubmitStaff() {
+    const edit = state.recallStaffEdit;
+    if (!edit || edit.submitting) return;
+    if (!edit.selectedStaff) {
+      edit.error = 'Vui lòng chọn tên KTV mới trước khi cập nhật.';
+      edit.armed = false;
+      renderConfirm();
+      return;
+    }
+
+    const isDemo = state.recallMode === 'demo';
+    const targetRowIndex = edit.rowIndex;
+    const targetItemName = edit.itemName;
+    const nextStaff = edit.selectedStaff;
+    edit.submitting = true;
+    edit.armed = false;
+    edit.error = '';
+    edit.dialogStillOpen = false;
+    renderConfirm();
+
+    try {
+      const res = await submitRecallStaffUpdate(
+        { targetStaff: nextStaff, rowIndex: targetRowIndex },
+        {
+          pageDocument,
+          pageLocation: pageWindow ? pageWindow.location : null,
+          forceDemo: isDemo,
+        }
+      );
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit ||
+        state.recallStaffEdit.rowIndex !== targetRowIndex
+      ) {
+        return;
+      }
+      state.recallStaffEdit.submitting = false;
+      if (res.status === 'ok') {
+        state.recallLastStaff = nextStaff;
+        if (isDemo && state.recallSnapshot && Array.isArray(state.recallSnapshot.items)) {
+          state.recallSnapshot.items = state.recallSnapshot.items.map((it) =>
+            it.rowIndex === targetRowIndex ? { ...it, collector: nextStaff } : it
+          );
+        } else if (res.snapshot) {
+          state.recallSnapshot = res.snapshot;
+        }
+        state.recallStaffEdit = null;
+        state.recallNotice =
+          res.message || `Đã cập nhật KTV ${nextStaff} cho "${targetItemName}".`;
+        state.recallNoticeTone = 'ok';
+        addLog(
+          'Vật tư',
+          isDemo ? 'Cập nhật KTV [Mẫu]' : 'Cập nhật KTV',
+          `${targetItemName} -> ${nextStaff}`,
+          isDemo ? 'demo' : 'ok'
+        );
+        renderConfirm();
+        if (!isDemo && !res.snapshot) {
+          loadRecallModal(state.contractInput);
+        }
+        return;
+      }
+
+      state.recallStaffEdit.error =
+        res.message || 'Chưa cập nhật được tên KTV trên NextGen.';
+      state.recallStaffEdit.dialogStillOpen =
+        res.status === 'dialog_closed' ? false : Boolean(res.dialogStillOpen);
+    } catch (err) {
+      if (
+        !state.confirmAction ||
+        state.confirmAction.id !== 'manage_recall' ||
+        !state.recallStaffEdit
+      ) {
+        return;
+      }
+      state.recallStaffEdit.submitting = false;
+      state.recallStaffEdit.error =
+        err && err.message ? err.message : 'Lỗi cập nhật tên KTV.';
+    }
+    renderConfirm();
+  }
+
   function collapseForRecallDialog(actionLabel) {
+    if (recallStaffSearchTimer) {
+      clearTimeout(recallStaffSearchTimer);
+      recallStaffSearchTimer = null;
+    }
+    state.recallStaffEdit = null;
     state.recallArmedCreate = false;
     if (canControlAndroidPortal() && showAndroidPortalOverlay(actionLabel)) {
       state.recallNotice = `Đã mở "${actionLabel}" trên trang NextGen. Lưu xong bạn bấm nút "Xong" ở góc phải trên để quay lại & tự làm mới.`;
@@ -8062,6 +8420,187 @@ export function mountRemoteInside({
           );
         }
 
+        if (state.recallStaffEdit) {
+          const edit = state.recallStaffEdit;
+          const dlg = edit.dialog || {};
+          const staffPanelParts = [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `Cập nhật KTV: ${edit.itemName}`,
+              }),
+              el('button', {
+                type: 'button',
+                className: 'ri-text-btn',
+                disabled: edit.submitting,
+                text: '← Quay lại',
+                onClick: () => closeRecallStaffPanel(),
+              }),
+            ]),
+          ];
+
+          if (edit.loading) {
+            staffPanelParts.push(
+              el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang mở hộp thoại và tải danh sách KTV…' }),
+              ])
+            );
+          } else {
+            const metaRows = [
+              dlg.currentStaff ? `KTV hiện tại: ${dlg.currentStaff}` : 'KTV hiện tại: Chưa có',
+              [dlg.partner, dlg.province].filter(Boolean).join(' • '),
+              dlg.recallStatus ? `Tình trạng: ${dlg.recallStatus}` : '',
+            ].filter(Boolean);
+            for (const mLine of metaRows) {
+              staffPanelParts.push(el('div', { className: 'ri-session-meta', text: mLine }));
+            }
+
+            if (dlg.staffDisabled) {
+              staffPanelParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                  el('div', {
+                    text: 'Ô "Nhân viên*" trên hộp thoại NextGen đang bị khóa, không thể đổi trực tiếp.',
+                  }),
+                ])
+              );
+            }
+
+            const staffSearchInp = el('input', {
+              type: 'search',
+              className: 'ri-confirm-input',
+              id: 'ri-recall-staff-search',
+              placeholder: 'Gõ tên KTV để tìm (vd: ANH...)…',
+              autocomplete: 'off',
+              disabled: edit.submitting || Boolean(dlg.staffDisabled),
+              value: edit.searchQuery || '',
+            });
+            staffSearchInp.value = edit.searchQuery || '';
+            staffSearchInp.addEventListener('input', (e) => {
+              const val = e.target.value;
+              if (state.recallStaffEdit) {
+                state.recallStaffEdit.searchQuery = val;
+              }
+              if (recallStaffSearchTimer) {
+                clearTimeout(recallStaffSearchTimer);
+              }
+              recallStaffSearchTimer = setTimeout(() => {
+                handleRecallSearchStaff(val, { updateOptionsOnly: true });
+              }, 450);
+            });
+            staffSearchInp.addEventListener('keydown', (e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (recallStaffSearchTimer) {
+                  clearTimeout(recallStaffSearchTimer);
+                  recallStaffSearchTimer = null;
+                }
+                handleRecallSearchStaff(staffSearchInp.value);
+              }
+            });
+
+            const optionsHost = el('div', {
+              className: 'ri-reassign-results',
+              id: 'ri-recall-staff-options',
+            });
+            renderRecallStaffOptionsIntoHost(optionsHost, edit);
+
+            staffPanelParts.push(
+              el('div', { className: 'ri-recall-staff-search-row' }, [
+                staffSearchInp,
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  disabled: edit.submitting || edit.searching || Boolean(dlg.staffDisabled),
+                  text: edit.searching ? 'Đang tìm…' : 'Tìm KTV',
+                  onClick: () => {
+                    if (recallStaffSearchTimer) {
+                      clearTimeout(recallStaffSearchTimer);
+                      recallStaffSearchTimer = null;
+                    }
+                    handleRecallSearchStaff(staffSearchInp.value);
+                  },
+                }),
+              ]),
+              optionsHost
+            );
+
+            if (edit.selectedStaff) {
+              staffPanelParts.push(
+                el('div', { className: 'ri-reassign-preview' }, [
+                  el('div', {
+                    text: `Đổi KTV: ${dlg.currentStaff || 'Chưa có'} → ${edit.selectedStaff}`,
+                  }),
+                ])
+              );
+            }
+
+            if (edit.error) {
+              const errChildren = [el('div', { text: edit.error })];
+              if (edit.dialogStillOpen) {
+                errChildren.push(
+                  el('div', { className: 'ri-result-actions' }, [
+                    el('button', {
+                      type: 'button',
+                      className: 'ri-secondary-btn',
+                      text: 'Mở hộp thoại NextGen gốc',
+                      onClick: () =>
+                        collapseForRecallDialog(`Cập nhật KTV: ${edit.itemName}`),
+                    }),
+                  ])
+                );
+              }
+              staffPanelParts.push(
+                el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, errChildren)
+              );
+            }
+
+            if (edit.armed) {
+              staffPanelParts.push(
+                el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-secondary-btn',
+                    disabled: edit.submitting,
+                    text: 'Hủy',
+                    onClick: () => {
+                      if (!state.recallStaffEdit) return;
+                      state.recallStaffEdit.armed = false;
+                      renderConfirm();
+                    },
+                  }),
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-primary-btn',
+                    disabled: edit.submitting || Boolean(dlg.staffDisabled),
+                    text: edit.submitting ? 'Đang lưu…' : 'Xác nhận cập nhật KTV',
+                    onClick: handleRecallSubmitStaff,
+                  }),
+                ])
+              );
+            } else {
+              staffPanelParts.push(
+                el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-primary-btn',
+                    disabled:
+                      edit.submitting || !edit.selectedStaff || Boolean(dlg.staffDisabled),
+                    text: edit.submitting ? 'Đang cập nhật…' : 'Cập nhật KTV',
+                    onClick: () => {
+                      if (!state.recallStaffEdit) return;
+                      state.recallStaffEdit.armed = true;
+                      renderConfirm();
+                    },
+                  }),
+                ])
+              );
+            }
+          }
+
+          sheetParts.push(el('div', { className: 'ri-recall-staff-panel' }, staffPanelParts));
+        }
+
         const createControls = state.recallArmedCreate
           ? el('div', { className: 'ri-result-actions' }, [
               el('button', {
@@ -8079,6 +8618,7 @@ export function mountRemoteInside({
                 text: 'Xác nhận tạo phiếu (+)',
                 onClick: async () => {
                   state.recallArmedCreate = false;
+                  state.recallStaffEdit = null;
                   if (isDemo) {
                     const nextNum = String(tickets.length + 1);
                     const updatedTickets = tickets.map((t) => ({ ...t, isSelected: false }));
@@ -8142,6 +8682,7 @@ export function mountRemoteInside({
                 disabled: !isDemo && !snap.canAddEquipment,
                 text: '+ Thêm thiết bị',
                 onClick: async () => {
+                  state.recallStaffEdit = null;
                   if (isDemo) {
                     state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
                     state.recallNoticeTone = 'ok';
@@ -8164,7 +8705,14 @@ export function mountRemoteInside({
                 type: 'button',
                 className: 'ri-secondary-btn',
                 text: 'Làm mới',
-                onClick: () => loadRecallModal(contractId),
+                onClick: () => {
+                  if (recallStaffSearchTimer) {
+                    clearTimeout(recallStaffSearchTimer);
+                    recallStaffSearchTimer = null;
+                  }
+                  state.recallStaffEdit = null;
+                  loadRecallModal(contractId);
+                },
               }),
             ]),
           ])
@@ -8198,6 +8746,7 @@ export function mountRemoteInside({
                       className: `ri-box-item${t.isSelected ? ' is-selected' : ''}`,
                       onClick: async () => {
                         if (t.isSelected) return;
+                        state.recallStaffEdit = null;
                         if (isDemo) {
                           snap.tickets = tickets.map((item) => ({
                             ...item,
@@ -8302,8 +8851,15 @@ export function mountRemoteInside({
                         el('button', {
                           type: 'button',
                           className: 'ri-primary-btn',
+                          text: 'Đổi KTV',
+                          onClick: () => handleRecallOpenStaffEdit(item),
+                        }),
+                        el('button', {
+                          type: 'button',
+                          className: 'ri-secondary-btn',
                           text: 'Sửa vật tư',
                           onClick: async () => {
+                            state.recallStaffEdit = null;
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
                               state.recallNoticeTone = 'ok';

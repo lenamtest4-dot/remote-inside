@@ -164,22 +164,36 @@ import {
   triggerPortFtthMenuAction,
 } from '../src/adapters/port.js';
 import {
+  DEMO_RECALL_STAFF_LIST,
   RECALL_ENDPOINTS,
   buildDemoRecallSnapshot,
+  closeRecallStaffEditor,
+  findRecallDialogFieldInfo,
+  findRecallOpenDialog,
   isRecallPortalLocation,
   isRecallTicketLocation,
   loadRecallTicketContext,
+  openRecallStaffEditor,
   parseRecallEquipmentRow,
   parseRecallTicketCardElement,
   parseRecallTicketFromDocument,
+  readRecallDialogStaffOptions,
+  readRecallStaffDialogState,
   runRecallAction,
+  searchRecallStaffOptions,
+  submitRecallStaffUpdate,
   triggerRecallAddAccessory,
   triggerRecallAddEquipment,
+  triggerRecallCloseEditDialog,
   triggerRecallCreateTicket,
   triggerRecallEditEquipment,
+  triggerRecallFilterStaffDropdown,
+  triggerRecallOpenStaffDropdown,
+  triggerRecallPickStaffOption,
   triggerRecallPortalAction,
   triggerRecallSearchOnPage,
   triggerRecallSelectTicket,
+  triggerRecallSubmitEditDialog,
   triggerRecallSubmitNote,
 } from '../src/adapters/recall.js';
 import {
@@ -5374,6 +5388,407 @@ async function runTests() {
     'Built reassignment bundles must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: FOX-ERP Phân tuyến KTV tests passed.');
+
+  console.log('24. Testing Vật tư thu hồi — Đổi / Cập nhật tên KTV (Radzen Blazor DOM + Android bridge)...');
+  assert.ok(Array.isArray(DEMO_RECALL_STAFF_LIST) && DEMO_RECALL_STAFF_LIST.length >= 6);
+
+  // Demo workflow
+  const demoOpenStaff = await openRecallStaffEditor(
+    { rowIndex: 1, itemName: 'FPT Play Box 650 (Mẫu)', currentCollector: '' },
+    { forceDemo: true }
+  );
+  assert.equal(demoOpenStaff.status, 'ok');
+  assert.equal(demoOpenStaff.mode, 'demo');
+  assert.equal(demoOpenStaff.dialog.hasStaffField, true);
+  assert.equal(demoOpenStaff.dialog.staffOptions.length, DEMO_RECALL_STAFF_LIST.length);
+
+  const demoSearchStaff = await searchRecallStaffOptions('mau03', { forceDemo: true });
+  assert.equal(demoSearchStaff.status, 'ok');
+  assert.deepEqual(demoSearchStaff.options, ['KTV.MAU03']);
+
+  const demoEmptySubmit = await submitRecallStaffUpdate({ targetStaff: '' }, { forceDemo: true });
+  assert.equal(demoEmptySubmit.status, 'validation_error');
+
+  const demoOkSubmit = await submitRecallStaffUpdate(
+    { targetStaff: 'KTV.MAU03', rowIndex: 1 },
+    { forceDemo: true }
+  );
+  assert.equal(demoOkSubmit.status, 'ok');
+  assert.equal(demoOkSubmit.staff, 'KTV.MAU03');
+  assert.equal((await closeRecallStaffEditor({ forceDemo: true })).ok, true);
+
+  // Mock NextGen Radzen Blazor edit dialog DOM (supports body-portaled #popup-<ddId>, input+keyup filter, validation & close on save)
+  function createMockRadzenRecallSandbox({ validationFailureMode = false } = {}) {
+    let dialogOpen = false;
+    let staffPanelVisible = false;
+    let currentCollector = 'KTV.MAU01';
+    let dialogStaff = 'KTV.MAU01';
+    let filterQuery = '';
+    let filterEvents = [];
+    let snackbarText = '';
+    let validationMsgs = [];
+    const allStaff = ['KTV.MAU01', 'KTV.MAU02', 'KTV.MAU03', 'ANHT22', 'HOALT39'];
+
+    function filteredStaff() {
+      const q = filterQuery.trim().toLowerCase();
+      return q ? allStaff.filter((s) => s.toLowerCase().includes(q)) : allStaff.slice();
+    }
+
+    const searchInputEl = {
+      id: 'search-staffDd',
+      className: 'rz-dropdown-filter rz-inputtext',
+      value: '',
+      dispatchEvent(evt) {
+        filterEvents.push(evt.type);
+        filterQuery = String(searchInputEl.value || '');
+      },
+    };
+
+    const staffPopupEl = {
+      id: 'popup-staffDd',
+      className: 'rz-dropdown-panel',
+      get style() {
+        return { display: staffPanelVisible ? 'block' : 'none' };
+      },
+      querySelector(sel) {
+        if (sel.includes('rz-dropdown-filter') || sel.includes('Search')) return searchInputEl;
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel.includes('rz-dropdown-item') || sel.includes('option')) {
+          return filteredStaff().map((name) => ({
+            innerText: name,
+            className: 'rz-dropdown-item',
+            click() {
+              dialogStaff = name;
+              staffPanelVisible = false;
+            },
+          }));
+        }
+        return [];
+      },
+    };
+
+    const staffTriggerEl = {
+      className: 'rz-dropdown-trigger',
+      click() {
+        staffPanelVisible = !staffPanelVisible;
+      },
+    };
+
+    const staffDropdownEl = {
+      id: 'staffDd',
+      className: 'rz-dropdown rz-clear',
+      disabled: false,
+      click() {
+        staffPanelVisible = true;
+      },
+      querySelector(sel) {
+        if (sel.includes('rz-dropdown-trigger')) return staffTriggerEl;
+        if (sel.includes('rz-dropdown-label')) return { innerText: dialogStaff, className: 'rz-dropdown-label' };
+        if (sel.includes('rz-dropdown-panel')) return null; // force body portal lookup via #popup-staffDd
+        return null;
+      },
+    };
+
+    function makeFormField(label, dd) {
+      return {
+        querySelector(sel) {
+          if (sel.includes('label')) return { innerText: label };
+          if (sel.includes('rz-dropdown')) return dd;
+          return null;
+        },
+      };
+    }
+
+    const staticDd = (val) => ({
+      id: '',
+      className: 'rz-dropdown',
+      disabled: false,
+      querySelector(sel) {
+        if (sel.includes('rz-dropdown-label')) return { innerText: val, className: 'rz-dropdown-label' };
+        return null;
+      },
+    });
+
+    const formFields = [
+      makeFormField('Tỉnh thành thu hồi*', staticDd('Khu vực Mẫu 01')),
+      makeFormField('Đối tác*', staticDd('DT Mau Khu Vuc A')),
+      makeFormField('Chi nhánh', staticDd('Chi nhánh mẫu')),
+      makeFormField('Nhân viên*', staffDropdownEl),
+      makeFormField('Tình trạng thu hồi*', staticDd('Chưa thu hồi')),
+      makeFormField('Nguyên nhân*', staticDd('')),
+    ];
+
+    const updateBtn = {
+      innerText: 'Cập nhật',
+      className: 'rz-button rz-primary',
+      disabled: false,
+      click() {
+        if (validationFailureMode) {
+          validationMsgs = ['Vui lòng chọn Nguyên nhân*'];
+          snackbarText = 'Vui lòng chọn Nguyên nhân bắt buộc';
+          return;
+        }
+        currentCollector = dialogStaff;
+        dialogOpen = false;
+        staffPanelVisible = false;
+        validationMsgs = [];
+        snackbarText = 'Cập nhật thành công';
+      },
+    };
+
+    const closeBtn = {
+      innerText: 'Đóng',
+      className: 'rz-button rz-light',
+      disabled: false,
+      click() {
+        dialogOpen = false;
+        staffPanelVisible = false;
+      },
+    };
+
+    const openDialogEl = {
+      className: 'rz-dialog rz-open',
+      querySelector(sel) {
+        if (sel.includes('rz-dialog-title')) return { innerText: 'FPT Play Box 650 (Mẫu)' };
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel.includes('rz-form-field')) return formFields;
+        if (sel === 'button') return [updateBtn, closeBtn];
+        if (sel.includes('validation-message') || sel.includes('rz-message')) {
+          return validationMsgs.map((m) => ({ innerText: m }));
+        }
+        return [];
+      },
+    };
+
+    const row0EditableSpan = {
+      id: 'equipmentname',
+      innerText: 'FPT Play Box 650 (Mẫu)',
+      click() {
+        dialogOpen = true;
+        dialogStaff = currentCollector;
+        validationMsgs = [];
+        snackbarText = '';
+      },
+    };
+
+    const gridRow0 = {
+      querySelectorAll(sel) {
+        if (sel === 'td') {
+          return [
+            'FPT Play Box 650 (Mẫu)',
+            '',
+            'Box OTT',
+            'AABBCCDDEEFF',
+            '1',
+            'Chưa thu hồi',
+            '',
+            currentCollector,
+            '',
+            'Thanh lý hợp đồng tại nhà',
+            'Hàng nhập lại',
+            'Hàng tái sử dụng',
+            'Có',
+            'SR',
+          ].map((tx) => ({ innerText: tx }));
+        }
+        if (sel === 'button') return [];
+        return [];
+      },
+      querySelector(sel) {
+        if (sel.includes('equipmentname')) return row0EditableSpan;
+        return null;
+      },
+    };
+
+    const gridEl = {
+      querySelectorAll(sel) {
+        if (sel === 'tbody tr') return [gridRow0];
+        return [];
+      },
+    };
+
+    const doc = {
+      title: 'SGN123456',
+      location: {
+        href: 'https://nextgen.fpt.net/resource/recall/recall-ticket?q=demo',
+        hostname: 'nextgen.fpt.net',
+        pathname: '/resource/recall/recall-ticket',
+      },
+      body: { innerText: 'DANH SÁCH PHIẾU THU HỒI - SGN123456' },
+      getElementById(id) {
+        if (id === 'popup-staffDd' && dialogOpen) return staffPopupEl;
+        if (id === 'search-staffDd' && dialogOpen) return searchInputEl;
+        return null;
+      },
+      querySelector(sel) {
+        if (sel === '.rz-dialog.rz-open' || sel === '.rz-dialog') return dialogOpen ? openDialogEl : null;
+        if (sel === '.rz-data-grid') return gridEl;
+        if (sel.includes('mud-snackbar')) return snackbarText ? { innerText: snackbarText } : null;
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (sel === 'h1,h2,h3,h4') return [{ innerText: 'Phiếu số 1' }];
+        if (sel === '.ticketinf') {
+          return [
+            {
+              innerText:
+                '1 TIN/PNC Ngày tạo phiếu: 23/11/2026 09:00:00 Người tạo phiếu: ktv.mau01',
+              className: 'ticketinf Card-Ticket-Selected',
+              querySelector: () => ({ id: '900001', className: 'Card-Ticket Card-Ticket-Selected' }),
+            },
+          ];
+        }
+        if (sel === 'button') return [];
+        return [];
+      },
+    };
+
+    return {
+      doc,
+      getCollector: () => currentCollector,
+      getFilterEvents: () => filterEvents.slice(),
+      isDialogOpen: () => dialogOpen,
+    };
+  }
+
+  // Test low-level synchronous helpers directly against Desktop DOM
+  const desktopMock = createMockRadzenRecallSandbox();
+  assert.equal(findRecallOpenDialog(desktopMock.doc), null);
+  assert.equal(triggerRecallEditEquipment(desktopMock.doc, 0).ok, true);
+  assert.ok(findRecallOpenDialog(desktopMock.doc));
+  assert.equal(readRecallStaffDialogState(desktopMock.doc).currentStaff, 'KTV.MAU01');
+  assert.equal(readRecallStaffDialogState(desktopMock.doc).staffPanelOpen, false);
+  assert.equal(triggerRecallOpenStaffDropdown(desktopMock.doc).ok, true);
+  assert.equal(readRecallStaffDialogState(desktopMock.doc).staffPanelOpen, true);
+  assert.equal(
+    readRecallDialogStaffOptions(
+      findRecallDialogFieldInfo(desktopMock.doc, findRecallOpenDialog(desktopMock.doc), /^nhân\s*viên\*?$/i).panel
+    ).length,
+    5
+  );
+  assert.equal(triggerRecallFilterStaffDropdown(desktopMock.doc, 'MAU02').ok, true);
+  assert.equal(
+    desktopMock.getFilterEvents().includes('input') &&
+      desktopMock.getFilterEvents().includes('keyup'),
+    true,
+    'Staff search filter must dispatch both input and keyup for Radzen AllowFiltering'
+  );
+  assert.deepEqual(readRecallStaffDialogState(desktopMock.doc).staffOptions, ['KTV.MAU02']);
+  assert.equal(triggerRecallPickStaffOption(desktopMock.doc, 'KTV.MAU02').picked, 'KTV.MAU02');
+  assert.equal(triggerRecallSubmitEditDialog(desktopMock.doc).ok, true);
+  assert.equal(desktopMock.getCollector(), 'KTV.MAU02');
+  assert.equal(triggerRecallCloseEditDialog(desktopMock.doc).alreadyClosed, true);
+
+  // Test Android portalWebView evalPortalJs bridge (serializes fnSource into VM context + runs end-to-end async flow)
+  const hadWin24 = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+  const prevWin24 = globalThis.window;
+  const androidMock = createMockRadzenRecallSandbox({ validationFailureMode: false });
+  const androidErrMock = createMockRadzenRecallSandbox({ validationFailureMode: true });
+  try {
+    const sandbox24 = vm.createContext({
+      window: {},
+      document: androidMock.doc,
+      location: androidMock.doc.location,
+      Event: class MockEvt {
+        constructor(type, opts) {
+          this.type = type;
+          Object.assign(this, opts);
+        }
+      },
+      KeyboardEvent: class MockKeyEvt {
+        constructor(type, opts) {
+          this.type = type;
+          Object.assign(this, opts);
+        }
+      },
+      console,
+    });
+    sandbox24.window = sandbox24;
+    globalThis.window = {
+      location: { href: 'https://appassets.androidplatform.net/assets/remote-inside.html', hostname: 'appassets.androidplatform.net', pathname: '/assets/remote-inside.html' },
+      __riNativePending: new Map(),
+      RemoteInsideNative: {
+        httpRequest() {},
+        loadPortalBackground() {},
+        evalPortalJs(payloadJson) {
+          const parsed = JSON.parse(payloadJson);
+          const wrapped =
+            '(function(){try{var __fn=function(){\n' +
+            parsed.script +
+            '\n};var __val=__fn();return JSON.stringify({ok:true,status:"ok",finalUrl:String(location.href||""),value:__val===undefined?null:__val});}catch(__err){return JSON.stringify({ok:false,status:"js_error",finalUrl:String(location.href||""),error:String(__err&&__err.message?__err.message:__err)});}})();';
+          const outJson = vm.runInContext(wrapped, sandbox24);
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(parsed.reqId, outJson);
+          });
+        },
+      },
+    };
+
+    const androidOpen = await openRecallStaffEditor(
+      { rowIndex: 0, itemName: 'FPT Play Box 650 (Mẫu)', currentCollector: 'KTV.MAU01' },
+      { pageDocument: {} }
+    );
+    assert.equal(androidOpen.status, 'ok');
+    assert.equal(androidOpen.mode, 'live');
+    assert.equal(androidOpen.dialog.currentStaff, 'KTV.MAU01');
+    assert.equal(androidOpen.dialog.staffOptions.length, 5);
+
+    const androidSearch = await searchRecallStaffOptions('mau03', { pageDocument: {} });
+    assert.equal(androidSearch.status, 'ok');
+    assert.deepEqual(androidSearch.options, ['KTV.MAU03']);
+
+    const androidSave = await submitRecallStaffUpdate(
+      { targetStaff: 'KTV.MAU03', rowIndex: 0 },
+      { pageDocument: {} }
+    );
+    assert.equal(androidSave.status, 'ok');
+    assert.equal(androidSave.staff, 'KTV.MAU03');
+    assert.equal(androidMock.getCollector(), 'KTV.MAU03');
+    assert.equal(androidSave.snapshot.items[0].collector, 'KTV.MAU03');
+
+    // Now test validation-error path (dialog stays open with validation message)
+    sandbox24.document = androidErrMock.doc;
+    const errOpen = await openRecallStaffEditor({ rowIndex: 0 }, { pageDocument: {} });
+    assert.equal(errOpen.status, 'ok');
+    const errSubmit = await submitRecallStaffUpdate(
+      { targetStaff: 'KTV.MAU02', rowIndex: 0 },
+      { pageDocument: {} }
+    );
+    assert.equal(errSubmit.status, 'validation_error');
+    assert.equal(errSubmit.dialogStillOpen, true);
+    assert.ok(errSubmit.message.includes('Nguyên nhân'));
+    const closeRes24 = await closeRecallStaffEditor({ pageDocument: {} });
+    assert.equal(closeRes24.ok, true);
+    assert.equal(androidErrMock.isDialogOpen(), false);
+  } finally {
+    if (hadWin24) {
+      globalThis.window = prevWin24;
+    } else {
+      delete globalThis.window;
+    }
+  }
+
+  for (const token of [
+    'openRecallStaffEditor',
+    'searchRecallStaffOptions',
+    'submitRecallStaffUpdate',
+    'Đổi KTV',
+    'ri-recall-staff-panel',
+    '__riRecallDomVersion',
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) || forbiddenDemoDataRe.test(androidAssetContent),
+    false,
+    'Built recall staff editor bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: Vật tư thu hồi — Đổi / Cập nhật tên KTV tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

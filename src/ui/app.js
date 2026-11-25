@@ -31,6 +31,7 @@ import {
   FOX_ERP_HOME_URL,
   NEXTGEN_FOX_APPS,
   buildFoxErpNextGenLaunchUrlFromStorage,
+  canClearPortalHostCookies,
   canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
@@ -88,6 +89,8 @@ import {
   PORT_ENDPOINTS,
   bootstrapMvcPortSession,
   buildPortUrl,
+  clearPortCookiesIncognito,
+  clearPortTokenCache,
   fetchPortBranches,
   fetchPortConboxes,
   fetchPortContractContext,
@@ -333,13 +336,9 @@ export function mountRemoteInside({
     return el('button', {
       type: 'button',
       className: 'ri-secondary-btn',
-      text: 'Mở trang Port đăng nhập',
+      text: canClearPortalHostCookies() ? 'Làm sạch phiên Port & Đăng nhập' : 'Mở trang Port đăng nhập',
       onClick: () => {
-        openExternalOrPortalUrl(loginUrl, {
-          mode: 'login',
-          title: 'Đăng nhập Port',
-          pageWindow,
-        });
+        openPortCleanLogin(loginUrl, 'Đăng nhập Port (ẩn danh)');
       },
     });
   }
@@ -610,6 +609,23 @@ export function mountRemoteInside({
       return active.loginUrl || active.url;
     }
     return PORTALS.inside.url;
+  }
+
+  async function openPortCleanLogin(fallbackUrl = '', title = 'Đăng nhập Port (làm sạch phiên)') {
+    if (state.appMenuOpen) {
+      state.appMenuOpen = false;
+      renderScanner();
+    }
+    clearWarmSessionCache();
+    await clearPortCookiesIncognito({ clearIamAuthTemp: true, clearCache: true });
+    const targetUrl = canClearPortalHostCookies()
+      ? PORTALS.port.url
+      : fallbackUrl || PORT_ENDPOINTS.oidcPromptLogin;
+    return openExternalOrPortalUrl(targetUrl, {
+      mode: 'login',
+      title,
+      pageWindow,
+    });
   }
 
   function syncSessionPillOrRenderMain() {
@@ -5033,23 +5049,29 @@ export function mountRemoteInside({
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
-            text: 'Mở lại port.fpt.net',
+            text: canClearPortalHostCookies() ? 'Làm sạch phiên Port & Mở lại' : 'Mở lại port.fpt.net',
             onClick: () => {
-              openExternalOrPortalUrl(res.loginUrl, {
-                mode: 'login',
-                title: 'Đăng nhập Port',
-                pageWindow,
-              });
+              openPortCleanLogin(res.loginUrl, 'Đăng nhập Port (ẩn danh)');
             },
           })
         );
       } else {
+        const isPortLoginTarget =
+          state.activePortalId === 'port' ||
+          /port\.fpt\.net|client_id=mvc-port/i.test(String(res.loginUrl || ''));
         extraBtns.push(
           el('button', {
             type: 'button',
             className: 'ri-primary-btn',
-            text: 'Đăng nhập IAM ngay',
+            text:
+              isPortLoginTarget && canClearPortalHostCookies()
+                ? 'Làm sạch phiên Port & Đăng nhập'
+                : 'Đăng nhập IAM ngay',
             onClick: () => {
+              if (isPortLoginTarget) {
+                openPortCleanLogin(res.loginUrl, 'Đăng nhập Port (ẩn danh)');
+                return;
+              }
               openExternalOrPortalUrl(res.loginUrl, {
                 mode: 'login',
                 title: 'Đăng nhập IAM',
@@ -11213,7 +11235,8 @@ export function mountRemoteInside({
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Port',
-              onClick: () => openLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (IAM)'),
+              onClick: () =>
+                openPortCleanLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (ẩn danh)'),
             }),
             el('button', {
               type: 'button',
@@ -11661,6 +11684,7 @@ export function mountRemoteInside({
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {
     window.__riOnPortalBrowserClosed = async (completedHost = '', loginCompleted = false) => {
       clearWarmSessionCache();
+      clearPortTokenCache();
       const cleanHost = String(completedHost || '').trim().toLowerCase();
       if (standalone && isAndroidAppEnv() && state.authGate !== 'unlocked') {
         if (loginCompleted) {
@@ -11703,6 +11727,10 @@ export function mountRemoteInside({
       }
 
       if (loginCompleted && canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
+        if (cleanHost === 'port.fpt.net' || cleanHost === 'mvcport.fpt.net') {
+          await bootstrapMvcPortSession();
+          await refreshSessionStatus();
+        }
         runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
         return;
       }

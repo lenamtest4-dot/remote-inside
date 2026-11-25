@@ -5,7 +5,7 @@
 export const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 
 const PORT_OIDC_LOGIN_URL =
-  'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login';
+  'https://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login';
 
 export const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },

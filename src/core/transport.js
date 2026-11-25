@@ -162,6 +162,7 @@ function ensureNativePendingBridge() {
         entry.kind === 'portal_bg' ||
         entry.kind === 'portal_eval' ||
         entry.kind === 'clipboard' ||
+        entry.kind === 'clear_cookies' ||
         typeof parsed.status === 'string'
       ) {
         entry.resolve({
@@ -680,6 +681,85 @@ export async function bootstrapNextGenViaFoxErpAndroid(
 
 export function clearWarmSessionCache() {
   warmCacheByHost.clear();
+}
+
+export function canClearPortalHostCookies() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window.RemoteInsideNative.clearPortalCookies === 'function'
+  );
+}
+
+export function clearPortalHostCookies(
+  hosts,
+  {
+    clearSharedPrefixes = ['MVCPORT_', 'PORT_'],
+    clearIamAuthTemp = true,
+    clearCache = true,
+    timeout = 5000,
+  } = {}
+) {
+  if (!canClearPortalHostCookies()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', value: 0 });
+  }
+  const normalizedHosts = Array.from(
+    new Set(
+      (Array.isArray(hosts) ? hosts : [])
+        .map((h) => String(h || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  if (normalizedHosts.length === 0) {
+    return Promise.resolve({ ok: false, status: 'invalid_hosts', value: 0 });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_clr_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1500, Math.min(10000, Number(timeout) || 5000));
+
+  return new Promise((resolve) => {
+    const settle = (outcome) => {
+      resolve({
+        ok: Boolean(outcome && outcome.ok),
+        status: String((outcome && outcome.status) || 'error'),
+        value: Number(outcome && outcome.value) || 0,
+      });
+    };
+
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      settle({ ok: false, status: 'timeout', value: 0 });
+    }, numericTimeout);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'clear_cookies',
+      resolve: settle,
+      timer,
+      url: '',
+    });
+
+    try {
+      window.RemoteInsideNative.clearPortalCookies(
+        JSON.stringify({
+          reqId,
+          hosts: normalizedHosts,
+          clearSharedPrefixes: Array.isArray(clearSharedPrefixes)
+            ? clearSharedPrefixes
+            : ['MVCPORT_', 'PORT_'],
+          clearIamAuthTemp: Boolean(clearIamAuthTemp),
+          clearCache: Boolean(clearCache),
+        })
+      );
+    } catch {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      settle({ ok: false, status: 'error', value: 0 });
+    }
+  });
 }
 
 export function warmPortalSession(

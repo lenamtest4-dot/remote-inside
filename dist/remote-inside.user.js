@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.17.1
+// @version      0.17.2
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
@@ -48,7 +48,7 @@
 
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.17.1";
+  const __REMOTE_INSIDE_VERSION__ = "0.17.2";
   const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n  -webkit-text-size-adjust: 100%;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-mode-btn--wide {\n  grid-column: 1 / -1;\n}\n\n.ri-reassign-results {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  margin-top: 8px;\n  max-height: 220px;\n  overflow-y: auto;\n}\n\n.ri-reassign-emp-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 2px;\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 10px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-reassign-emp-btn:hover {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-reassign-emp-btn.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  box-shadow: inset 0 0 0 1px var(--accent-signal);\n}\n\n.ri-reassign-emp-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-reassign-emp-meta {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--ink-muted);\n}\n\n.ri-reassign-preview {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions {\n  flex-wrap: wrap;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 110px;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-staff-panel {\n  padding: 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ri-recall-staff-search-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-staff-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-staff-search-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 14px;\n  padding-right: 14px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n\n/* Prevent iOS Safari / WKWebView auto-zoom when focusing inputs < 16px */\n@supports (-webkit-touch-callout: none) {\n  .ri-root input,\n  .ri-root select,\n  .ri-root textarea {\n    font-size: 16px;\n  }\n}\n";
 
 // --- config/portals.js ---
@@ -58,7 +58,7 @@
 const PORTAL_ORDER = ['inside', 'port', 'recall', 'radius', 'camera'];
 
 const PORT_OIDC_LOGIN_URL =
-  'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login';
+  'https://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login';
 const IAM_SSO_TARGETS = [
   { id: 'inside', portalId: 'inside', label: 'Inside', url: 'http://inside.fpt.net/default.asp' },
   { id: 'partner', portalId: 'inside', label: 'Partner', url: 'http://partner.fpt.net/pt-portal/monitor' },
@@ -780,6 +780,7 @@ function ensureNativePendingBridge() {
         entry.kind === 'portal_bg' ||
         entry.kind === 'portal_eval' ||
         entry.kind === 'clipboard' ||
+        entry.kind === 'clear_cookies' ||
         typeof parsed.status === 'string'
       ) {
         entry.resolve({
@@ -1284,6 +1285,83 @@ async function bootstrapNextGenViaFoxErpAndroid(
 }
 function clearWarmSessionCache() {
   warmCacheByHost.clear();
+}
+function canClearPortalHostCookies() {
+  return (
+    isAndroidAppEnv() &&
+    typeof window.RemoteInsideNative.clearPortalCookies === 'function'
+  );
+}
+function clearPortalHostCookies(
+  hosts,
+  {
+    clearSharedPrefixes = ['MVCPORT_', 'PORT_'],
+    clearIamAuthTemp = true,
+    clearCache = true,
+    timeout = 5000,
+  } = {}
+) {
+  if (!canClearPortalHostCookies()) {
+    return Promise.resolve({ ok: false, status: 'unsupported', value: 0 });
+  }
+  const normalizedHosts = Array.from(
+    new Set(
+      (Array.isArray(hosts) ? hosts : [])
+        .map((h) => String(h || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  if (normalizedHosts.length === 0) {
+    return Promise.resolve({ ok: false, status: 'invalid_hosts', value: 0 });
+  }
+
+  ensureNativePendingBridge();
+  const reqId = `ri_clr_${++androidReqSeq}_${Date.now()}`;
+  const numericTimeout = Math.max(1500, Math.min(10000, Number(timeout) || 5000));
+
+  return new Promise((resolve) => {
+    const settle = (outcome) => {
+      resolve({
+        ok: Boolean(outcome && outcome.ok),
+        status: String((outcome && outcome.status) || 'error'),
+        value: Number(outcome && outcome.value) || 0,
+      });
+    };
+
+    const timer = setTimeout(() => {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      settle({ ok: false, status: 'timeout', value: 0 });
+    }, numericTimeout);
+
+    window.__riNativePending.set(reqId, {
+      kind: 'clear_cookies',
+      resolve: settle,
+      timer,
+      url: '',
+    });
+
+    try {
+      window.RemoteInsideNative.clearPortalCookies(
+        JSON.stringify({
+          reqId,
+          hosts: normalizedHosts,
+          clearSharedPrefixes: Array.isArray(clearSharedPrefixes)
+            ? clearSharedPrefixes
+            : ['MVCPORT_', 'PORT_'],
+          clearIamAuthTemp: Boolean(clearIamAuthTemp),
+          clearCache: Boolean(clearCache),
+        })
+      );
+    } catch {
+      if (window.__riNativePending && window.__riNativePending.has(reqId)) {
+        window.__riNativePending.delete(reqId);
+      }
+      clearTimeout(timer);
+      settle({ ok: false, status: 'error', value: 0 });
+    }
+  });
 }
 function warmPortalSession(
   url,
@@ -8623,9 +8701,9 @@ const PORT_ENDPOINTS = {
   portIndexPage: 'http://port.fpt.net/Index.aspx',
   loginPage: 'http://port.fpt.net/LoginPage.aspx',
   oidcSilentAuth:
-    'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx',
+    'https://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx',
   oidcPromptLogin:
-    'http://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login',
+    'https://iam.fpt.net/auth/realms/fpt/protocol/openid-connect/auth?client_id=mvc-port&response_type=code&redirect_uri=http%3A%2F%2Fport.fpt.net%2FLoginPage.aspx&prompt=login',
   indexPage: 'http://mvcport.fpt.net/ftth_newport/contract/index',
   insertPage: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Insert',
   search: 'http://mvcport.fpt.net/FTTH_NewPort/Contract/Index_Search',
@@ -8728,6 +8806,24 @@ function clearPortContractCache(rawContractId) {
 
 let cachedMvcPortToken = '';
 let portBootstrapInFlight = null;
+function clearPortTokenCache() {
+  cachedMvcPortToken = '';
+  clearPortContractCache();
+}
+async function clearPortCookiesIncognito({
+  clearIamAuthTemp = true,
+  clearCache = true,
+} = {}) {
+  clearPortTokenCache();
+  if (!canClearPortalHostCookies()) {
+    return { ok: false, status: 'unsupported', value: 0 };
+  }
+  return clearPortalHostCookies(['port.fpt.net', 'mvcport.fpt.net'], {
+    clearSharedPrefixes: ['MVCPORT_', 'PORT_'],
+    clearIamAuthTemp,
+    clearCache,
+  });
+}
 
 function safeDecodeToken(raw) {
   if (!raw || typeof raw !== 'string') return '';
@@ -9023,30 +9119,31 @@ async function bootstrapMvcPortSession() {
       const extracted =
         extractMvcPortTokenFromText(idxBody) ||
         parseMvcPortTokenFromSetCookieHeaders(idxRes.responseHeaders);
-      if (extracted) {
-        cachedMvcPortToken = extracted;
-        return extracted;
-      }
+      let menuToken = '';
       const frameMatch = idxBody.match(/<frame[^>]+src\s*=\s*["']([^"']*LeftMenu\.aspx[^"']*)["']/i);
       if (frameMatch && frameMatch[1]) {
         try {
-          const menuUrl = new URL(
-            decodeHtmlEntities(frameMatch[1]),
-            idxFinalUrl || PORT_ENDPOINTS.portIndexPage
-          ).toString();
-          const menuRes = await requestPortal({ url: menuUrl, method: 'GET', timeout: 8000 });
+          const refererUrl = idxFinalUrl || PORT_ENDPOINTS.portIndexPage;
+          const menuUrl = new URL(decodeHtmlEntities(frameMatch[1]), refererUrl).toString();
+          const menuRes = await requestPortal({
+            url: menuUrl,
+            method: 'GET',
+            headers: { Referer: refererUrl },
+            timeout: 8000,
+          });
           if (menuRes && menuRes.ok) {
-            const menuToken =
+            menuToken =
               extractMvcPortTokenFromText(menuRes.responseText || '') ||
               parseMvcPortTokenFromSetCookieHeaders(menuRes.responseHeaders);
-            if (menuToken) {
-              cachedMvcPortToken = menuToken;
-              return menuToken;
-            }
           }
         } catch {
           // ignore malformed LeftMenu src URL
         }
+      }
+      const resolvedToken = menuToken || extracted;
+      if (resolvedToken) {
+        cachedMvcPortToken = resolvedToken;
+        return resolvedToken;
       }
       return '';
     }
@@ -9059,9 +9156,15 @@ async function bootstrapMvcPortSession() {
     }
 
     let warmRes = null;
+    const mvcHeaders = { Referer: PORT_ENDPOINTS.portIndexPage };
     if (token) {
       const warmUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, token);
-      warmRes = await requestPortal({ url: warmUrl, method: 'GET', timeout: 10000 });
+      warmRes = await requestPortal({
+        url: warmUrl,
+        method: 'GET',
+        headers: mvcHeaders,
+        timeout: 10000,
+      });
       if (warmRes && warmRes.ok && !detectPortSessionExpired(warmRes, warmUrl).expired) {
         return { ok: true, res: warmRes };
       }
@@ -9071,7 +9174,12 @@ async function bootstrapMvcPortSession() {
         const freshToken = await fetchTokenFromPortIndex();
         if (freshToken && freshToken !== token) {
           const warmUrl2 = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, freshToken);
-          const warmRes2 = await requestPortal({ url: warmUrl2, method: 'GET', timeout: 10000 });
+          const warmRes2 = await requestPortal({
+            url: warmUrl2,
+            method: 'GET',
+            headers: mvcHeaders,
+            timeout: 10000,
+          });
           if (warmRes2 && warmRes2.ok && !detectPortSessionExpired(warmRes2, warmUrl2).expired) {
             return { ok: true, res: warmRes2 };
           }
@@ -9081,21 +9189,57 @@ async function bootstrapMvcPortSession() {
     }
 
     if (canWarmPortalSession()) {
-      cachedMvcPortToken = '';
-      const oidcWarm = await warmPortalSession(PORT_ENDPOINTS.oidcSilentAuth, {
+      await clearPortCookiesIncognito({ clearIamAuthTemp: true, clearCache: true });
+      let oidcWarm = await warmPortalSession(PORT_ENDPOINTS.oidcSilentAuth, {
         targetHost: 'port.fpt.net',
-        timeout: 12000,
+        timeout: 14000,
         force: true,
       });
+      if ((!oidcWarm || !oidcWarm.ok) && (!oidcWarm || oidcWarm.status !== 'needs_login')) {
+        oidcWarm = await warmPortalSession(PORTALS.port.url, {
+          targetHost: 'port.fpt.net',
+          timeout: 14000,
+          force: true,
+        });
+      }
       if (oidcWarm && oidcWarm.ok) {
         const oidcToken = await fetchTokenFromPortIndex(false);
         if (oidcToken) {
           const oidcUrl = appendPortTokenToUrl(PORT_ENDPOINTS.indexPage, oidcToken);
-          const oidcRes = await requestPortal({ url: oidcUrl, method: 'GET', timeout: 10000 });
+          const oidcRes = await requestPortal({
+            url: oidcUrl,
+            method: 'GET',
+            headers: mvcHeaders,
+            timeout: 10000,
+          });
           if (oidcRes && oidcRes.ok && !detectPortSessionExpired(oidcRes, oidcUrl).expired) {
-            return { ok: true, res: oidcRes, refreshedViaOidc: true };
+            return { ok: true, res: oidcRes, refreshedViaOidc: true, clearedCookies: true };
           }
           warmRes = oidcRes;
+
+          const mvcWarm = await warmPortalSession(oidcUrl, {
+            targetHost: 'mvcport.fpt.net',
+            timeout: 12000,
+            force: true,
+          });
+          if (mvcWarm && mvcWarm.ok) {
+            const verifyRes = await requestPortal({
+              url: oidcUrl,
+              method: 'GET',
+              headers: mvcHeaders,
+              timeout: 10000,
+            });
+            if (verifyRes && verifyRes.ok && !detectPortSessionExpired(verifyRes, oidcUrl).expired) {
+              return {
+                ok: true,
+                res: verifyRes,
+                refreshedViaOidc: true,
+                warmedMvcWebView: true,
+                clearedCookies: true,
+              };
+            }
+            warmRes = verifyRes;
+          }
         }
       }
       return {
@@ -9103,6 +9247,7 @@ async function bootstrapMvcPortSession() {
         reason: oidcWarm && !oidcWarm.ok ? 'needs_login' : 'warmup_rejected',
         loginUrl: PORT_ENDPOINTS.oidcPromptLogin,
         res: warmRes,
+        clearedCookies: true,
       };
     }
 
@@ -9184,6 +9329,23 @@ function detectPortSessionExpired(res, requestedUrl) {
   return { expired: false, reason: '' };
 }
 
+function formatPortFailureHint(res) {
+  if (!res || typeof res !== 'object') return '';
+  const status = Number(res.status) || 0;
+  let pathPart = '';
+  if (res.finalUrl) {
+    try {
+      pathPart = new URL(res.finalUrl).pathname || '';
+    } catch {
+      pathPart = '';
+    }
+  }
+  const parts = [];
+  if (status > 0) parts.push(`HTTP ${status}`);
+  if (pathPart) parts.push(pathPart);
+  return parts.join(' • ');
+}
+
 async function portRequest({
   url,
   method = 'POST',
@@ -9227,12 +9389,13 @@ async function portRequest({
     } catch {
       onLoggedInPortHost = false;
     }
+    const detailHint = formatPortFailureHint((lastBoot && lastBoot.res) || res);
     return {
       ok: false,
       statusType: 'iam_expired',
       message: onLoggedInPortHost
         ? 'Bạn đã đăng nhập port.fpt.net nhưng phiên FTTH NEW (mvcport.fpt.net) chưa được kích hoạt. Bấm nút "Kích hoạt FTTH NEW ngay" bên dưới hoặc chọn menu trái: FTTH NEW → Hợp đồng → Tìm kiếm 1 lần rồi bấm thử lại (không cần đăng nhập lại hay F5).'
-        : 'Phiên FTTH NEW (mvcport.fpt.net) đã hết hạn hoặc token bị từ chối (401). Bấm nút bên dưới để cấp lại phiên IAM mới cho Port.',
+        : `Phiên FTTH NEW (mvcport.fpt.net) bị từ chối (${detailHint || '401'}). Bấm nút bên dưới để xóa sạch cookie cũ của Port và đăng nhập lại như tab ẩn danh.`,
       loginUrl: (lastBoot && lastBoot.loginUrl) || PORT_ENDPOINTS.oidcPromptLogin,
       res,
     };
@@ -15561,13 +15724,9 @@ function mountRemoteInside({
     return el('button', {
       type: 'button',
       className: 'ri-secondary-btn',
-      text: 'Mở trang Port đăng nhập',
+      text: canClearPortalHostCookies() ? 'Làm sạch phiên Port & Đăng nhập' : 'Mở trang Port đăng nhập',
       onClick: () => {
-        openExternalOrPortalUrl(loginUrl, {
-          mode: 'login',
-          title: 'Đăng nhập Port',
-          pageWindow,
-        });
+        openPortCleanLogin(loginUrl, 'Đăng nhập Port (ẩn danh)');
       },
     });
   }
@@ -15838,6 +15997,23 @@ function mountRemoteInside({
       return active.loginUrl || active.url;
     }
     return PORTALS.inside.url;
+  }
+
+  async function openPortCleanLogin(fallbackUrl = '', title = 'Đăng nhập Port (làm sạch phiên)') {
+    if (state.appMenuOpen) {
+      state.appMenuOpen = false;
+      renderScanner();
+    }
+    clearWarmSessionCache();
+    await clearPortCookiesIncognito({ clearIamAuthTemp: true, clearCache: true });
+    const targetUrl = canClearPortalHostCookies()
+      ? PORTALS.port.url
+      : fallbackUrl || PORT_ENDPOINTS.oidcPromptLogin;
+    return openExternalOrPortalUrl(targetUrl, {
+      mode: 'login',
+      title,
+      pageWindow,
+    });
   }
 
   function syncSessionPillOrRenderMain() {
@@ -20261,23 +20437,29 @@ function mountRemoteInside({
           el('button', {
             type: 'button',
             className: 'ri-secondary-btn',
-            text: 'Mở lại port.fpt.net',
+            text: canClearPortalHostCookies() ? 'Làm sạch phiên Port & Mở lại' : 'Mở lại port.fpt.net',
             onClick: () => {
-              openExternalOrPortalUrl(res.loginUrl, {
-                mode: 'login',
-                title: 'Đăng nhập Port',
-                pageWindow,
-              });
+              openPortCleanLogin(res.loginUrl, 'Đăng nhập Port (ẩn danh)');
             },
           })
         );
       } else {
+        const isPortLoginTarget =
+          state.activePortalId === 'port' ||
+          /port\.fpt\.net|client_id=mvc-port/i.test(String(res.loginUrl || ''));
         extraBtns.push(
           el('button', {
             type: 'button',
             className: 'ri-primary-btn',
-            text: 'Đăng nhập IAM ngay',
+            text:
+              isPortLoginTarget && canClearPortalHostCookies()
+                ? 'Làm sạch phiên Port & Đăng nhập'
+                : 'Đăng nhập IAM ngay',
             onClick: () => {
+              if (isPortLoginTarget) {
+                openPortCleanLogin(res.loginUrl, 'Đăng nhập Port (ẩn danh)');
+                return;
+              }
               openExternalOrPortalUrl(res.loginUrl, {
                 mode: 'login',
                 title: 'Đăng nhập IAM',
@@ -26441,7 +26623,8 @@ function mountRemoteInside({
               type: 'button',
               className: 'ri-secondary-btn',
               text: 'Port',
-              onClick: () => openLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (IAM)'),
+              onClick: () =>
+                openPortCleanLogin(PORTALS.port.loginUrl || PORTALS.port.url, 'Đăng nhập Port (ẩn danh)'),
             }),
             el('button', {
               type: 'button',
@@ -26889,6 +27072,7 @@ function mountRemoteInside({
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {
     window.__riOnPortalBrowserClosed = async (completedHost = '', loginCompleted = false) => {
       clearWarmSessionCache();
+      clearPortTokenCache();
       const cleanHost = String(completedHost || '').trim().toLowerCase();
       if (standalone && isAndroidAppEnv() && state.authGate !== 'unlocked') {
         if (loginCompleted) {
@@ -26931,6 +27115,10 @@ function mountRemoteInside({
       }
 
       if (loginCompleted && canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
+        if (cleanHost === 'port.fpt.net' || cleanHost === 'mvcport.fpt.net') {
+          await bootstrapMvcPortSession();
+          await refreshSessionStatus();
+        }
         runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
         return;
       }

@@ -185,6 +185,9 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
             readClipboardAsync: function(payloadJson) {
               postAction({ action: 'readClipboardAsync', payloadJson: String(payloadJson || '') });
             },
+            clearPortalCookies: function(payloadJson) {
+              postAction({ action: 'clearPortalCookies', payloadJson: String(payloadJson || '') });
+            },
             clearSessionCookies: function() {
               postAction({ action: 'clearSessionCookies' });
               return true;
@@ -704,6 +707,16 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                 ]
             )
 
+        case "clearPortalCookies":
+            let raw = (body["payloadJson"] as? String) ?? ""
+            guard let payload = parseJsonDict(raw),
+                  let reqId = payload["reqId"] as? String,
+                  !reqId.isEmpty
+            else {
+                return
+            }
+            handleClearPortalCookies(reqId: reqId, payload: payload)
+
         case "clearSessionCookies":
             handleClearSessionCookies()
 
@@ -964,6 +977,117 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
         toastHideWorkItem = nil
     }
 
+    private func handleClearPortalCookies(reqId: String, payload: [String: Any]) {
+        let rawHosts = (payload["hosts"] as? [Any]) ?? []
+        var allowedHosts: [String] = []
+        for item in rawHosts {
+            let h = String(describing: item).trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !h.isEmpty && PortalPolicy.isAllowedPortalHost(h) && !allowedHosts.contains(h) {
+                allowedHosts.append(h)
+            }
+        }
+        guard !allowedHosts.isEmpty else {
+            deliverBridgeResponse(reqId: reqId, result: [
+                "ok": false,
+                "status": "invalid_hosts",
+                "value": 0
+            ])
+            return
+        }
+
+        let rawPrefixes = payload["clearSharedPrefixes"] as? [Any]
+        let sharedPrefixes: [String] = rawPrefixes?
+            .map { String(describing: $0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            ?? ["MVCPORT_", "PORT_"]
+        let clearIamAuthTemp = (payload["clearIamAuthTemp"] as? Bool) ?? true
+        let clearCache = (payload["clearCache"] as? Bool) ?? true
+        let iamTempCookieNames: Set<String> = [
+            "AUTH_SESSION_ID",
+            "AUTH_SESSION_ID_LEGACY",
+            "KC_RESTART",
+            "KEYCLOAK_LOCALE"
+        ]
+
+        func matchesTargetCookie(_ cookie: HTTPCookie) -> Bool {
+            var dom = cookie.domain.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            while dom.hasPrefix(".") {
+                dom.removeFirst()
+            }
+            if allowedHosts.contains(where: { dom == $0 || dom.hasSuffix(".\($0)") }) {
+                return true
+            }
+            if dom == "fpt.net" {
+                let cName = cookie.name
+                let matchesPrefix = sharedPrefixes.contains { prefix in
+                    cName.range(of: prefix, options: [.anchored, .caseInsensitive]) != nil
+                }
+                if matchesPrefix || cName.caseInsensitiveCompare(".ASPXAUTH") == .orderedSame {
+                    return true
+                }
+            }
+            if clearIamAuthTemp && dom == "iam.fpt.net" {
+                return iamTempCookieNames.contains(cookie.name)
+            }
+            return false
+        }
+
+        var deletedCount = 0
+        if let sharedCookies = HTTPCookieStorage.shared.cookies {
+            for cookie in sharedCookies where matchesTargetCookie(cookie) {
+                HTTPCookieStorage.shared.deleteCookie(cookie)
+                deletedCount += 1
+            }
+        }
+
+        let cookieStore = dataStore.httpCookieStore
+        cookieStore.getAllCookies { [weak self] cookies in
+            guard let self = self else { return }
+            let group = DispatchGroup()
+            for cookie in cookies where matchesTargetCookie(cookie) {
+                deletedCount += 1
+                group.enter()
+                cookieStore.delete(cookie) {
+                    group.leave()
+                }
+            }
+            group.notify(queue: .main) {
+                let finish = {
+                    self.deliverBridgeResponse(reqId: reqId, result: [
+                        "ok": true,
+                        "status": "ok",
+                        "value": deletedCount
+                    ])
+                }
+                guard clearCache else {
+                    finish()
+                    return
+                }
+                let cacheTypes: Set<String> = [
+                    WKWebsiteDataTypeDiskCache,
+                    WKWebsiteDataTypeMemoryCache,
+                    WKWebsiteDataTypeOfflineWebApplicationCache,
+                    WKWebsiteDataTypeLocalStorage,
+                    WKWebsiteDataTypeSessionStorage
+                ]
+                self.dataStore.fetchDataRecords(ofTypes: cacheTypes) { records in
+                    let hostRecords = records.filter { record in
+                        let name = record.displayName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                        guard name != "console" else { return false }
+                        return allowedHosts.contains(where: { name == $0 || name.hasSuffix(".\($0)") })
+                    }
+                    if hostRecords.isEmpty {
+                        finish()
+                    } else {
+                        self.dataStore.removeData(ofTypes: cacheTypes, for: hostRecords) {
+                            finish()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private func handleClearSessionCookies() {
         isClearingSession = true
         cancelAllPendingWorkItems()
@@ -1126,7 +1250,8 @@ final class MainViewController: UIViewController, WKNavigationDelegate, WKUIDele
                 self.closePortalOverlay(completedHost: targetHost, loginCompleted: true)
             }
             portalAutoCloseWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9, execute: work)
+            let autoCloseDelay = targetHost.lowercased() == "port.fpt.net" ? 1.4 : 0.9
+            DispatchQueue.main.asyncAfter(deadline: .now() + autoCloseDelay, execute: work)
         }
 
         guard let bgTask = activePortalBgTask,

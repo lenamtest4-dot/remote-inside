@@ -33,9 +33,11 @@ import {
   NEXTGEN_FOX_APPS,
   bootstrapNextGenViaFoxErpAndroid,
   buildFoxErpNextGenLaunchUrlFromStorage,
+  canClearPortalHostCookies,
   canControlAndroidPortal,
   canWarmPortalSession,
   checkPortalSession,
+  clearPortalHostCookies,
   clearWarmSessionCache,
   detectIamRedirect,
   evalAndroidPortalJs,
@@ -150,6 +152,8 @@ import {
   PORT_ENDPOINTS,
   bootstrapMvcPortSession,
   buildPortUrl,
+  clearPortCookiesIncognito,
+  clearPortTokenCache,
   decodeHtmlEntities,
   detectPortSessionExpired,
   extractMvcPortTokenFromText,
@@ -1774,6 +1778,158 @@ async function runTests() {
     userscriptContent.includes('current_page_v1'),
     'Userscript bundle must include current_page_v1 scan kind'
   );
+  assert.ok(
+    PORT_ENDPOINTS.oidcSilentAuth.startsWith('https://iam.fpt.net/'),
+    'PORT_ENDPOINTS.oidcSilentAuth must use https://iam.fpt.net/'
+  );
+  assert.ok(
+    PORT_ENDPOINTS.oidcPromptLogin.startsWith('https://iam.fpt.net/'),
+    'PORT_ENDPOINTS.oidcPromptLogin must use https://iam.fpt.net/'
+  );
+  assert.ok(
+    String(PORTALS.port.loginUrl || '').startsWith('https://iam.fpt.net/'),
+    'PORTALS.port.loginUrl must use https://iam.fpt.net/'
+  );
+
+  // Scoped incognito cookie clear & multi-stage mvcport recovery (Index + LeftMenu + WebView fallback)
+  {
+    const hadWin14 = Object.prototype.hasOwnProperty.call(globalThis, 'window');
+    const prevWin14 = globalThis.window;
+    const clearCalls14 = [];
+    const httpCalls14 = [];
+    const warmCalls14 = [];
+    let mvcWarmCompleted = false;
+    try {
+      clearPortTokenCache();
+      clearWarmSessionCache();
+      globalThis.window = {
+        RemoteInsideNative: {
+          clearPortalCookies(payloadJson) {
+            const parsed = JSON.parse(payloadJson || '{}');
+            clearCalls14.push(parsed);
+            queueMicrotask(() => {
+              globalThis.window.__riNativeResolve(
+                parsed.reqId,
+                JSON.stringify({ ok: true, status: 'ok', value: 18 })
+              );
+            });
+          },
+          warmPortalSession(payloadJson) {
+            const parsed = JSON.parse(payloadJson || '{}');
+            warmCalls14.push(parsed);
+            if (parsed.targetHost === 'mvcport.fpt.net') {
+              mvcWarmCompleted = true;
+            }
+            queueMicrotask(() => {
+              globalThis.window.__riNativeResolve(
+                parsed.reqId,
+                JSON.stringify({
+                  ok: true,
+                  status: 'ok',
+                  finalUrl: parsed.url,
+                  sawAuth: false,
+                })
+              );
+            });
+          },
+          httpRequest(payloadJson) {
+            const parsed = JSON.parse(payloadJson || '{}');
+            httpCalls14.push(parsed);
+            const urlStr = String(parsed.url || '');
+            let resp = {
+              ok: false,
+              status: 404,
+              finalUrl: urlStr,
+              responseText: '',
+              responseHeaders: '',
+            };
+            if (urlStr.startsWith('http://port.fpt.net/Index.aspx')) {
+              resp = {
+                ok: true,
+                status: 200,
+                finalUrl: 'http://port.fpt.net/Index.aspx',
+                responseText:
+                  '<frameset><frame name="leftFrame" src="LeftMenu.aspx?mvct=idx_tok&mvcu=1" /></frameset>',
+                responseHeaders: '',
+              };
+            } else if (urlStr.startsWith('http://port.fpt.net/LeftMenu.aspx')) {
+              resp = {
+                ok: true,
+                status: 200,
+                finalUrl: urlStr,
+                responseText:
+                  '<a href="http://mvcport.fpt.net/ftth_newport/contract/index?Token=menu_tok">Tìm kiếm</a>',
+                responseHeaders:
+                  'Set-Cookie: MVCPORT_TOKEN_PROD=cookie_tok; path=/; domain=.fpt.net\r\n',
+              };
+            } else if (urlStr.startsWith('http://mvcport.fpt.net/ftth_newport/contract/index')) {
+              if (mvcWarmCompleted) {
+                resp = {
+                  ok: true,
+                  status: 200,
+                  finalUrl: urlStr,
+                  responseText: '<html><body><table id="Grid"></table></body></html>',
+                  responseHeaders: '',
+                };
+              } else {
+                resp = {
+                  ok: false,
+                  status: 401,
+                  finalUrl: 'http://mvcport.fpt.net/FTTH_NEW/POP?ReturnUrl=%2Fftth_newport%2Fcontract%2Findex',
+                  responseText: '401 - Unauthorized',
+                  responseHeaders: '',
+                };
+              }
+            }
+            queueMicrotask(() => {
+              globalThis.window.__riNativeResolve(parsed.reqId, JSON.stringify(resp));
+            });
+          },
+        },
+      };
+
+      assert.equal(canClearPortalHostCookies(), true);
+      const clrTest = await clearPortCookiesIncognito();
+      assert.equal(clrTest.ok, true);
+      assert.equal(clrTest.value, 18);
+
+      clearCalls14.length = 0;
+      httpCalls14.length = 0;
+      warmCalls14.length = 0;
+      mvcWarmCompleted = false;
+
+      const bootRes = await bootstrapMvcPortSession();
+      assert.equal(bootRes.ok, true, 'bootstrapMvcPortSession must recover via mvcport WebView fallback');
+      assert.equal(bootRes.refreshedViaOidc, true);
+      assert.equal(bootRes.warmedMvcWebView, true);
+      assert.equal(bootRes.clearedCookies, true);
+      assert.equal(clearCalls14.length, 1, 'bootstrapMvcPortSession must wipe Port cookies before OIDC warmup');
+      assert.deepEqual(clearCalls14[0].hosts, ['port.fpt.net', 'mvcport.fpt.net']);
+      assert.deepEqual(clearCalls14[0].clearSharedPrefixes, ['MVCPORT_', 'PORT_']);
+      assert.equal(clearCalls14[0].clearIamAuthTemp, true);
+
+      const leftMenuCall = httpCalls14.find((c) => c.url.includes('LeftMenu.aspx'));
+      assert.ok(leftMenuCall, 'fetchTokenFromPortIndex must always hydrate LeftMenu.aspx');
+      assert.equal(leftMenuCall.headers.Referer, 'http://port.fpt.net/Index.aspx');
+      assert.ok(
+        warmCalls14.some((w) => w.url.startsWith('https://iam.fpt.net/') && w.targetHost === 'port.fpt.net'),
+        'OIDC silent warmup must target port.fpt.net over https://iam.fpt.net/'
+      );
+      assert.ok(
+        warmCalls14.some((w) => w.targetHost === 'mvcport.fpt.net' && w.url.includes('Token=menu_tok')),
+        'mvcport WebView warmup must receive menu_tok from LeftMenu.aspx'
+      );
+    } finally {
+      clearPortTokenCache();
+      clearWarmSessionCache();
+      if (hadWin14) {
+        globalThis.window = prevWin14;
+      } else {
+        delete globalThis.window;
+      }
+    }
+  }
+
   console.log('   OK: port.fpt.net adapter tests passed.');
 
   console.log('15. Testing Inside CheckList ByPass parsers, validators, and demo execution...');
@@ -2130,6 +2286,20 @@ async function runTests() {
       fs.existsSync(path.join(ROOT_DIR, rel)),
       `Required Android/CI file must exist: ${rel}`
     );
+  }
+  const mainActivityKt16 = fs.readFileSync(
+    path.join(ROOT_DIR, 'android/app/src/main/java/com/remoteinside/app/MainActivity.kt'),
+    'utf8'
+  );
+  for (const ktToken of [
+    'fun clearPortalCookies(payloadJson: String)',
+    'MVCPORT_TOKEN_PROD',
+    'AUTH_SESSION_ID',
+    'KC_RESTART',
+    'matchesSharedPrefix',
+    '1400L else 900L',
+  ]) {
+    assert.ok(mainActivityKt16.includes(ktToken), `MainActivity.kt must include ${ktToken}`);
   }
   console.log('   OK: Android App Native Bridge & Packaging checks passed.');
 
@@ -6311,7 +6481,11 @@ async function runTests() {
     'keyboardLayoutGuide',
     'accesstoken_iam_radius',
     'readClipboardAsync',
+    'clearPortalCookies',
     'clearSessionCookies',
+    'AUTH_SESSION_ID',
+    'KC_RESTART',
+    '1.4 : 0.9',
     'evalPortalJs',
     'loadPortalBackground',
     'warmPortalSession',

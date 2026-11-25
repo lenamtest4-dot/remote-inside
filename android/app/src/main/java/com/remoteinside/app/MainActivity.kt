@@ -39,6 +39,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
 import java.io.ByteArrayOutputStream
@@ -343,7 +344,9 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     portalAutoCloseRunnable = autoClose
-                    mainHandler.postDelayed(autoClose, 900L)
+                    val autoCloseDelayMs =
+                        if (targetHost.equals("port.fpt.net", ignoreCase = true)) 1400L else 900L
+                    mainHandler.postDelayed(autoClose, autoCloseDelayMs)
                 }
 
                 val bgTask = activePortalBgTask
@@ -1480,6 +1483,198 @@ class MainActivity : AppCompatActivity() {
                 clip.getItemAt(0).coerceToText(this@MainActivity)?.toString().orEmpty()
             } catch (_: Exception) {
                 ""
+            }
+        }
+
+        @JavascriptInterface
+        fun clearPortalCookies(payloadJson: String) {
+            val payload = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val reqId = payload.optString("reqId", "")
+            if (reqId.isBlank()) return
+
+            val rawHosts = payload.optJSONArray("hosts") ?: JSONArray()
+            val allowedHosts = mutableListOf<String>()
+            for (i in 0 until rawHosts.length()) {
+                val h = rawHosts.optString(i, "").trim().lowercase(Locale.US)
+                if (h.isNotEmpty() && isAllowedPortalHost(h) && !allowedHosts.contains(h)) {
+                    allowedHosts.add(h)
+                }
+            }
+            if (allowedHosts.isEmpty()) {
+                deliverBridgeResponse(
+                    reqId,
+                    JSONObject().apply {
+                        put("ok", false)
+                        put("status", "invalid_hosts")
+                        put("value", 0)
+                    }
+                )
+                return
+            }
+
+            val rawPrefixes = payload.optJSONArray("clearSharedPrefixes")
+            val sharedPrefixes = mutableListOf<String>()
+            if (rawPrefixes != null) {
+                for (i in 0 until rawPrefixes.length()) {
+                    val p = rawPrefixes.optString(i, "").trim()
+                    if (p.isNotEmpty()) sharedPrefixes.add(p)
+                }
+            } else {
+                sharedPrefixes.add("MVCPORT_")
+                sharedPrefixes.add("PORT_")
+            }
+            val clearIamAuthTemp = payload.optBoolean("clearIamAuthTemp", true)
+            val clearCache = payload.optBoolean("clearCache", true)
+
+            httpExecutor.execute {
+                try {
+                    val cookieManager = CookieManager.getInstance()
+                    var clearedCount = 0
+
+                    fun expireCookie(url: String, name: String, path: String = "/", domain: String = "") {
+                        val sb = StringBuilder()
+                        sb.append(name).append("=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=").append(path)
+                        if (domain.isNotEmpty()) {
+                            sb.append("; Domain=").append(domain)
+                        }
+                        cookieManager.setCookie(url, sb.toString())
+                        clearedCount++
+                    }
+
+                    val includesPort = allowedHosts.any {
+                        it == "port.fpt.net" || it == "mvcport.fpt.net"
+                    }
+                    val explicitPortCookieNames = listOf(
+                        ".ASPXAUTH",
+                        "ASP.NET_SessionId",
+                        "route",
+                        "MVCPORT_TOKEN",
+                        "MVCPORT_TOKEN_PROD",
+                        "MVCPORT_USER_PROD",
+                        "MVCPORT_COOKIE_V2_PROD",
+                        "__RequestVerificationToken"
+                    )
+
+                    for (host in allowedHosts) {
+                        val probeUrls = mutableListOf("http://$host/", "https://$host/")
+                        if (host == "mvcport.fpt.net") {
+                            probeUrls.add("http://mvcport.fpt.net/FTTH_NewPort")
+                            probeUrls.add("http://mvcport.fpt.net/ftth_newport")
+                            probeUrls.add("http://mvcport.fpt.net/FTTH_NEW")
+                        }
+                        val names = linkedSetOf<String>()
+                        for (probeUrl in probeUrls) {
+                            val raw = runCatching { cookieManager.getCookie(probeUrl) }.getOrNull().orEmpty()
+                            if (raw.isNotBlank()) {
+                                for (part in raw.split(";")) {
+                                    val eq = part.indexOf('=')
+                                    if (eq > 0) {
+                                        val cName = part.substring(0, eq).trim()
+                                        if (cName.isNotEmpty()) names.add(cName)
+                                    }
+                                }
+                            }
+                        }
+                        if (includesPort && (host == "port.fpt.net" || host == "mvcport.fpt.net")) {
+                            names.addAll(explicitPortCookieNames)
+                        }
+                        for (cName in names) {
+                            expireCookie("http://$host/", cName, "/")
+                            expireCookie("https://$host/", cName, "/")
+                            expireCookie("http://$host/", cName, "/", ".$host")
+                            expireCookie("https://$host/", cName, "/", ".$host")
+                            if (host == "mvcport.fpt.net") {
+                                expireCookie("http://mvcport.fpt.net/FTTH_NewPort", cName, "/FTTH_NewPort")
+                                expireCookie("http://mvcport.fpt.net/ftth_newport", cName, "/ftth_newport")
+                                expireCookie("http://mvcport.fpt.net/FTTH_NEW", cName, "/FTTH_NEW")
+                            }
+                            val matchesSharedPrefix = sharedPrefixes.any { prefix ->
+                                cName.startsWith(prefix, ignoreCase = true)
+                            }
+                            if (matchesSharedPrefix || cName.equals(".ASPXAUTH", ignoreCase = true)) {
+                                expireCookie("http://fpt.net/", cName, "/", ".fpt.net")
+                                expireCookie("https://fpt.net/", cName, "/", ".fpt.net")
+                            }
+                        }
+                    }
+
+                    if (clearIamAuthTemp) {
+                        val iamTempNames = listOf(
+                            "AUTH_SESSION_ID",
+                            "AUTH_SESSION_ID_LEGACY",
+                            "KC_RESTART",
+                            "KEYCLOAK_LOCALE"
+                        )
+                        val iamTargets = listOf(
+                            Pair("https://iam.fpt.net/auth/realms/fpt/", "/auth/realms/fpt/"),
+                            Pair("https://iam.fpt.net/auth/realms/fpt", "/auth/realms/fpt"),
+                            Pair("https://iam.fpt.net/", "/"),
+                            Pair("http://iam.fpt.net/auth/realms/fpt/", "/auth/realms/fpt/"),
+                            Pair("http://iam.fpt.net/auth/realms/fpt", "/auth/realms/fpt"),
+                            Pair("http://iam.fpt.net/", "/")
+                        )
+                        for ((iamUrl, iamPath) in iamTargets) {
+                            for (iamCookie in iamTempNames) {
+                                expireCookie(iamUrl, iamCookie, iamPath)
+                            }
+                        }
+                    }
+
+                    runCatching { cookieManager.flush() }
+
+                    if (clearCache) {
+                        val uiLatch = CountDownLatch(1)
+                        runOnUiThread {
+                            try {
+                                if (!isDestroyed && !isFinishing) {
+                                    ssoWebView.clearCache(true)
+                                    portalWebView.clearCache(true)
+                                    runCatching {
+                                        WebStorage.getInstance().getOrigins { origins ->
+                                            if (origins != null) {
+                                                for (rawOrigin in origins.keys) {
+                                                    val originStr = rawOrigin?.toString().orEmpty()
+                                                    val originHost = runCatching { Uri.parse(originStr).host }
+                                                        .getOrNull()
+                                                        ?.trim()
+                                                        ?.lowercase(Locale.US)
+                                                        .orEmpty()
+                                                    if (originStr.isNotEmpty() &&
+                                                        !APP_ASSETS_HOST.equals(originHost, ignoreCase = true) &&
+                                                        allowedHosts.any { h -> originHost == h || originHost.endsWith(".$h") }
+                                                    ) {
+                                                        WebStorage.getInstance().deleteOrigin(originStr)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } finally {
+                                uiLatch.countDown()
+                            }
+                        }
+                        uiLatch.await(1500L, TimeUnit.MILLISECONDS)
+                    }
+
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", true)
+                            put("status", "ok")
+                            put("value", clearedCount)
+                        }
+                    )
+                } catch (_: Exception) {
+                    deliverBridgeResponse(
+                        reqId,
+                        JSONObject().apply {
+                            put("ok", false)
+                            put("status", "error")
+                            put("value", 0)
+                        }
+                    )
+                }
             }
         }
 

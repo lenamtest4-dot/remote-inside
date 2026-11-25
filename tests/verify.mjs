@@ -2940,6 +2940,13 @@ async function runTests() {
     'private fun isAuthHost',
     'private fun isLoginPath',
     'window.__riOnPortalBrowserClosed',
+    'WebStorage.getInstance()',
+    'deleteOrigin',
+    'WebViewDatabase.getInstance',
+    'clearFormData',
+    'clearHttpAuthUsernamePassword',
+    'CountDownLatch',
+    'saveFormData = false',
   ]) {
     assert.ok(mainActivitySrc.includes(token), `MainActivity.kt must contain ${token}`);
   }
@@ -2948,7 +2955,16 @@ async function runTests() {
     /android:id="@\+id\/portalOverlay"[\s\S]{0,260}android:visibility="invisible"/.test(layoutXmlSrc),
     'portalOverlay in activity_main.xml must use android:visibility="invisible" to preserve WebView layout dimensions'
   );
-  for (const bundleToken of ['warmPortalSession', 'syncIamSsoSessions', 'Đăng nhập IAM (1 lần cho tất cả)']) {
+  for (const bundleToken of [
+    'warmPortalSession',
+    'syncIamSsoSessions',
+    'Đăng nhập IAM (1 lần cho tất cả)',
+    'bootstrapAndroidAuthGate',
+    'renderAuthGatePanel',
+    'handleAndroidLogout',
+    'Đăng nhập cổng nội bộ FPT',
+    'Đăng xuất & Đổi tài khoản FPT',
+  ]) {
     assert.ok(androidAssetContent.includes(bundleToken), `Android bundle must include ${bundleToken}`);
     assert.ok(userscriptContent.includes(bundleToken), `Userscript bundle must include ${bundleToken}`);
   }

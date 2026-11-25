@@ -25,8 +25,10 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
+import android.webkit.WebStorage
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.WebViewDatabase
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -44,8 +46,10 @@ import java.nio.charset.Charset
 import java.util.ArrayDeque
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -195,6 +199,8 @@ class MainActivity : AppCompatActivity() {
         settings.displayZoomControls = false
         settings.setSupportMultipleWindows(true)
         settings.javaScriptCanOpenWindowsAutomatically = true
+        @Suppress("DEPRECATION")
+        settings.saveFormData = false
 
         portalWebView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -452,6 +458,8 @@ class MainActivity : AppCompatActivity() {
         settings.mediaPlaybackRequiresUserGesture = true
         settings.allowFileAccess = false
         settings.allowContentAccess = false
+        @Suppress("DEPRECATION")
+        settings.saveFormData = false
 
         ssoWebView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(
@@ -1436,15 +1444,74 @@ class MainActivity : AppCompatActivity() {
         fun clearSessionCookies(): Boolean {
             return try {
                 val cookieManager = CookieManager.getInstance()
-                cookieManager.removeAllCookies(null)
+                val latch = CountDownLatch(1)
+                cookieManager.removeAllCookies {
+                    runCatching { cookieManager.flush() }
+                    latch.countDown()
+                }
+                if (Looper.myLooper() != Looper.getMainLooper()) {
+                    latch.await(1500L, TimeUnit.MILLISECONDS)
+                }
+                cookieManager.removeSessionCookies(null)
                 cookieManager.flush()
+
                 runOnUiThread {
-                    if (!isDestroyed && !isFinishing) {
-                        portalWebView.clearCache(true)
-                        portalWebView.clearHistory()
-                        ssoWebView.clearCache(true)
-                        ssoWebView.clearHistory()
+                    if (isDestroyed || isFinishing) {
+                        return@runOnUiThread
                     }
+                    ssoSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                    ssoSettleRunnable = null
+                    ssoTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                    ssoTimeoutRunnable = null
+                    portalBgSettleRunnable?.let { mainHandler.removeCallbacks(it) }
+                    portalBgSettleRunnable = null
+                    portalBgTimeoutRunnable?.let { mainHandler.removeCallbacks(it) }
+                    portalBgTimeoutRunnable = null
+                    portalAutoCloseRunnable?.let { mainHandler.removeCallbacks(it) }
+                    portalAutoCloseRunnable = null
+                    ssoQueue.clear()
+                    activeSsoTask = null
+                    activePortalBgTask = null
+
+                    runCatching {
+                        WebStorage.getInstance().getOrigins { origins ->
+                            if (origins != null) {
+                                for (rawOrigin in origins.keys) {
+                                    val originStr = rawOrigin?.toString().orEmpty()
+                                    val originHost = runCatching { Uri.parse(originStr).host }
+                                        .getOrNull()
+                                        ?.trim()
+                                        ?.lowercase(Locale.US)
+                                        .orEmpty()
+                                    if (originStr.isNotEmpty() && !APP_ASSETS_HOST.equals(originHost, ignoreCase = true)) {
+                                        WebStorage.getInstance().deleteOrigin(originStr)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    runCatching {
+                        @Suppress("DEPRECATION")
+                        WebViewDatabase.getInstance(this@MainActivity).apply {
+                            clearFormData()
+                            clearHttpAuthUsernamePassword()
+                        }
+                    }
+
+                    portalWebView.stopLoading()
+                    portalWebView.loadUrl("about:blank")
+                    portalWebView.clearCache(true)
+                    portalWebView.clearHistory()
+                    @Suppress("DEPRECATION")
+                    portalWebView.clearFormData()
+
+                    ssoWebView.stopLoading()
+                    ssoWebView.loadUrl("about:blank")
+                    ssoWebView.clearCache(true)
+                    ssoWebView.clearHistory()
+                    @Suppress("DEPRECATION")
+                    ssoWebView.clearFormData()
                 }
                 true
             } catch (_: Exception) {

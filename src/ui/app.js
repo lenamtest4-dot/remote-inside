@@ -522,6 +522,11 @@ export function mountRemoteInside({
     radiusIpv6Note: '',
     radiusKillSession: true,
     radiusPresetApplied: '',
+    authGate: standalone && isAndroidAppEnv() ? 'checking' : 'unlocked',
+    authGateReason: '',
+    authGateDetail: '',
+    authGateSyncing: false,
+    authGateAutoOpened: false,
     scannerOpen: false,
     appMenuOpen: false,
     domSnapshot: null,
@@ -670,6 +675,103 @@ export function mountRemoteInside({
       renderMain();
     }
     return report;
+  }
+
+  function openFptInternalLoginGate() {
+    return openExternalOrPortalUrl(PORTALS.inside.url, {
+      mode: 'login',
+      title: 'Đăng nhập nội bộ FPT (IAM)',
+      pageWindow,
+    });
+  }
+
+  async function bootstrapAndroidAuthGate({
+    autoOpenLogin = false,
+    allowSsoWarmup = true,
+  } = {}) {
+    if (!standalone || !isAndroidAppEnv()) {
+      state.authGate = 'unlocked';
+      return;
+    }
+
+    state.authGate = 'checking';
+    state.authGateDetail = 'Đang kiểm tra phiên đăng nhập cổng nội bộ FPT…';
+    renderMain();
+
+    const checked = await checkPortalSession(PORTALS.inside, { allowSsoWarmup });
+    if (checked.state === 'ok') {
+      state.authGate = 'unlocked';
+      state.authGateReason = '';
+      state.authGateDetail = '';
+      state.authGateAutoOpened = false;
+      state.sessionStatus = checked;
+      render();
+      if (state.activePortalId !== 'inside') {
+        refreshSessionStatus();
+      }
+      return;
+    }
+
+    state.sessionStatus = checked;
+    state.authGate = 'locked';
+    if (checked.state === 'iam_expired') {
+      state.authGateReason = 'iam_expired';
+      state.authGateDetail =
+        checked.detail || 'Chưa có phiên đăng nhập trên cổng nội bộ FPT.';
+      render();
+      if (autoOpenLogin && !state.authGateAutoOpened) {
+        state.authGateAutoOpened = true;
+        openFptInternalLoginGate();
+      }
+      return;
+    }
+
+    state.authGateReason = 'offline';
+    state.authGateDetail =
+      checked.detail || 'Chưa chạm tới được inside.fpt.net. Hãy bật VPN công ty.';
+    render();
+  }
+
+  function handleAndroidLogout({ openLoginAfter = false } = {}) {
+    clearWarmSessionCache();
+    if (
+      typeof window !== 'undefined' &&
+      window.RemoteInsideNative &&
+      typeof window.RemoteInsideNative.clearSessionCookies === 'function'
+    ) {
+      window.RemoteInsideNative.clearSessionCookies();
+    }
+    state.appMenuOpen = false;
+    resetConfirmState();
+    state.result = null;
+    state.authGateSyncing = false;
+    state.authGateAutoOpened = false;
+    if (standalone && isAndroidAppEnv()) {
+      state.authGate = 'locked';
+      state.authGateReason = 'logged_out';
+      state.authGateDetail =
+        'Đã xóa sạch cookie & phiên cũ. Hãy đăng nhập bằng tài khoản FPT của bạn.';
+      state.sessionStatus = {
+        state: 'iam_expired',
+        label: 'Cần đăng nhập IAM',
+        loginUrl: PORTALS.inside.url,
+        detail: 'Đã đăng xuất khỏi phiên cũ.',
+      };
+    } else {
+      state.result = {
+        status: 'ok',
+        title: 'Đã xóa cookie phiên đăng nhập',
+        message:
+          'Cookie phiên IAM/Port trên ứng dụng đã được làm sạch. Khi cần thao tác lại, hãy mở đăng nhập IAM mới.',
+      };
+    }
+    render();
+    if (openLoginAfter && standalone && isAndroidAppEnv()) {
+      state.authGateAutoOpened = true;
+      setTimeout(() => {
+        openFptInternalLoginGate();
+      }, 150);
+    }
   }
 
   async function refreshSessionStatus() {
@@ -9775,27 +9877,8 @@ export function mountRemoteInside({
           el('button', {
             type: 'button',
             className: 'ri-danger-btn',
-            text: 'Đăng xuất (Xóa cookie phiên)',
-            onClick: () => {
-              clearWarmSessionCache();
-              if (
-                typeof window !== 'undefined' &&
-                window.RemoteInsideNative &&
-                typeof window.RemoteInsideNative.clearSessionCookies === 'function'
-              ) {
-                window.RemoteInsideNative.clearSessionCookies();
-              }
-              state.appMenuOpen = false;
-              state.result = {
-                status: 'ok',
-                title: 'Đã xóa cookie phiên đăng nhập',
-                message:
-                  'Cookie phiên IAM/Port trên ứng dụng đã được làm sạch. Khi cần thao tác lại, hãy mở đăng nhập IAM mới.',
-              };
-              renderScanner();
-              renderMain();
-              refreshSessionStatus();
-            },
+            text: 'Đăng xuất & Đổi tài khoản FPT',
+            onClick: () => handleAndroidLogout({ openLoginAfter: false }),
           }),
         ]),
         el('details', { className: 'ri-confirm-input-wrap' }, [
@@ -9855,8 +9938,90 @@ export function mountRemoteInside({
     ]);
   }
 
+  function renderAuthGatePanel() {
+    const appVersion =
+      typeof __REMOTE_INSIDE_VERSION__ !== 'undefined' ? __REMOTE_INSIDE_VERSION__ : '0.14.3';
+    const isBusy = state.authGate === 'checking' || state.authGateSyncing;
+    const statusText = state.authGateSyncing
+      ? state.iamSyncText || 'Đang đồng bộ phiên sang các cổng FPT…'
+      : state.authGateDetail || 'Đang kiểm tra phiên đăng nhập cổng nội bộ FPT…';
+
+    const bodyParts = [
+      el('div', { className: 'ri-auth-gate-head' }, [
+        el('div', { className: 'ri-brand' }, [
+          el('span', { className: 'ri-brand-mark' }),
+          el('h1', { className: 'ri-brand-title', text: `Remote Inside v${appVersion}` }),
+        ]),
+        el('div', { className: 'ri-auth-gate-sub', text: 'Cổng nội bộ FPT — Bắt buộc đăng nhập trước khi dùng tool' }),
+      ]),
+    ];
+
+    if (isBusy) {
+      bodyParts.push(
+        el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+          el('span', { className: 'ri-spinner' }),
+          el('span', { text: statusText }),
+        ])
+      );
+    } else {
+      bodyParts.push(
+        el(
+          'div',
+          {
+            className: 'ri-sheet-status',
+            'data-tone': state.authGateReason === 'offline' ? 'error' : 'warn',
+            'aria-live': 'polite',
+          },
+          [
+            el('div', {
+              text: 'Đăng nhập trên trang nội bộ FPT (inside.fpt.net → IAM / Azure AD) bằng tài khoản chính chủ của bạn trước khi sử dụng công cụ. Ứng dụng không lưu mật khẩu hay cài sẵn tài khoản mặc định.',
+            }),
+            state.authGateDetail
+              ? el('div', { className: 'ri-auth-gate-detail', text: state.authGateDetail })
+              : null,
+          ]
+        ),
+        el('div', { className: 'ri-auth-gate-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-primary-btn',
+            text: 'Đăng nhập cổng nội bộ FPT',
+            onClick: () => openFptInternalLoginGate(),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Kiểm tra lại phiên',
+            onClick: () =>
+              bootstrapAndroidAuthGate({ autoOpenLogin: false, allowSsoWarmup: true }),
+          }),
+          el('button', {
+            type: 'button',
+            className: 'ri-danger-btn',
+            text: 'Xóa sạch phiên cũ & Đổi tài khoản',
+            onClick: () => handleAndroidLogout({ openLoginAfter: true }),
+          }),
+        ])
+      );
+    }
+
+    return el('div', { className: 'ri-auth-gate' }, bodyParts);
+  }
+
   function renderMain() {
     mainLayer.textContent = '';
+
+    if (standalone && isAndroidAppEnv() && state.authGate !== 'unlocked') {
+      const gateShell = el(
+        'div',
+        { className: 'ri-shell ri-auth-gate-shell' },
+        [renderAuthGatePanel()]
+      );
+      mainLayer.appendChild(
+        el('div', { className: 'ri-standalone-wrap' }, [gateShell])
+      );
+      return;
+    }
 
     if (!state.isOpen && !standalone) {
       const fabLabel = state.isRecording
@@ -10059,7 +10224,11 @@ export function mountRemoteInside({
     });
   }
   if (standalone) {
-    refreshSessionStatus();
+    if (isAndroidAppEnv()) {
+      bootstrapAndroidAuthGate({ autoOpenLogin: true, allowSsoWarmup: true });
+    } else {
+      refreshSessionStatus();
+    }
   } else if (isUserscriptEnv() && pageWindow && pageDocument) {
     const loc = pageWindow.location;
     const hostLower = String(loc.hostname || '').toLowerCase();
@@ -10174,9 +10343,49 @@ export function mountRemoteInside({
   }
 
   if (typeof window !== 'undefined' && isAndroidAppEnv()) {
-    window.__riOnPortalBrowserClosed = (completedHost = '', loginCompleted = false) => {
+    window.__riOnPortalBrowserClosed = async (completedHost = '', loginCompleted = false) => {
       clearWarmSessionCache();
       const cleanHost = String(completedHost || '').trim().toLowerCase();
+      if (standalone && isAndroidAppEnv() && state.authGate !== 'unlocked') {
+        if (loginCompleted) {
+          state.authGateSyncing = true;
+          renderMain();
+          try {
+            if (canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
+              await runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
+            } else {
+              await refreshSessionStatus();
+            }
+            let isInsideOk = Boolean(state.sessionStatus && state.sessionStatus.state === 'ok');
+            if (!isInsideOk) {
+              const verifyInside = await checkPortalSession(PORTALS.inside, {
+                allowSsoWarmup: false,
+              });
+              if (verifyInside && verifyInside.state === 'ok') {
+                isInsideOk = true;
+              } else if (verifyInside) {
+                state.authGateReason =
+                  verifyInside.state === 'offline' ? 'offline' : 'iam_expired';
+                state.authGateDetail = verifyInside.detail || '';
+              }
+            }
+            if (isInsideOk) {
+              state.authGate = 'unlocked';
+              state.authGateReason = '';
+              state.authGateDetail = '';
+            } else {
+              state.authGate = 'locked';
+            }
+          } finally {
+            state.authGateSyncing = false;
+            render();
+          }
+          return;
+        }
+        await bootstrapAndroidAuthGate({ autoOpenLogin: false, allowSsoWarmup: false });
+        return;
+      }
+
       if (loginCompleted && canWarmPortalSession() && cleanHost !== 'fli-mngt.fcam.vn') {
         runUnifiedIamSync({ skipHost: cleanHost, announceResult: true });
         return;

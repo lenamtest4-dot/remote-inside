@@ -1,4 +1,4 @@
-# Remote Inside (v0.14.2)
+# Remote Inside (v0.14.3)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
 
@@ -15,12 +15,12 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.14.2.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.14.3.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
 3. Bật **VPN công ty**, mở biểu tượng app **Remote Inside** trên màn hình chính.
-4. Nếu trạng thái báo **Cần đăng nhập IAM**, chạm thẳng vào ô trạng thái (hoặc nút **Tiện ích** ở góc trên bên phải -> **Đăng nhập IAM (1 lần cho tất cả)**) -> bấm **Azure AD** đăng nhập 1 lần -> app tự đóng màn hình đăng nhập và đồng bộ phiên sang tất cả cổng dùng chung IAM (`Inside`, `Partner`, `FOX-ERP`, `Port`, `Vật tư`, `Radius`).
+4. Khi chưa có phiên đăng nhập (hoặc sau khi bấm **Tiện ích -> Đăng xuất & Đổi tài khoản FPT**), app tự yêu cầu bạn **đăng nhập trực tiếp trên cổng nội bộ FPT (`inside.fpt.net` -> IAM / Azure AD)** trước khi mở bảng điều khiển. Remote Inside không cài sẵn bất kỳ tài khoản hay mật khẩu mặc định nào; sau khi bạn đăng nhập 1 lần bằng tài khoản FPT chính chủ, app tự đóng màn hình đăng nhập và đồng bộ phiên sang toàn bộ cổng (`Inside`, `Partner`, `FOX-ERP`, `Port`, `Vật tư`, `Radius`).
 
 > **Cập nhật đè trực tiếp từ bản v0.10.1 trở đi:**
 > Các bản phát hành từ `v0.10.1` trở lên đều được ký bằng khóa Release cố định (`remoteinside`) trên GitHub Actions, nên mọi máy cài về sau chỉ cần tải file `.apk` mới về bấm **Cập nhật (Cài đè)** không cần gỡ bản cũ. *(Riêng máy nào đang cài bản thử `v0.10.0` dạng debug cần gỡ `v0.10.0` một lần duy nhất trước khi cài `v0.10.1`.)*

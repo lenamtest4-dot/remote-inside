@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.16.0
+// @version      0.16.1
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
@@ -47,7 +47,7 @@
 
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.16.0";
+  const __REMOTE_INSIDE_VERSION__ = "0.16.1";
   const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover {\n  background: var(--bg-subtle);\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-mode-btn--wide {\n  grid-column: 1 / -1;\n}\n\n.ri-reassign-results {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  margin-top: 8px;\n  max-height: 220px;\n  overflow-y: auto;\n}\n\n.ri-reassign-emp-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 2px;\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 10px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-reassign-emp-btn:hover {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-reassign-emp-btn.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  box-shadow: inset 0 0 0 1px var(--accent-signal);\n}\n\n.ri-reassign-emp-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-reassign-emp-meta {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--ink-muted);\n}\n\n.ri-reassign-preview {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions {\n  flex-wrap: wrap;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 110px;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-staff-panel {\n  padding: 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ri-recall-staff-search-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-staff-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-staff-search-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 14px;\n  padding-right: 14px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n";
 
 // --- config/portals.js ---
@@ -10973,18 +10973,94 @@ function triggerRecallFilterStaffDropdown(doc, rawQuery = '') {
       error: 'Không tìm thấy ô gõ tìm tên KTV bên trong danh sách Nhân viên.',
     };
   }
-  setRecallNativeInputValue(searchInput, query);
+
+  try {
+    if (typeof searchInput.focus === 'function') {
+      searchInput.focus();
+    }
+  } catch {
+    // Ignore focus failures on headless mocks
+  }
+
+  try {
+    const proto = typeof HTMLInputElement !== 'undefined' ? HTMLInputElement.prototype : null;
+    const desc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+    if (desc && typeof desc.set === 'function') {
+      desc.set.call(searchInput, query);
+    } else {
+      searchInput.value = query;
+    }
+  } catch {
+    searchInput.value = query;
+  }
+
+  // Radzen.Blazor v4 DropDownBase binds @onkeydown (OnFilterKeyPress -> DebounceFilter) and ignores Enter/Change when FilterAsYouType=true.
+  let keyName = 'Backspace';
+  let keyCode = 'Backspace';
+  if (query) {
+    const lastChar = query.charAt(query.length - 1);
+    keyName = lastChar;
+    if (/^[a-zA-Z]$/.test(lastChar)) {
+      keyCode = `Key${lastChar.toUpperCase()}`;
+    } else if (/^[0-9]$/.test(lastChar)) {
+      keyCode = `Digit${lastChar}`;
+    } else {
+      keyCode = 'Unidentified';
+    }
+  }
+
   if (typeof searchInput.dispatchEvent === 'function') {
     try {
       if (typeof KeyboardEvent === 'function') {
         searchInput.dispatchEvent(
-          new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+          new KeyboardEvent('keydown', { key: keyName, code: keyCode, bubbles: true, cancelable: true })
         );
       } else {
-        searchInput.dispatchEvent({ type: 'keyup', key: 'Enter', bubbles: true });
+        searchInput.dispatchEvent({ type: 'keydown', key: keyName, code: keyCode, bubbles: true });
       }
     } catch {
       // Ignore keyboard event failures on minimal mocks
+    }
+
+    try {
+      if (typeof InputEvent === 'function') {
+        searchInput.dispatchEvent(
+          new InputEvent('input', {
+            bubbles: true,
+            composed: true,
+            data: query || null,
+            inputType: query ? 'insertText' : 'deleteContentBackward',
+          })
+        );
+      } else if (typeof Event === 'function') {
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        searchInput.dispatchEvent({ type: 'input', bubbles: true });
+      }
+    } catch {
+      // Ignore input event failures on minimal mocks
+    }
+
+    try {
+      if (typeof KeyboardEvent === 'function') {
+        searchInput.dispatchEvent(
+          new KeyboardEvent('keyup', { key: keyName, code: keyCode, bubbles: true, cancelable: true })
+        );
+      } else {
+        searchInput.dispatchEvent({ type: 'keyup', key: keyName, code: keyCode, bubbles: true });
+      }
+    } catch {
+      // Ignore keyboard event failures on minimal mocks
+    }
+
+    try {
+      if (typeof Event === 'function') {
+        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        searchInput.dispatchEvent({ type: 'change', bubbles: true });
+      }
+    } catch {
+      // Ignore change event failures on minimal mocks
     }
   }
   return { ok: true, query };
@@ -11218,8 +11294,8 @@ function buildRecallPortalBootstrapJs() {
     .join('\n');
 
   return `
-    if (!window.__riRecallDom || window.__riRecallDomVersion !== 'v2') {
-      window.__riRecallDomVersion = 'v2';
+    if (!window.__riRecallDom || window.__riRecallDomVersion !== 'v3') {
+      window.__riRecallDomVersion = 'v3';
       window.__riRecallDom = (function() {
         var CONTRACT_REGEX = ${CONTRACT_REGEX.toString()};
         var RECALL_ENDPOINTS = ${JSON.stringify(RECALL_ENDPOINTS)};
@@ -11234,6 +11310,10 @@ function buildRecallPortalBootstrapJs() {
             var snackEl = typeof document.querySelector === 'function'
               ? document.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
               : null;
+            var loadingEl = typeof document.querySelector === 'function'
+              ? document.querySelector('.rz-progressbar, .rz-datatable-loading, .mud-progress-circular, .mud-progress-linear, .mud-overlay-visible, [role="progressbar"]')
+              : null;
+            var isLoading = Boolean(loadingEl && (loadingEl.offsetParent === undefined || loadingEl.offsetParent !== null));
             var onTicket = isRecallTicketLocation(location);
             var snap = onTicket ? parseRecallTicketFromDocument(document, location) : null;
             return {
@@ -11244,6 +11324,7 @@ function buildRecallPortalBootstrapJs() {
               hasVisibleSearchInput: isInputVisible,
               hasAnySearchInput: Boolean(inp),
               hasMenuToggle: Boolean(menuBtn),
+              isLoading: isLoading,
               snackbarText: getRecallElementText(snackEl),
               snapshot: snap
             };
@@ -11476,9 +11557,11 @@ async function searchRecallStaffOptions(rawQuery = '', ctx = {}) {
     };
   }
 
-  await sleep(350);
+  const pollTimeoutMs = Number(ctx.pollTimeoutMs) > 0 ? Number(ctx.pollTimeoutMs) : 4000;
+  const pollIntervalMs = Number(ctx.pollIntervalMs) > 0 ? Number(ctx.pollIntervalMs) : 180;
+  await sleep(Math.min(200, pollIntervalMs));
   const qLower = query.toLowerCase();
-  const pollDeadline = Date.now() + 2200;
+  const pollDeadline = Date.now() + pollTimeoutMs;
   while (Date.now() < pollDeadline) {
     const cur = await callRecallStaffOp('read_dialog', {}, ctx);
     if (!cur || !cur.isOpen) {
@@ -11492,11 +11575,19 @@ async function searchRecallStaffOptions(rawQuery = '', ctx = {}) {
     const opts = Array.isArray(cur.staffOptions) ? cur.staffOptions : [];
     const curSig = opts.join('|');
     const allMatch =
-      !qLower || (opts.length > 0 && opts.every((o) => o.toLowerCase().includes(qLower)));
-    if (curSig !== prevSig || allMatch) {
+      Boolean(qLower) &&
+      opts.length > 0 &&
+      opts.every((o) => o.toLowerCase().includes(qLower));
+    const changed = curSig !== prevSig;
+    if (
+      qLower
+        ? allMatch ||
+          (changed && (opts.length === 0 || opts.some((o) => o.toLowerCase().includes(qLower))))
+        : changed
+    ) {
       break;
     }
-    await sleep(200);
+    await sleep(pollIntervalMs);
   }
 
   return {
@@ -11685,8 +11776,10 @@ async function triggerRecallPortalAction(actionType, payload = {}, doc = null) {
 
 async function loadRecallTicketViaAndroidPortal(
   requestedContract,
-  { onProgress = null, forceReload = false } = {}
+  { onProgress = null, forceReload = false, emptySettleMs = 3200, itemsSettleMs = 1200 } = {}
 ) {
+  const resolvedEmptySettleMs = Number(emptySettleMs) > 0 ? Number(emptySettleMs) : 3200;
+  const resolvedItemsSettleMs = Number(itemsSettleMs) > 0 ? Number(itemsSettleMs) : 1200;
   const notify = (msg) => {
     if (typeof onProgress === 'function' && msg) {
       onProgress(msg);
@@ -11700,7 +11793,10 @@ async function loadRecallTicketViaAndroidPortal(
       curCheck.value &&
       !curCheck.value.sessionExpired &&
       curCheck.value.onTicket &&
-      curCheck.value.snapshot
+      curCheck.value.snapshot &&
+      (curCheck.value.snapshot.tickets.length > 0 ||
+        curCheck.value.snapshot.items.length > 0 ||
+        curCheck.value.snapshot.hasEmptyNotice)
     ) {
       const curSnap = curCheck.value.snapshot;
       if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
@@ -11818,7 +11914,14 @@ async function loadRecallTicketViaAndroidPortal(
     }
     if (stRes.ok && stRes.value) {
       const v = stRes.value;
-      if (v.onTicket && v.snapshot && (!v.snapshot.contract || v.snapshot.contract === requestedContract)) {
+      if (
+        v.onTicket &&
+        v.snapshot &&
+        (v.snapshot.tickets.length > 0 ||
+          v.snapshot.items.length > 0 ||
+          v.snapshot.hasEmptyNotice) &&
+        (!v.snapshot.contract || v.snapshot.contract === requestedContract)
+      ) {
         return {
           status: 'ok',
           mode: 'live',
@@ -11856,34 +11959,85 @@ async function loadRecallTicketViaAndroidPortal(
   }
 
   notify(`Đang mở chi tiết phiếu thu hồi HĐ ${requestedContract}…`);
+  let emptyTicketSeenAt = 0;
+  let ticketsOnlySeenAt = 0;
+  let lastEmptySnapshot = null;
   const ticketDeadline = Date.now() + 14000;
   while (Date.now() < ticketDeadline) {
-    await sleep(350);
+    await sleep(300);
     const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
     if (!stRes.ok || !stRes.value) continue;
     const v = stRes.value;
-    if (
-      v.onTicket &&
-      v.snapshot &&
-      (v.snapshot.contract ||
-        v.snapshot.hasEmptyNotice ||
-        v.snapshot.tickets.length > 0 ||
-        v.snapshot.items.length > 0)
-    ) {
-      await sleep(250);
-      const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
-      const finalSnap =
-        (freshSnapRes.ok && freshSnapRes.value) || v.snapshot;
-      if (!finalSnap.contract) {
-        finalSnap.contract = requestedContract;
+    if (v.onTicket && v.snapshot) {
+      const snap = v.snapshot;
+      const contractMatches = !snap.contract || snap.contract === requestedContract;
+      if (contractMatches) {
+        const hasTickets = Array.isArray(snap.tickets) && snap.tickets.length > 0;
+        const hasItems = Array.isArray(snap.items) && snap.items.length > 0;
+
+        if (hasItems) {
+          await sleep(200);
+          const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+          const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+          if (!finalSnap.contract) {
+            finalSnap.contract = requestedContract;
+          }
+          return {
+            status: 'ok',
+            mode: 'live',
+            snapshot: finalSnap,
+            requestedContract,
+            contractMismatch: false,
+          };
+        }
+
+        if (hasTickets) {
+          if (!ticketsOnlySeenAt) {
+            ticketsOnlySeenAt = Date.now();
+          }
+          if (!v.isLoading && Date.now() - ticketsOnlySeenAt >= resolvedItemsSettleMs) {
+            const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+            const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+            if (!finalSnap.contract) {
+              finalSnap.contract = requestedContract;
+            }
+            return {
+              status: 'ok',
+              mode: 'live',
+              snapshot: finalSnap,
+              requestedContract,
+              contractMismatch: false,
+            };
+          }
+          continue;
+        }
+
+        if (snap.contract || snap.hasEmptyNotice) {
+          lastEmptySnapshot = snap;
+          if (!emptyTicketSeenAt) {
+            emptyTicketSeenAt = Date.now();
+          }
+          const settledElapsed = Date.now() - emptyTicketSeenAt;
+          const requiredWait = v.isLoading
+            ? Math.max(resolvedEmptySettleMs, 6000)
+            : resolvedEmptySettleMs;
+          if (settledElapsed >= requiredWait) {
+            const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+            const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+            if (!finalSnap.contract) {
+              finalSnap.contract = requestedContract;
+            }
+            return {
+              status: 'ok',
+              mode: 'live',
+              snapshot: finalSnap,
+              requestedContract,
+              contractMismatch: false,
+            };
+          }
+          continue;
+        }
       }
-      return {
-        status: 'ok',
-        mode: 'live',
-        snapshot: finalSnap,
-        requestedContract,
-        contractMismatch: false,
-      };
     }
     if (
       !v.onTicket &&
@@ -11897,6 +12051,21 @@ async function loadRecallTicketViaAndroidPortal(
         message: v.snackbarText,
       };
     }
+  }
+
+  if (lastEmptySnapshot) {
+    const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+    const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || lastEmptySnapshot;
+    if (!finalSnap.contract) {
+      finalSnap.contract = requestedContract;
+    }
+    return {
+      status: 'ok',
+      mode: 'live',
+      snapshot: finalSnap,
+      requestedContract,
+      contractMismatch: false,
+    };
   }
 
   return {
@@ -11925,6 +12094,8 @@ async function loadRecallTicketContext(rawContractId, ctx = {}) {
     return loadRecallTicketViaAndroidPortal(requestedContract, {
       onProgress: ctx.onProgress || null,
       forceReload: Boolean(ctx.forceReload),
+      emptySettleMs: ctx.emptySettleMs,
+      itemsSettleMs: ctx.itemsSettleMs,
     });
   }
 
@@ -15787,12 +15958,18 @@ function mountRemoteInside({
   }
 
   let recallStaffSearchTimer = null;
+  let recallStaffSearchSeq = 0;
 
-  function resetRecallModalState() {
+  function cancelPendingRecallStaffSearch() {
     if (recallStaffSearchTimer) {
       clearTimeout(recallStaffSearchTimer);
       recallStaffSearchTimer = null;
     }
+    recallStaffSearchSeq += 1;
+  }
+
+  function resetRecallModalState() {
+    cancelPendingRecallStaffSearch();
     state.recallLoading = false;
     state.recallProgress = '';
     state.recallError = '';
@@ -17408,10 +17585,7 @@ function mountRemoteInside({
     { clearNotice = false, forceReload = false } = {}
   ) {
     if (forceReload) {
-      if (recallStaffSearchTimer) {
-        clearTimeout(recallStaffSearchTimer);
-        recallStaffSearchTimer = null;
-      }
+      cancelPendingRecallStaffSearch();
       state.recallStaffEdit = null;
     }
     state.recallLoading = true;
@@ -17477,10 +17651,7 @@ function mountRemoteInside({
   }
 
   function closeRecallStaffPanel({ closeRemote = true } = {}) {
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
     const hadEdit = Boolean(state.recallStaffEdit);
     state.recallStaffEdit = null;
     renderConfirm();
@@ -17489,6 +17660,19 @@ function mountRemoteInside({
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
       }).catch(() => {});
+    }
+  }
+
+  async function closeRecallStaffEditBeforeSwitch(isDemo) {
+    cancelPendingRecallStaffSearch();
+    const hadStaffEdit = Boolean(state.recallStaffEdit);
+    state.recallStaffEdit = null;
+    if (!isDemo && hadStaffEdit) {
+      await closeRecallStaffEditor({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 180));
     }
   }
 
@@ -17548,10 +17732,8 @@ function mountRemoteInside({
 
   async function handleRecallOpenStaffEdit(item) {
     if (!item) return;
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
+    const openSeq = recallStaffSearchSeq;
     const isDemo = state.recallMode === 'demo';
     state.recallArmedCreate = false;
     state.recallNotice = '';
@@ -17570,6 +17752,12 @@ function mountRemoteInside({
       selectedStaff: '',
     };
     renderConfirm();
+    if (confirmLayer) {
+      const staffPanel = confirmLayer.querySelector('.ri-recall-staff-panel');
+      if (staffPanel && typeof staffPanel.scrollIntoView === 'function') {
+        staffPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
 
     try {
       const res = await openRecallStaffEditor(
@@ -17585,6 +17773,7 @@ function mountRemoteInside({
         }
       );
       if (
+        openSeq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit ||
@@ -17620,6 +17809,7 @@ function mountRemoteInside({
             forceDemo: isDemo,
           });
           if (
+            openSeq !== recallStaffSearchSeq ||
             !state.confirmAction ||
             state.confirmAction.id !== 'manage_recall' ||
             !state.recallStaffEdit ||
@@ -17641,6 +17831,7 @@ function mountRemoteInside({
       }
     } catch (err) {
       if (
+        openSeq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit
@@ -17658,6 +17849,7 @@ function mountRemoteInside({
   async function handleRecallSearchStaff(rawQuery = '', { updateOptionsOnly = false } = {}) {
     const edit = state.recallStaffEdit;
     if (!edit || edit.loading || edit.submitting) return;
+    const seq = ++recallStaffSearchSeq;
     const targetRowIndex = edit.rowIndex;
     const isDemo = state.recallMode === 'demo';
     const cleanQuery = String(rawQuery || '').trim();
@@ -17681,6 +17873,7 @@ function mountRemoteInside({
         forceDemo: isDemo,
       });
       if (
+        seq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit ||
@@ -17707,9 +17900,11 @@ function mountRemoteInside({
       }
     } catch (err) {
       if (
+        seq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
-        !state.recallStaffEdit
+        !state.recallStaffEdit ||
+        state.recallStaffEdit.rowIndex !== targetRowIndex
       ) {
         return;
       }
@@ -17803,10 +17998,7 @@ function mountRemoteInside({
   }
 
   function collapseForRecallDialog(actionLabel) {
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
     state.recallStaffEdit = null;
     state.recallArmedCreate = false;
     if (canControlAndroidPortal() && showAndroidPortalOverlay(actionLabel)) {
@@ -23340,10 +23532,7 @@ function mountRemoteInside({
             staffSearchInp.addEventListener('keydown', (e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                if (recallStaffSearchTimer) {
-                  clearTimeout(recallStaffSearchTimer);
-                  recallStaffSearchTimer = null;
-                }
+                cancelPendingRecallStaffSearch();
                 handleRecallSearchStaff(staffSearchInp.value);
               }
             });
@@ -23360,13 +23549,10 @@ function mountRemoteInside({
                 el('button', {
                   type: 'button',
                   className: 'ri-secondary-btn',
-                  disabled: edit.submitting || edit.searching || Boolean(dlg.staffDisabled),
+                  disabled: edit.submitting || Boolean(dlg.staffDisabled),
                   text: edit.searching ? 'Đang tìm…' : 'Tìm KTV',
                   onClick: () => {
-                    if (recallStaffSearchTimer) {
-                      clearTimeout(recallStaffSearchTimer);
-                      recallStaffSearchTimer = null;
-                    }
+                    cancelPendingRecallStaffSearch();
                     handleRecallSearchStaff(staffSearchInp.value);
                   },
                 }),
@@ -23531,7 +23717,7 @@ function mountRemoteInside({
                 disabled: !isDemo && !snap.canAddEquipment,
                 text: '+ Thêm thiết bị',
                 onClick: async () => {
-                  state.recallStaffEdit = null;
+                  await closeRecallStaffEditBeforeSwitch(isDemo);
                   if (isDemo) {
                     state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
                     state.recallNoticeTone = 'ok';
@@ -23555,10 +23741,7 @@ function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Làm mới',
                 onClick: () => {
-                  if (recallStaffSearchTimer) {
-                    clearTimeout(recallStaffSearchTimer);
-                    recallStaffSearchTimer = null;
-                  }
+                  cancelPendingRecallStaffSearch();
                   state.recallStaffEdit = null;
                   loadRecallModal(contractId);
                 },
@@ -23708,7 +23891,7 @@ function mountRemoteInside({
                           className: 'ri-secondary-btn',
                           text: 'Sửa vật tư',
                           onClick: async () => {
-                            state.recallStaffEdit = null;
+                            await closeRecallStaffEditBeforeSwitch(isDemo);
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
                               state.recallNoticeTone = 'ok';
@@ -23739,6 +23922,7 @@ function mountRemoteInside({
                           className: 'ri-secondary-btn',
                           text: '+ TB phụ',
                           onClick: async () => {
+                            await closeRecallStaffEditBeforeSwitch(isDemo);
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm "+ Thêm thiết bị phụ" cho "${item.name}".`;
                               state.recallNoticeTone = 'ok';

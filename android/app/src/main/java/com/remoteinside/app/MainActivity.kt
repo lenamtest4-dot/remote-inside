@@ -17,6 +17,7 @@ import android.os.Looper
 import android.os.Message
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.SslErrorHandler
@@ -35,6 +36,8 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -53,6 +56,7 @@ import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var rootContainer: View
     private lateinit var consoleWebView: WebView
     private lateinit var ssoWebView: WebView
     private lateinit var portalOverlay: LinearLayout
@@ -106,6 +110,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        rootContainer = findViewById(R.id.rootContainer)
         consoleWebView = findViewById(R.id.consoleWebView)
         ssoWebView = findViewById(R.id.ssoWebView)
         portalOverlay = findViewById(R.id.portalOverlay)
@@ -116,6 +121,15 @@ class MainActivity : AppCompatActivity() {
         btnPortalBack = findViewById(R.id.btnPortalBack)
         btnPortalReload = findViewById(R.id.btnPortalReload)
         btnPortalDone = findViewById(R.id.btnPortalDone)
+
+        ViewCompat.setOnApplyWindowInsetsListener(rootContainer) { view, windowInsets ->
+            val sysBars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val ime = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
+            val bottomInset = maxOf(sysBars.bottom, ime.bottom)
+            view.setPadding(sysBars.left, sysBars.top, sysBars.right, bottomInset)
+            windowInsets
+        }
+        ViewCompat.requestApplyInsets(rootContainer)
 
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
@@ -772,6 +786,7 @@ class MainActivity : AppCompatActivity() {
             portalProgress.visibility = View.VISIBLE
             portalProgress.progress = 15
             portalOverlay.visibility = View.VISIBLE
+            ViewCompat.requestApplyInsets(rootContainer)
             portalWebView.loadUrl(url)
         }
     }
@@ -794,6 +809,15 @@ class MainActivity : AppCompatActivity() {
             tvPortalUrl.text = portalWebView.url.orEmpty()
             portalProgress.visibility = View.GONE
             portalOverlay.visibility = View.VISIBLE
+            ViewCompat.requestApplyInsets(rootContainer)
+        }
+    }
+
+    private fun hideSoftKeyboard(targetView: View?) {
+        val view = targetView ?: currentFocus ?: rootContainer
+        runCatching {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(view.windowToken, 0)
         }
     }
 
@@ -806,6 +830,8 @@ class MainActivity : AppCompatActivity() {
         if (portalOverlay.visibility != View.VISIBLE) {
             return
         }
+        portalWebView.clearFocus()
+        hideSoftKeyboard(portalWebView)
         portalOverlay.visibility = View.INVISIBLE
         CookieManager.getInstance().flush()
         consoleWebView.evaluateJavascript(

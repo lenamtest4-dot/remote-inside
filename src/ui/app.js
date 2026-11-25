@@ -938,12 +938,18 @@ export function mountRemoteInside({
   }
 
   let recallStaffSearchTimer = null;
+  let recallStaffSearchSeq = 0;
 
-  function resetRecallModalState() {
+  function cancelPendingRecallStaffSearch() {
     if (recallStaffSearchTimer) {
       clearTimeout(recallStaffSearchTimer);
       recallStaffSearchTimer = null;
     }
+    recallStaffSearchSeq += 1;
+  }
+
+  function resetRecallModalState() {
+    cancelPendingRecallStaffSearch();
     state.recallLoading = false;
     state.recallProgress = '';
     state.recallError = '';
@@ -2559,10 +2565,7 @@ export function mountRemoteInside({
     { clearNotice = false, forceReload = false } = {}
   ) {
     if (forceReload) {
-      if (recallStaffSearchTimer) {
-        clearTimeout(recallStaffSearchTimer);
-        recallStaffSearchTimer = null;
-      }
+      cancelPendingRecallStaffSearch();
       state.recallStaffEdit = null;
     }
     state.recallLoading = true;
@@ -2628,10 +2631,7 @@ export function mountRemoteInside({
   }
 
   function closeRecallStaffPanel({ closeRemote = true } = {}) {
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
     const hadEdit = Boolean(state.recallStaffEdit);
     state.recallStaffEdit = null;
     renderConfirm();
@@ -2640,6 +2640,19 @@ export function mountRemoteInside({
         pageDocument,
         pageLocation: pageWindow ? pageWindow.location : null,
       }).catch(() => {});
+    }
+  }
+
+  async function closeRecallStaffEditBeforeSwitch(isDemo) {
+    cancelPendingRecallStaffSearch();
+    const hadStaffEdit = Boolean(state.recallStaffEdit);
+    state.recallStaffEdit = null;
+    if (!isDemo && hadStaffEdit) {
+      await closeRecallStaffEditor({
+        pageDocument,
+        pageLocation: pageWindow ? pageWindow.location : null,
+      }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 180));
     }
   }
 
@@ -2699,10 +2712,8 @@ export function mountRemoteInside({
 
   async function handleRecallOpenStaffEdit(item) {
     if (!item) return;
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
+    const openSeq = recallStaffSearchSeq;
     const isDemo = state.recallMode === 'demo';
     state.recallArmedCreate = false;
     state.recallNotice = '';
@@ -2721,6 +2732,12 @@ export function mountRemoteInside({
       selectedStaff: '',
     };
     renderConfirm();
+    if (confirmLayer) {
+      const staffPanel = confirmLayer.querySelector('.ri-recall-staff-panel');
+      if (staffPanel && typeof staffPanel.scrollIntoView === 'function') {
+        staffPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
 
     try {
       const res = await openRecallStaffEditor(
@@ -2736,6 +2753,7 @@ export function mountRemoteInside({
         }
       );
       if (
+        openSeq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit ||
@@ -2771,6 +2789,7 @@ export function mountRemoteInside({
             forceDemo: isDemo,
           });
           if (
+            openSeq !== recallStaffSearchSeq ||
             !state.confirmAction ||
             state.confirmAction.id !== 'manage_recall' ||
             !state.recallStaffEdit ||
@@ -2792,6 +2811,7 @@ export function mountRemoteInside({
       }
     } catch (err) {
       if (
+        openSeq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit
@@ -2809,6 +2829,7 @@ export function mountRemoteInside({
   async function handleRecallSearchStaff(rawQuery = '', { updateOptionsOnly = false } = {}) {
     const edit = state.recallStaffEdit;
     if (!edit || edit.loading || edit.submitting) return;
+    const seq = ++recallStaffSearchSeq;
     const targetRowIndex = edit.rowIndex;
     const isDemo = state.recallMode === 'demo';
     const cleanQuery = String(rawQuery || '').trim();
@@ -2832,6 +2853,7 @@ export function mountRemoteInside({
         forceDemo: isDemo,
       });
       if (
+        seq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
         !state.recallStaffEdit ||
@@ -2858,9 +2880,11 @@ export function mountRemoteInside({
       }
     } catch (err) {
       if (
+        seq !== recallStaffSearchSeq ||
         !state.confirmAction ||
         state.confirmAction.id !== 'manage_recall' ||
-        !state.recallStaffEdit
+        !state.recallStaffEdit ||
+        state.recallStaffEdit.rowIndex !== targetRowIndex
       ) {
         return;
       }
@@ -2954,10 +2978,7 @@ export function mountRemoteInside({
   }
 
   function collapseForRecallDialog(actionLabel) {
-    if (recallStaffSearchTimer) {
-      clearTimeout(recallStaffSearchTimer);
-      recallStaffSearchTimer = null;
-    }
+    cancelPendingRecallStaffSearch();
     state.recallStaffEdit = null;
     state.recallArmedCreate = false;
     if (canControlAndroidPortal() && showAndroidPortalOverlay(actionLabel)) {
@@ -8491,10 +8512,7 @@ export function mountRemoteInside({
             staffSearchInp.addEventListener('keydown', (e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
-                if (recallStaffSearchTimer) {
-                  clearTimeout(recallStaffSearchTimer);
-                  recallStaffSearchTimer = null;
-                }
+                cancelPendingRecallStaffSearch();
                 handleRecallSearchStaff(staffSearchInp.value);
               }
             });
@@ -8511,13 +8529,10 @@ export function mountRemoteInside({
                 el('button', {
                   type: 'button',
                   className: 'ri-secondary-btn',
-                  disabled: edit.submitting || edit.searching || Boolean(dlg.staffDisabled),
+                  disabled: edit.submitting || Boolean(dlg.staffDisabled),
                   text: edit.searching ? 'Đang tìm…' : 'Tìm KTV',
                   onClick: () => {
-                    if (recallStaffSearchTimer) {
-                      clearTimeout(recallStaffSearchTimer);
-                      recallStaffSearchTimer = null;
-                    }
+                    cancelPendingRecallStaffSearch();
                     handleRecallSearchStaff(staffSearchInp.value);
                   },
                 }),
@@ -8682,7 +8697,7 @@ export function mountRemoteInside({
                 disabled: !isDemo && !snap.canAddEquipment,
                 text: '+ Thêm thiết bị',
                 onClick: async () => {
-                  state.recallStaffEdit = null;
+                  await closeRecallStaffEditBeforeSwitch(isDemo);
                   if (isDemo) {
                     state.recallNotice = 'Đã mô phỏng mở hộp thoại Thêm thiết bị thu hồi.';
                     state.recallNoticeTone = 'ok';
@@ -8706,10 +8721,7 @@ export function mountRemoteInside({
                 className: 'ri-secondary-btn',
                 text: 'Làm mới',
                 onClick: () => {
-                  if (recallStaffSearchTimer) {
-                    clearTimeout(recallStaffSearchTimer);
-                    recallStaffSearchTimer = null;
-                  }
+                  cancelPendingRecallStaffSearch();
                   state.recallStaffEdit = null;
                   loadRecallModal(contractId);
                 },
@@ -8859,7 +8871,7 @@ export function mountRemoteInside({
                           className: 'ri-secondary-btn',
                           text: 'Sửa vật tư',
                           onClick: async () => {
-                            state.recallStaffEdit = null;
+                            await closeRecallStaffEditBeforeSwitch(isDemo);
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm tên thiết bị "${item.name}" (#equipmentname) để mở form sửa.`;
                               state.recallNoticeTone = 'ok';
@@ -8890,6 +8902,7 @@ export function mountRemoteInside({
                           className: 'ri-secondary-btn',
                           text: '+ TB phụ',
                           onClick: async () => {
+                            await closeRecallStaffEditBeforeSwitch(isDemo);
                             if (isDemo) {
                               state.recallNotice = `Đã mô phỏng bấm "+ Thêm thiết bị phụ" cho "${item.name}".`;
                               state.recallNoticeTone = 'ok';

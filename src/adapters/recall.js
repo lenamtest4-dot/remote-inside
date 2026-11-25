@@ -788,18 +788,94 @@ export function triggerRecallFilterStaffDropdown(doc, rawQuery = '') {
       error: 'Không tìm thấy ô gõ tìm tên KTV bên trong danh sách Nhân viên.',
     };
   }
-  setRecallNativeInputValue(searchInput, query);
+
+  try {
+    if (typeof searchInput.focus === 'function') {
+      searchInput.focus();
+    }
+  } catch {
+    // Ignore focus failures on headless mocks
+  }
+
+  try {
+    const proto = typeof HTMLInputElement !== 'undefined' ? HTMLInputElement.prototype : null;
+    const desc = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+    if (desc && typeof desc.set === 'function') {
+      desc.set.call(searchInput, query);
+    } else {
+      searchInput.value = query;
+    }
+  } catch {
+    searchInput.value = query;
+  }
+
+  // Radzen.Blazor v4 DropDownBase binds @onkeydown (OnFilterKeyPress -> DebounceFilter) and ignores Enter/Change when FilterAsYouType=true.
+  let keyName = 'Backspace';
+  let keyCode = 'Backspace';
+  if (query) {
+    const lastChar = query.charAt(query.length - 1);
+    keyName = lastChar;
+    if (/^[a-zA-Z]$/.test(lastChar)) {
+      keyCode = `Key${lastChar.toUpperCase()}`;
+    } else if (/^[0-9]$/.test(lastChar)) {
+      keyCode = `Digit${lastChar}`;
+    } else {
+      keyCode = 'Unidentified';
+    }
+  }
+
   if (typeof searchInput.dispatchEvent === 'function') {
     try {
       if (typeof KeyboardEvent === 'function') {
         searchInput.dispatchEvent(
-          new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true })
+          new KeyboardEvent('keydown', { key: keyName, code: keyCode, bubbles: true, cancelable: true })
         );
       } else {
-        searchInput.dispatchEvent({ type: 'keyup', key: 'Enter', bubbles: true });
+        searchInput.dispatchEvent({ type: 'keydown', key: keyName, code: keyCode, bubbles: true });
       }
     } catch {
       // Ignore keyboard event failures on minimal mocks
+    }
+
+    try {
+      if (typeof InputEvent === 'function') {
+        searchInput.dispatchEvent(
+          new InputEvent('input', {
+            bubbles: true,
+            composed: true,
+            data: query || null,
+            inputType: query ? 'insertText' : 'deleteContentBackward',
+          })
+        );
+      } else if (typeof Event === 'function') {
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+      } else {
+        searchInput.dispatchEvent({ type: 'input', bubbles: true });
+      }
+    } catch {
+      // Ignore input event failures on minimal mocks
+    }
+
+    try {
+      if (typeof KeyboardEvent === 'function') {
+        searchInput.dispatchEvent(
+          new KeyboardEvent('keyup', { key: keyName, code: keyCode, bubbles: true, cancelable: true })
+        );
+      } else {
+        searchInput.dispatchEvent({ type: 'keyup', key: keyName, code: keyCode, bubbles: true });
+      }
+    } catch {
+      // Ignore keyboard event failures on minimal mocks
+    }
+
+    try {
+      if (typeof Event === 'function') {
+        searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        searchInput.dispatchEvent({ type: 'change', bubbles: true });
+      }
+    } catch {
+      // Ignore change event failures on minimal mocks
     }
   }
   return { ok: true, query };
@@ -1037,8 +1113,8 @@ function buildRecallPortalBootstrapJs() {
     .join('\n');
 
   return `
-    if (!window.__riRecallDom || window.__riRecallDomVersion !== 'v2') {
-      window.__riRecallDomVersion = 'v2';
+    if (!window.__riRecallDom || window.__riRecallDomVersion !== 'v3') {
+      window.__riRecallDomVersion = 'v3';
       window.__riRecallDom = (function() {
         var CONTRACT_REGEX = ${CONTRACT_REGEX.toString()};
         var RECALL_ENDPOINTS = ${JSON.stringify(RECALL_ENDPOINTS)};
@@ -1053,6 +1129,10 @@ function buildRecallPortalBootstrapJs() {
             var snackEl = typeof document.querySelector === 'function'
               ? document.querySelector('.mud-snackbar, .rz-notification-message, .rz-growl-message')
               : null;
+            var loadingEl = typeof document.querySelector === 'function'
+              ? document.querySelector('.rz-progressbar, .rz-datatable-loading, .mud-progress-circular, .mud-progress-linear, .mud-overlay-visible, [role="progressbar"]')
+              : null;
+            var isLoading = Boolean(loadingEl && (loadingEl.offsetParent === undefined || loadingEl.offsetParent !== null));
             var onTicket = isRecallTicketLocation(location);
             var snap = onTicket ? parseRecallTicketFromDocument(document, location) : null;
             return {
@@ -1063,6 +1143,7 @@ function buildRecallPortalBootstrapJs() {
               hasVisibleSearchInput: isInputVisible,
               hasAnySearchInput: Boolean(inp),
               hasMenuToggle: Boolean(menuBtn),
+              isLoading: isLoading,
               snackbarText: getRecallElementText(snackEl),
               snapshot: snap
             };
@@ -1295,9 +1376,11 @@ export async function searchRecallStaffOptions(rawQuery = '', ctx = {}) {
     };
   }
 
-  await sleep(350);
+  const pollTimeoutMs = Number(ctx.pollTimeoutMs) > 0 ? Number(ctx.pollTimeoutMs) : 4000;
+  const pollIntervalMs = Number(ctx.pollIntervalMs) > 0 ? Number(ctx.pollIntervalMs) : 180;
+  await sleep(Math.min(200, pollIntervalMs));
   const qLower = query.toLowerCase();
-  const pollDeadline = Date.now() + 2200;
+  const pollDeadline = Date.now() + pollTimeoutMs;
   while (Date.now() < pollDeadline) {
     const cur = await callRecallStaffOp('read_dialog', {}, ctx);
     if (!cur || !cur.isOpen) {
@@ -1311,11 +1394,19 @@ export async function searchRecallStaffOptions(rawQuery = '', ctx = {}) {
     const opts = Array.isArray(cur.staffOptions) ? cur.staffOptions : [];
     const curSig = opts.join('|');
     const allMatch =
-      !qLower || (opts.length > 0 && opts.every((o) => o.toLowerCase().includes(qLower)));
-    if (curSig !== prevSig || allMatch) {
+      Boolean(qLower) &&
+      opts.length > 0 &&
+      opts.every((o) => o.toLowerCase().includes(qLower));
+    const changed = curSig !== prevSig;
+    if (
+      qLower
+        ? allMatch ||
+          (changed && (opts.length === 0 || opts.some((o) => o.toLowerCase().includes(qLower))))
+        : changed
+    ) {
       break;
     }
-    await sleep(200);
+    await sleep(pollIntervalMs);
   }
 
   return {
@@ -1505,8 +1596,10 @@ export async function triggerRecallPortalAction(actionType, payload = {}, doc = 
 
 async function loadRecallTicketViaAndroidPortal(
   requestedContract,
-  { onProgress = null, forceReload = false } = {}
+  { onProgress = null, forceReload = false, emptySettleMs = 3200, itemsSettleMs = 1200 } = {}
 ) {
+  const resolvedEmptySettleMs = Number(emptySettleMs) > 0 ? Number(emptySettleMs) : 3200;
+  const resolvedItemsSettleMs = Number(itemsSettleMs) > 0 ? Number(itemsSettleMs) : 1200;
   const notify = (msg) => {
     if (typeof onProgress === 'function' && msg) {
       onProgress(msg);
@@ -1520,7 +1613,10 @@ async function loadRecallTicketViaAndroidPortal(
       curCheck.value &&
       !curCheck.value.sessionExpired &&
       curCheck.value.onTicket &&
-      curCheck.value.snapshot
+      curCheck.value.snapshot &&
+      (curCheck.value.snapshot.tickets.length > 0 ||
+        curCheck.value.snapshot.items.length > 0 ||
+        curCheck.value.snapshot.hasEmptyNotice)
     ) {
       const curSnap = curCheck.value.snapshot;
       if (!requestedContract || !curSnap.contract || curSnap.contract === requestedContract) {
@@ -1638,7 +1734,14 @@ async function loadRecallTicketViaAndroidPortal(
     }
     if (stRes.ok && stRes.value) {
       const v = stRes.value;
-      if (v.onTicket && v.snapshot && (!v.snapshot.contract || v.snapshot.contract === requestedContract)) {
+      if (
+        v.onTicket &&
+        v.snapshot &&
+        (v.snapshot.tickets.length > 0 ||
+          v.snapshot.items.length > 0 ||
+          v.snapshot.hasEmptyNotice) &&
+        (!v.snapshot.contract || v.snapshot.contract === requestedContract)
+      ) {
         return {
           status: 'ok',
           mode: 'live',
@@ -1676,34 +1779,85 @@ async function loadRecallTicketViaAndroidPortal(
   }
 
   notify(`Đang mở chi tiết phiếu thu hồi HĐ ${requestedContract}…`);
+  let emptyTicketSeenAt = 0;
+  let ticketsOnlySeenAt = 0;
+  let lastEmptySnapshot = null;
   const ticketDeadline = Date.now() + 14000;
   while (Date.now() < ticketDeadline) {
-    await sleep(350);
+    await sleep(300);
     const stRes = await evalRecallDom('window.__riRecallDom.inspectState()');
     if (!stRes.ok || !stRes.value) continue;
     const v = stRes.value;
-    if (
-      v.onTicket &&
-      v.snapshot &&
-      (v.snapshot.contract ||
-        v.snapshot.hasEmptyNotice ||
-        v.snapshot.tickets.length > 0 ||
-        v.snapshot.items.length > 0)
-    ) {
-      await sleep(250);
-      const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
-      const finalSnap =
-        (freshSnapRes.ok && freshSnapRes.value) || v.snapshot;
-      if (!finalSnap.contract) {
-        finalSnap.contract = requestedContract;
+    if (v.onTicket && v.snapshot) {
+      const snap = v.snapshot;
+      const contractMatches = !snap.contract || snap.contract === requestedContract;
+      if (contractMatches) {
+        const hasTickets = Array.isArray(snap.tickets) && snap.tickets.length > 0;
+        const hasItems = Array.isArray(snap.items) && snap.items.length > 0;
+
+        if (hasItems) {
+          await sleep(200);
+          const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+          const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+          if (!finalSnap.contract) {
+            finalSnap.contract = requestedContract;
+          }
+          return {
+            status: 'ok',
+            mode: 'live',
+            snapshot: finalSnap,
+            requestedContract,
+            contractMismatch: false,
+          };
+        }
+
+        if (hasTickets) {
+          if (!ticketsOnlySeenAt) {
+            ticketsOnlySeenAt = Date.now();
+          }
+          if (!v.isLoading && Date.now() - ticketsOnlySeenAt >= resolvedItemsSettleMs) {
+            const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+            const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+            if (!finalSnap.contract) {
+              finalSnap.contract = requestedContract;
+            }
+            return {
+              status: 'ok',
+              mode: 'live',
+              snapshot: finalSnap,
+              requestedContract,
+              contractMismatch: false,
+            };
+          }
+          continue;
+        }
+
+        if (snap.contract || snap.hasEmptyNotice) {
+          lastEmptySnapshot = snap;
+          if (!emptyTicketSeenAt) {
+            emptyTicketSeenAt = Date.now();
+          }
+          const settledElapsed = Date.now() - emptyTicketSeenAt;
+          const requiredWait = v.isLoading
+            ? Math.max(resolvedEmptySettleMs, 6000)
+            : resolvedEmptySettleMs;
+          if (settledElapsed >= requiredWait) {
+            const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+            const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || snap;
+            if (!finalSnap.contract) {
+              finalSnap.contract = requestedContract;
+            }
+            return {
+              status: 'ok',
+              mode: 'live',
+              snapshot: finalSnap,
+              requestedContract,
+              contractMismatch: false,
+            };
+          }
+          continue;
+        }
       }
-      return {
-        status: 'ok',
-        mode: 'live',
-        snapshot: finalSnap,
-        requestedContract,
-        contractMismatch: false,
-      };
     }
     if (
       !v.onTicket &&
@@ -1717,6 +1871,21 @@ async function loadRecallTicketViaAndroidPortal(
         message: v.snackbarText,
       };
     }
+  }
+
+  if (lastEmptySnapshot) {
+    const freshSnapRes = await evalRecallDom('window.__riRecallDom.readSnapshot()');
+    const finalSnap = (freshSnapRes.ok && freshSnapRes.value) || lastEmptySnapshot;
+    if (!finalSnap.contract) {
+      finalSnap.contract = requestedContract;
+    }
+    return {
+      status: 'ok',
+      mode: 'live',
+      snapshot: finalSnap,
+      requestedContract,
+      contractMismatch: false,
+    };
   }
 
   return {
@@ -1746,6 +1915,8 @@ export async function loadRecallTicketContext(rawContractId, ctx = {}) {
     return loadRecallTicketViaAndroidPortal(requestedContract, {
       onProgress: ctx.onProgress || null,
       forceReload: Boolean(ctx.forceReload),
+      emptySettleMs: ctx.emptySettleMs,
+      itemsSettleMs: ctx.itemsSettleMs,
     });
   }
 

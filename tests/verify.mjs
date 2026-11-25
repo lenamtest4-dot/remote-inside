@@ -5417,13 +5417,18 @@ async function runTests() {
   assert.equal(demoOkSubmit.staff, 'KTV.MAU03');
   assert.equal((await closeRecallStaffEditor({ forceDemo: true })).ok, true);
 
-  // Mock NextGen Radzen Blazor edit dialog DOM (supports body-portaled #popup-<ddId>, input+keyup filter, validation & close on save)
-  function createMockRadzenRecallSandbox({ validationFailureMode = false } = {}) {
+  // Mock NextGen Radzen Blazor v4 edit dialog DOM (supports body-portaled #popup-<ddId>, OnFilterKeyPress keydown filter + async delay, validation & close on save)
+  function createMockRadzenRecallSandbox({
+    validationFailureMode = false,
+    asyncDelayMs = 0,
+  } = {}) {
     let dialogOpen = false;
     let staffPanelVisible = false;
+    let searchFocused = false;
     let currentCollector = 'KTV.MAU01';
     let dialogStaff = 'KTV.MAU01';
     let filterQuery = '';
+    let filterTimer = null;
     let filterEvents = [];
     let snackbarText = '';
     let validationMsgs = [];
@@ -5438,9 +5443,33 @@ async function runTests() {
       id: 'search-staffDd',
       className: 'rz-dropdown-filter rz-inputtext',
       value: '',
+      focus() {
+        searchFocused = true;
+      },
       dispatchEvent(evt) {
-        filterEvents.push(evt.type);
-        filterQuery = String(searchInputEl.value || '');
+        const type = String((evt && evt.type) || '');
+        const key = String((evt && evt.key) || '');
+        const code = String((evt && evt.code) || '');
+        filterEvents.push({ type, key, code });
+        if (type === 'keydown') {
+          const isNavOrControl =
+            key === 'Enter' ||
+            key === 'Escape' ||
+            key === 'Tab' ||
+            key.startsWith('Arrow') ||
+            code === 'Enter';
+          if (!isNavOrControl) {
+            const nextVal = String(searchInputEl.value || '');
+            if (filterTimer) clearTimeout(filterTimer);
+            if (asyncDelayMs > 0) {
+              filterTimer = setTimeout(() => {
+                filterQuery = nextVal;
+              }, asyncDelayMs);
+            } else {
+              filterQuery = nextVal;
+            }
+          }
+        }
       },
     };
 
@@ -5651,11 +5680,12 @@ async function runTests() {
       doc,
       getCollector: () => currentCollector,
       getFilterEvents: () => filterEvents.slice(),
+      isSearchFocused: () => searchFocused,
       isDialogOpen: () => dialogOpen,
     };
   }
 
-  // Test low-level synchronous helpers directly against Desktop DOM
+  // Test low-level synchronous helpers directly against Desktop DOM (Radzen v4 OnFilterKeyPress)
   const desktopMock = createMockRadzenRecallSandbox();
   assert.equal(findRecallOpenDialog(desktopMock.doc), null);
   assert.equal(triggerRecallEditEquipment(desktopMock.doc, 0).ok, true);
@@ -5672,10 +5702,25 @@ async function runTests() {
   );
   assert.equal(triggerRecallFilterStaffDropdown(desktopMock.doc, 'MAU02').ok, true);
   assert.equal(
-    desktopMock.getFilterEvents().includes('input') &&
-      desktopMock.getFilterEvents().includes('keyup'),
+    desktopMock.isSearchFocused(),
     true,
-    'Staff search filter must dispatch both input and keyup for Radzen AllowFiltering'
+    'Staff search filter must focus .rz-dropdown-filter input'
+  );
+  const desktopFilterEvents = desktopMock.getFilterEvents();
+  assert.ok(
+    desktopFilterEvents.some((e) => e.type === 'keydown' && e.key && e.key !== 'Enter'),
+    'Staff search filter must dispatch non-Enter keydown for Radzen v4 OnFilterKeyPress'
+  );
+  assert.ok(desktopFilterEvents.some((e) => e.type === 'input'));
+  assert.ok(
+    desktopFilterEvents.some((e) => e.type === 'keyup' && e.key && e.key !== 'Enter'),
+    'Staff search filter must dispatch non-Enter keyup'
+  );
+  assert.ok(desktopFilterEvents.some((e) => e.type === 'change'));
+  assert.equal(
+    desktopFilterEvents.some((e) => e.key === 'Enter' || e.code === 'Enter'),
+    false,
+    'Staff search filter must NEVER dispatch Enter on Radzen filter input'
   );
   assert.deepEqual(readRecallStaffDialogState(desktopMock.doc).staffOptions, ['KTV.MAU02']);
   assert.equal(triggerRecallPickStaffOption(desktopMock.doc, 'KTV.MAU02').picked, 'KTV.MAU02');
@@ -5688,12 +5733,19 @@ async function runTests() {
   const prevWin24 = globalThis.window;
   const androidMock = createMockRadzenRecallSandbox({ validationFailureMode: false });
   const androidErrMock = createMockRadzenRecallSandbox({ validationFailureMode: true });
+  const androidAsyncMock = createMockRadzenRecallSandbox({ asyncDelayMs: 260 });
   try {
     const sandbox24 = vm.createContext({
       window: {},
       document: androidMock.doc,
       location: androidMock.doc.location,
       Event: class MockEvt {
+        constructor(type, opts) {
+          this.type = type;
+          Object.assign(this, opts);
+        }
+      },
+      InputEvent: class MockInputEvt {
         constructor(type, opts) {
           this.type = type;
           Object.assign(this, opts);
@@ -5713,7 +5765,17 @@ async function runTests() {
       __riNativePending: new Map(),
       RemoteInsideNative: {
         httpRequest() {},
-        loadPortalBackground() {},
+        loadPortalBackground(payloadJson) {
+          const parsed = JSON.parse(payloadJson || '{}');
+          sandbox24.__riRecallDom = null;
+          sandbox24.__riRecallDomVersion = '';
+          queueMicrotask(() => {
+            globalThis.window.__riNativeResolve(
+              parsed.reqId,
+              JSON.stringify({ ok: true, status: 'ok', finalUrl: parsed.url || '' })
+            );
+          });
+        },
         evalPortalJs(payloadJson) {
           const parsed = JSON.parse(payloadJson);
           const wrapped =
@@ -5764,6 +5826,154 @@ async function runTests() {
     const closeRes24 = await closeRecallStaffEditor({ pageDocument: {} });
     assert.equal(closeRes24.ok, true);
     assert.equal(androidErrMock.isDialogOpen(), false);
+
+    // Bug #1 async Radzen filter & empty-query restore regression test
+    sandbox24.document = androidAsyncMock.doc;
+    const asyncOpen = await openRecallStaffEditor({ rowIndex: 0 }, { pageDocument: {} });
+    assert.equal(asyncOpen.status, 'ok');
+    const asyncFiltered = await searchRecallStaffOptions('mau03', {
+      pageDocument: {},
+      pollTimeoutMs: 2500,
+      pollIntervalMs: 80,
+    });
+    assert.equal(asyncFiltered.status, 'ok');
+    assert.deepEqual(asyncFiltered.options, ['KTV.MAU03']);
+    const asyncCleared = await searchRecallStaffOptions('', {
+      pageDocument: {},
+      pollTimeoutMs: 2500,
+      pollIntervalMs: 80,
+    });
+    assert.equal(asyncCleared.status, 'ok');
+    assert.equal(
+      asyncCleared.options.length,
+      5,
+      'Clearing staff filter must wait until Radzen async list restores all 5 options'
+    );
+
+    // Bug #2 delayed Blazor SignalR load regression test (banner renders before ticket cards + equipment grid)
+    let delayedPhase = 'search';
+    let delayedPollCount = 0;
+    let delayedEmptyBanner = false;
+    const delayedSearchInput = { value: '' };
+    const delayedSearchBtn = {
+      innerText: 'search',
+      className: 'rz-button',
+      click() {
+        delayedPhase = 'ticket';
+        delayedPollCount = 0;
+        delayedSandboxDoc.location.href = 'https://nextgen.fpt.net/resource/recall/recall-ticket';
+        delayedSandboxDoc.location.pathname = '/resource/recall/recall-ticket';
+      },
+    };
+    const delayedTicketCard = {
+      innerText:
+        '1 TIN/PNC Ngày tạo phiếu: 23/11/2026 09:00:00 Người tạo phiếu: ktv.mau01',
+      className: 'ticketinf Card-Ticket-Selected',
+      querySelector: () => ({ id: '900888', className: 'Card-Ticket Card-Ticket-Selected' }),
+    };
+    const delayedItemRow = {
+      querySelectorAll: (sel) =>
+        sel === 'td'
+          ? [
+              'Box Mau 01',
+              '',
+              'Box OTT',
+              'AABBCCDDEEFF',
+              '1',
+              'Chưa thu hồi',
+              '',
+              'KTV.MAU01',
+              '',
+              'Thanh lý hợp đồng tại nhà',
+              'Hàng nhập lại',
+              'Hàng tái sử dụng',
+              'Có',
+              'SR',
+            ].map((tx) => ({ innerText: tx }))
+          : [],
+      querySelector: (sel) =>
+        sel.includes('equipmentname') ? { id: 'equipmentname', innerText: 'Box Mau 01' } : null,
+    };
+    const delayedGrid = {
+      querySelectorAll: (sel) => {
+        if (sel === 'tbody tr') return delayedPollCount >= 4 ? [delayedItemRow] : [];
+        return [];
+      },
+    };
+    const delayedSandboxDoc = {
+      title: 'SGN999888',
+      location: {
+        href: 'https://nextgen.fpt.net/resource/recall',
+        hostname: 'nextgen.fpt.net',
+        pathname: '/resource/recall',
+      },
+      body: {
+        get innerText() {
+          if (delayedPhase === 'search') return 'Tra cứu phiếu thu hồi';
+          return delayedEmptyBanner
+            ? 'DANH SÁCH PHIẾU THU HỒI - SGN999889 Hợp đồng hiện chưa có phiếu thu hồi'
+            : 'DANH SÁCH PHIẾU THU HỒI - SGN999888';
+        },
+      },
+      querySelector(sel) {
+        if (delayedPhase === 'search' && sel.includes('placeholder') && sel.includes('hợp đồng')) {
+          return delayedSearchInput;
+        }
+        if (delayedPhase === 'ticket' && sel === '.rz-data-grid') {
+          return delayedPollCount >= 4 ? delayedGrid : null;
+        }
+        return null;
+      },
+      querySelectorAll(sel) {
+        if (delayedPhase === 'search' && sel === 'button') return [delayedSearchBtn];
+        if (delayedPhase === 'ticket') {
+          if (sel === 'h1,h2,h3,h4') {
+            delayedPollCount += 1;
+            return delayedPollCount >= 4 ? [{ innerText: 'Phiếu số 1' }] : [];
+          }
+          if (sel === '.ticketinf') {
+            return delayedPollCount >= 4 ? [delayedTicketCard] : [];
+          }
+        }
+        return [];
+      },
+    };
+
+    sandbox24.document = delayedSandboxDoc;
+    sandbox24.location = delayedSandboxDoc.location;
+    const delayedTicketRes = await loadRecallTicketContext('SGN999888', {
+      forceReload: true,
+      emptySettleMs: 1600,
+      itemsSettleMs: 500,
+    });
+    assert.equal(delayedTicketRes.status, 'ok');
+    assert.equal(
+      delayedTicketRes.snapshot.tickets.length,
+      1,
+      'Must NOT falsely return 0 tickets while Blazor SignalR is still populating cards/rows'
+    );
+    assert.equal(delayedTicketRes.snapshot.items.length, 1);
+
+    // Case 2: truly empty contract with hasEmptyNotice settles cleanly
+    delayedPhase = 'search';
+    delayedPollCount = 0;
+    delayedEmptyBanner = true;
+    delayedSandboxDoc.title = 'SGN999889';
+    delayedSandboxDoc.location.href = 'https://nextgen.fpt.net/resource/recall';
+    delayedSandboxDoc.location.pathname = '/resource/recall';
+    delayedSearchBtn.click = () => {
+      delayedPhase = 'ticket';
+      delayedPollCount = -999; // stays empty
+      delayedSandboxDoc.location.href = 'https://nextgen.fpt.net/resource/recall/recall-ticket';
+      delayedSandboxDoc.location.pathname = '/resource/recall/recall-ticket';
+    };
+    const emptyTicketRes = await loadRecallTicketContext('SGN999889', {
+      forceReload: true,
+      emptySettleMs: 300,
+    });
+    assert.equal(emptyTicketRes.status, 'ok');
+    assert.equal(emptyTicketRes.snapshot.tickets.length, 0);
+    assert.equal(emptyTicketRes.snapshot.hasEmptyNotice, true);
   } finally {
     if (hadWin24) {
       globalThis.window = prevWin24;
@@ -5772,6 +5982,30 @@ async function runTests() {
     }
   }
 
+  // Bug #3 static Android keyboard & WindowInsets checks
+  const mainActivityKt = fs.readFileSync(
+    path.join(ROOT_DIR, 'android', 'app', 'src', 'main', 'java', 'com', 'remoteinside', 'app', 'MainActivity.kt'),
+    'utf8'
+  );
+  const activityMainXml = fs.readFileSync(
+    path.join(ROOT_DIR, 'android', 'app', 'src', 'main', 'res', 'layout', 'activity_main.xml'),
+    'utf8'
+  );
+  const androidManifestXml = fs.readFileSync(
+    path.join(ROOT_DIR, 'android', 'app', 'src', 'main', 'AndroidManifest.xml'),
+    'utf8'
+  );
+  assert.ok(mainActivityKt.includes('WindowInsetsCompat.Type.ime()'));
+  assert.ok(mainActivityKt.includes('ViewCompat.setOnApplyWindowInsetsListener'));
+  assert.ok(mainActivityKt.includes('hideSoftInputFromWindow'));
+  assert.ok(activityMainXml.includes('android:id="@+id/rootContainer"'));
+  assert.equal(
+    activityMainXml.includes('android:fitsSystemWindows="true"'),
+    false,
+    'activity_main.xml must delegate insets to MainActivity.kt without duplicate fitsSystemWindows'
+  );
+  assert.ok(androidManifestXml.includes('android:windowSoftInputMode="adjustResize"'));
+
   for (const token of [
     'openRecallStaffEditor',
     'searchRecallStaffOptions',
@@ -5779,6 +6013,9 @@ async function runTests() {
     'Đổi KTV',
     'ri-recall-staff-panel',
     '__riRecallDomVersion',
+    "'v3'",
+    'recallStaffSearchSeq',
+    'emptySettleMs',
   ]) {
     assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
     assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
@@ -5788,7 +6025,7 @@ async function runTests() {
     false,
     'Built recall staff editor bundles must pass forbiddenDemoDataRe with 0 matches'
   );
-  console.log('   OK: Vật tư thu hồi — Đổi / Cập nhật tên KTV tests passed.');
+  console.log('   OK: Vật tư thu hồi — Đổi / Cập nhật tên KTV & Radzen v4 / Keyboard inset tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

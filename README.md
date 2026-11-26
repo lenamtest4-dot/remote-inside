@@ -1,8 +1,8 @@
-# Remote Inside (v0.17.4)
+# Remote Inside (v0.18.0)
 
 Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nhẹ, tối ưu thao tác 1 tay trên **App Android (`.apk`)**, **iPhone 15+ Safari 1 chạm / `.ipa`** và **MacBook / PC** khi đi hiện trường. *(Các cổng đã dùng được luôn được xếp lên đầu thanh tab.)*
 
-- **Inside** (`inside.fpt.net` / `fox-erp.fpt.net`) — *Đã ghép đủ 7 lệnh*: Tra thông tin HĐ, **Phiếu triển khai FOX-ERP** (Xem phiếu, **Phân tuyến KTV** kèm tìm nhanh KTV, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User & Sửa SĐT CMR, Biên bản ĐT, Cập nhật Online), ByPass (CheckList ByPass), Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port) *(hỗ trợ làm sạch phiên riêng & đổi tài khoản IAM riêng cho từng cổng)*
+- **Inside** (`inside.fpt.net` / `fox-erp.fpt.net` / `partner.fpt.net`) — *Đã ghép đủ 8 lệnh*: Tra thông tin HĐ, **Phiếu triển khai FOX-ERP** (Xem phiếu, **Phân tuyến KTV** kèm tìm nhanh KTV, Khoản thu, Clear MAC vật tư, Hoàn tất phiếu, SĐT User & Sửa SĐT CMR, Biên bản ĐT, Cập nhật Online), **Phiếu bảo trì FOX-ERP & Chuyển Cloud Camera** (chọn phiếu bảo trì, **Điều chỉnh vật tư sử dụng & thu hồi** kèm kho MAC/lịch sử MAC Camera & Modem MAC tự động, kiểm tra trạng thái & mở nhanh **1 chạm Chuyển Cloud trên Partner** cùng mã `?q=...`, ghi nhận ban đầu, nguyên nhân lỗi, ghi chú, đóng/cập nhật kết quả xử lý & trả tình trạng), ByPass (CheckList ByPass), Reset MAC Modem/Box (+ Lịch sử), Kill Session (IP từng dòng), Clear OSP (Clear Serial tự đọc OLT/Port) *(hỗ trợ làm sạch phiên riêng & đổi tài khoản IAM riêng cho từng cổng)*
 - **Port** (`port.fpt.net` / `mvcport.fpt.net`) — *Đã ghép đủ 3 lệnh FTTH NEW*: Xem Port hiện tại, Lịch sử Port, Cấp/Đổi Port & Thu hồi Port *(tự động làm sạch cookie/cache riêng của Port như tab ẩn danh + làm mới OIDC IAM `https://iam.fpt.net` và kích hoạt `LeftMenu.aspx` / `mvcport.fpt.net` khi gặp lỗi 401; hỗ trợ đổi tài khoản IAM riêng mà không làm mất phiên cổng khác)*
 - **Vật tư** (`nextgen.fpt.net/resource/recall` & `/resource/equipment`) — *Thu hồi & Tồn nợ*: Phiếu thu hồi vật tư NextGen (thêm/sửa thiết bị, **Đổi / Cập nhật tên KTV theo từng dòng vật tư** với lọc danh sách KTV Radzen Blazor, chờ tải đủ phiếu/thiết bị, tạo phiếu `+`, ghi chú) và Tra cứu tồn nợ vật tư theo KTV (Báo cáo nợ); trên App Android & iOS chạy qua WebView nền, tự làm sạch cookie NextGen khi hết phiên và tự cấp lại `SessionCode` từ Fox-ERP *(hỗ trợ đổi TK IAM riêng qua Menu / Kết quả)*
 - **Radius** (`radius-portal.fpt.net`) — *Đã ghép IPNAT & IPv6*: Tra cứu thông số kết nối, chỉnh Tình trạng NAT (`Default NAT` / `Khách hàng dùng Camera` / `ByPass NAT`), chỉnh IPv6 (`Deactivate` / `Active` / `Rule`) kèm ghi chú không dấu & Kill Session *(tự xóa cookie/token Radius cũ khi gặp HTTP 401; hỗ trợ đổi TK IAM riêng)*
@@ -15,7 +15,7 @@ Công cụ gom nhanh **5 trang nội bộ FPT** về một màn hình gọn nh�
 ## 1. Cài App Android (`.apk`) trên điện thoại (Khuyên dùng khi đi hiện trường)
 
 ### Cách tải và cài
-1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.17.4.apk`**:
+1. Mở trang **Releases** của repo để tải file **`remote-inside-v0.18.0.apk`**:
    https://github.com/lenamtest4-dot/remote-inside/releases
    *(Hoặc tải trực tiếp ở mục Artifacts trong tab Actions của GitHub).*
 2. Trên điện thoại Android, mở file `.apk` vừa tải -> chọn **Cài đặt** *(cho phép "Cài đặt ứng dụng không rõ nguồn gốc" cho trình duyệt/Tệp nếu máy hỏi lần đầu)*.
@@ -42,12 +42,12 @@ Trên **iPhone 15 trở lên (iOS 17 / 18+)**, Apple chặn bấm cài trực ti
   4. Bấm **4. Tạo Icon App Remote Inside ngoài màn hình chính** → **Cho phép** → **Cài đặt → Đã tải về hồ sơ → Cài đặt** để có icon màu cam y hệt file APK ngoài màn hình chính *(chỉ chứa link `inside.fpt.net` và icon, không MDM, bấm vào tự mở Safari + bảng điều khiển Remote Inside kèm nút **Cổng nhanh** chuyển 1 chạm sang Inside / Port / Vật tư / Radius)*.
 
 ### Cách B: Cài App iOS riêng (`.ipa`) qua SideStore / Sideloadly / TestFlight
-- Tải file **`remote-inside-v0.17.4-ios.ipa`** từ trang Releases:
+- Tải file **`remote-inside-v0.18.0-ios.ipa`** từ trang Releases:
   https://github.com/lenamtest4-dot/remote-inside/releases
 - **SideStore (cần máy tính 1 lần đầu, miễn phí bằng Apple ID thường):**
   1. Cài **SideStore** lên iPhone 1 lần đầu qua máy tính Windows/Mac theo hướng dẫn tại https://sidestore.io (trên iOS 17+ cần bật thêm *Chế độ nhà phát triển* trong Quyền riêng tư & Bảo mật).
-  2. Trên iPhone, tải `remote-inside-v0.17.4-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
-- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.17.4-ios.ipa` vào và nhập Apple ID miễn phí *(gia hạn 7 ngày/lần hoặc dùng TrollStore / chứng chỉ Developer / TestFlight)*.
+  2. Trên iPhone, tải `remote-inside-v0.18.0-ios.ipa` -> mở bằng app **SideStore** -> nhập Apple ID miễn phí của bạn để ký và cài app **Remote Inside** lên màn hình chính.
+- **Sideloadly (nhanh trên máy tính Windows/Mac):** Tải https://sideloadly.io, cắm cáp USB vào iPhone, kéo file `remote-inside-v0.18.0-ios.ipa` vào và nhập Apple ID miễn phí *(gia hạn 7 ngày/lần hoặc dùng TrollStore / chứng chỉ Developer / TestFlight)*.
 
 ---
 

@@ -134,6 +134,30 @@ import {
   validateCameraPhoneNumber,
 } from '../adapters/deployment.js';
 import {
+  MAINT_CATALOG_KEYS,
+  MAINT_DISCUSSION_CODES,
+  MAINT_ENDPOINTS,
+  addMaintenanceDiscussion,
+  canReturnMaintenanceTicketStatus,
+  evaluateMaintenanceCameraCloud,
+  fetchMaintenanceErrorCatalog,
+  fetchMaintenanceMaterialCatalogs,
+  fetchMaintenanceTicket,
+  fetchMaintenanceTicketDetail,
+  filterAllowedMaintenanceStatuses,
+  maintFoldText,
+  normalizeMaintenanceMaterials,
+  parseMaintenanceComboOptions,
+  returnMaintenanceTicketStatus,
+  selectActiveMaintenanceTicket,
+  swapMaintenanceLastTicket,
+  updateMaintenanceEquipments,
+  updateMaintenanceErrorComplete,
+  updateMaintenanceServiceInit,
+  updateMaintenanceTicketInfoAndStatus,
+  validateMaintenanceMaterials,
+} from '../adapters/maintenance.js';
+import {
   RECALL_ENDPOINTS,
   closeRecallStaffEditor,
   findRecallMobileMenuToggle,
@@ -505,6 +529,69 @@ export function mountRemoteInside({
     deployReassignEmpCode: '',
     deployReassignReasonId: '',
     deployReassignSearch: '',
+    maintTab: 'overview',
+    maintLoading: false,
+    maintError: '',
+    maintLoginUrl: '',
+    maintLoginLabel: '',
+    maintNotice: '',
+    maintNoticeTone: 'info',
+    maintHash: '',
+    maintFoxUrl: '',
+    maintPartnerUrl: '',
+    maintContract: null,
+    maintUserInfo: null,
+    maintPermissions: null,
+    maintComboConfig: [],
+    maintTicketStatusCfg: null,
+    maintCatalogInit: null,
+    maintContractProducts: [],
+    maintTickets: [],
+    maintTicket: null,
+    maintMaterials: { lstUse: [], lstReturn: [], cameraCloudSummary: null },
+    maintEditUse: [],
+    maintEditReturn: [],
+    maintMatCatalogLoading: false,
+    maintMatCatalogLoaded: false,
+    maintMatCatalogError: '',
+    maintEquipInfos: [],
+    maintEquipSearchUse: '',
+    maintEquipPickUse: '',
+    maintEquipQtyUse: '1',
+    maintEquipSearchRet: '',
+    maintEquipPickRet: '',
+    maintEquipQtyRet: '1',
+    maintMacPartners: [],
+    maintMacUseds: [],
+    maintCamHistory: [],
+    maintModemCallerId: '',
+    maintInitAndErrors: [],
+    maintErrorCatalog: null,
+    maintErrorCatalogLoading: false,
+    maintErrServiceCode: '',
+    maintErrInitCode: '',
+    maintErrElementCode: '',
+    maintErrReasonCode: '',
+    maintErrProcCode: '',
+    maintEditErrors: [],
+    maintDiscussions: [],
+    maintNoteCode: MAINT_DISCUSSION_CODES.TICKET_NOTE,
+    maintNoteDraft: '',
+    maintReimbursementStatus: 0,
+    maintBbntRecords: [],
+    maintRepName: '',
+    maintRepRelation: '',
+    maintRepPhone: '',
+    maintUrgent: '',
+    maintNonSetHiFpt: '',
+    maintReasonInCable: '',
+    maintReasonMyBao: '',
+    maintLink1: '',
+    maintLink2: '',
+    maintLengthLink: '0',
+    maintTargetStatus: '1',
+    maintBusyKey: '',
+    maintArmedAction: '',
     recallLoading: false,
     recallProgress: '',
     recallError: '',
@@ -1055,6 +1142,72 @@ export function mountRemoteInside({
     state.deployReassignSearch = '';
   }
 
+  function resetMaintModalState() {
+    state.maintTab = 'overview';
+    state.maintLoading = false;
+    state.maintError = '';
+    state.maintLoginUrl = '';
+    state.maintLoginLabel = '';
+    state.maintNotice = '';
+    state.maintNoticeTone = 'info';
+    state.maintHash = '';
+    state.maintFoxUrl = '';
+    state.maintPartnerUrl = '';
+    state.maintContract = null;
+    state.maintUserInfo = null;
+    state.maintPermissions = null;
+    state.maintComboConfig = [];
+    state.maintTicketStatusCfg = null;
+    state.maintCatalogInit = null;
+    state.maintContractProducts = [];
+    state.maintTickets = [];
+    state.maintTicket = null;
+    state.maintMaterials = { lstUse: [], lstReturn: [], cameraCloudSummary: null };
+    state.maintEditUse = [];
+    state.maintEditReturn = [];
+    state.maintMatCatalogLoading = false;
+    state.maintMatCatalogLoaded = false;
+    state.maintMatCatalogError = '';
+    state.maintEquipInfos = [];
+    state.maintEquipSearchUse = '';
+    state.maintEquipPickUse = '';
+    state.maintEquipQtyUse = '1';
+    state.maintEquipSearchRet = '';
+    state.maintEquipPickRet = '';
+    state.maintEquipQtyRet = '1';
+    state.maintMacPartners = [];
+    state.maintMacUseds = [];
+    state.maintCamHistory = [];
+    state.maintModemCallerId = '';
+    state.maintInitAndErrors = [];
+    state.maintErrorCatalog = null;
+    state.maintErrorCatalogLoading = false;
+    state.maintErrServiceCode = '';
+    state.maintErrInitCode = '';
+    state.maintErrElementCode = '';
+    state.maintErrReasonCode = '';
+    state.maintErrProcCode = '';
+    state.maintEditErrors = [];
+    state.maintDiscussions = [];
+    state.maintNoteCode = MAINT_DISCUSSION_CODES.TICKET_NOTE;
+    state.maintNoteDraft = '';
+    state.maintReimbursementStatus = 0;
+    state.maintBbntRecords = [];
+    state.maintRepName = '';
+    state.maintRepRelation = '';
+    state.maintRepPhone = '';
+    state.maintUrgent = '';
+    state.maintNonSetHiFpt = '';
+    state.maintReasonInCable = '';
+    state.maintReasonMyBao = '';
+    state.maintLink1 = '';
+    state.maintLink2 = '';
+    state.maintLengthLink = '0';
+    state.maintTargetStatus = '1';
+    state.maintBusyKey = '';
+    state.maintArmedAction = '';
+  }
+
   let recallStaffSearchTimer = null;
   let recallStaffSearchSeq = 0;
 
@@ -1219,6 +1372,7 @@ export function mountRemoteInside({
     state.portHistoryError = '';
     state.portHistoryRows = [];
     resetDeployModalState();
+    resetMaintModalState();
     if (state.recallStaffEdit && state.recallMode !== 'demo') {
       closeRecallStaffEditor({
         pageDocument,
@@ -2131,6 +2285,665 @@ export function mountRemoteInside({
         if (empRefreshWarn) {
           state.deployNotice = `${res.message} (Lưu ý đồng bộ lại KTV: ${empRefreshWarn})`;
         }
+      },
+    });
+  }
+
+  function cloneMaintEquipmentRows(rows = []) {
+    return (Array.isArray(rows) ? rows : []).map((r) => ({ ...r }));
+  }
+
+  function normalizeMaintErrorRowFromDb(row) {
+    const src = row && typeof row === 'object' ? row : {};
+    const procs = Array.isArray(src.ProcessingDiretions) ? src.ProcessingDiretions : [];
+    return {
+      ServiceCode: String(src.ServiceCode || ''),
+      InitStatusCode: String(src.InitStatusCode || ''),
+      ErrorElementCode: String(src.ErrorElementCode || ''),
+      ErrorReasonCode: String(src.ErrorReasonCode || ''),
+      ProcessingDiretions: procs
+        .map((d) => ({
+          ProcessingDiretionCode: String((d && (d.ProcessingDiretionCode || d.Code)) || ''),
+          LevelId: Number((d && (d.LevelId ?? d.Value ?? 4)) || 4),
+        }))
+        .filter((d) => Boolean(d.ProcessingDiretionCode)),
+    };
+  }
+
+  function applyMaintTicketDraft(ticket, materials, initAndErrors) {
+    const matNorm = normalizeMaintenanceMaterials(materials);
+    state.maintMaterials = matNorm;
+    state.maintEditUse = cloneMaintEquipmentRows(matNorm.lstUse);
+    state.maintEditReturn = cloneMaintEquipmentRows(matNorm.lstReturn);
+    state.maintEditErrors = (Array.isArray(initAndErrors) ? initAndErrors : []).map(
+      normalizeMaintErrorRowFromDb
+    );
+    state.maintRepName = ticket ? String(ticket.repreName || '') : '';
+    state.maintRepRelation = ticket ? String(ticket.repreRelation || '') : '';
+    state.maintRepPhone = ticket ? String(ticket.reprePhone || '') : '';
+    state.maintUrgent =
+      ticket && ticket.urgentNew !== null && ticket.urgentNew !== undefined
+        ? String(ticket.urgentNew)
+        : '';
+    state.maintNonSetHiFpt =
+      ticket && ticket.nonSetHiFpt !== null && ticket.nonSetHiFpt !== undefined
+        ? String(ticket.nonSetHiFpt)
+        : '';
+    state.maintReasonInCable =
+      ticket && ticket.reasonInCable !== null && ticket.reasonInCable !== undefined
+        ? String(ticket.reasonInCable)
+        : '';
+    state.maintReasonMyBao =
+      ticket && ticket.reasonMyBaoUnAcceptance !== null && ticket.reasonMyBaoUnAcceptance !== undefined
+        ? String(ticket.reasonMyBaoUnAcceptance)
+        : '';
+    state.maintLink1 = ticket ? String(ticket.link1 || '') : '';
+    state.maintLink2 = ticket ? String(ticket.link2 || '') : '';
+    state.maintLengthLink = ticket ? String(ticket.lengthLink ?? 0) : '0';
+    state.maintTargetStatus = ticket ? String(ticket.finalStatus ?? 1) : '1';
+    const initServices =
+      state.maintCatalogInit &&
+      state.maintCatalogInit.Service &&
+      Array.isArray(state.maintCatalogInit.Service.Infos)
+        ? state.maintCatalogInit.Service.Infos
+        : [];
+    if (!state.maintErrServiceCode && initServices.length > 0) {
+      state.maintErrServiceCode = String(initServices[0].Code || '');
+    }
+  }
+
+  async function loadMaintTicketModal(rawContractId, selectedSupId = 0) {
+    const prevTab = state.maintTab || 'overview';
+    resetMaintModalState();
+    state.maintTab = prevTab;
+    state.maintLoading = true;
+    renderConfirm();
+
+    const cleanId = normalizeContractId(rawContractId || '');
+    const cached = cleanId ? getCachedInsideContract(cleanId) : null;
+    try {
+      const res = await fetchMaintenanceTicket(cleanId, {
+        pageLocation: pageWindow ? pageWindow.location : null,
+        selectedSupId,
+        cachedObjId: (cached && Number(cached.objID)) || 0,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintLoading = false;
+      if (res.status !== 'ok') {
+        state.maintError = res.message || 'Không tải được Phiếu bảo trì FOX-ERP.';
+        state.maintLoginUrl = res.loginUrl || MAINT_ENDPOINTS.foxTicketPage;
+        state.maintLoginLabel = res.loginLabel || 'Đăng nhập IAM';
+        renderConfirm();
+        return;
+      }
+
+      state.maintHash = res.hash || '';
+      state.maintFoxUrl = res.foxTicketUrl || '';
+      state.maintPartnerUrl = res.partnerTicketUrl || '';
+      state.maintContract = res.contract || null;
+      state.maintUserInfo = res.userInfo || null;
+      state.maintPermissions = res.permissions || {};
+      state.maintComboConfig = Array.isArray(res.comboConfig) ? res.comboConfig : [];
+      state.maintTicketStatusCfg = res.ticketStatusCfg || null;
+      state.maintCatalogInit = res.catalogInit || null;
+      state.maintContractProducts = Array.isArray(res.contractProducts) ? res.contractProducts : [];
+      state.maintTickets = Array.isArray(res.tickets) ? res.tickets : [];
+      state.maintTicket = res.ticket || null;
+      state.maintInitAndErrors = Array.isArray(res.initAndErrors) ? res.initAndErrors : [];
+      state.maintDiscussions = Array.isArray(res.discussions) ? res.discussions : [];
+      state.maintReimbursementStatus = Number(res.reimbursementStatus ?? 0);
+      state.maintBbntRecords = Array.isArray(res.bbntRecords) ? res.bbntRecords : [];
+      applyMaintTicketDraft(state.maintTicket, res.materials, state.maintInitAndErrors);
+
+      const resolvedContract =
+        (res.contract && res.contract.contract) || cleanId;
+      if (resolvedContract && normalizeContractId(state.contractInput) !== resolvedContract) {
+        state.contractInput = resolvedContract;
+        state.recentContracts = addRecentContract(resolvedContract);
+      }
+      addLog(
+        'Inside',
+        'Mở phiếu bảo trì',
+        (state.maintTicket && state.maintTicket.no) || resolvedContract,
+        res.mode === 'demo' ? 'demo' : 'ok'
+      );
+      renderConfirm();
+
+      if (state.maintTab === 'materials') {
+        loadMaintMaterialCatalogs({ forceReload: true });
+      } else if (state.maintTab === 'service' && state.maintErrServiceCode) {
+        loadMaintErrorCatalogForService(state.maintErrServiceCode);
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintLoading = false;
+      state.maintError = err && err.message ? err.message : 'Lỗi tải Phiếu bảo trì.';
+      state.maintLoginUrl = MAINT_ENDPOINTS.foxTicketPage;
+      state.maintLoginLabel = 'Mở FOX-ERP';
+      renderConfirm();
+    }
+  }
+
+  async function switchMaintTicketSupId(rawSupId) {
+    const nextTicket = selectActiveMaintenanceTicket(state.maintTickets, Number(rawSupId));
+    if (!nextTicket || (state.maintTicket && nextTicket.supId === state.maintTicket.supId)) return;
+    state.maintTicket = nextTicket;
+    state.maintArmedAction = '';
+    state.maintNotice = `Đang tải chi tiết ${nextTicket.no}…`;
+    state.maintNoticeTone = 'info';
+    state.maintMatCatalogLoaded = false;
+    renderConfirm();
+
+    const detail = await fetchMaintenanceTicketDetail({
+      objId: nextTicket.objId || (state.maintContract && state.maintContract.objId) || 0,
+      supId: nextTicket.supId,
+      ticket: nextTicket,
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+    state.maintInitAndErrors = Array.isArray(detail.initAndErrors) ? detail.initAndErrors : [];
+    state.maintDiscussions = Array.isArray(detail.discussions) ? detail.discussions : [];
+    state.maintReimbursementStatus = Number(detail.reimbursementStatus ?? 0);
+    state.maintBbntRecords = Array.isArray(detail.bbntRecords) ? detail.bbntRecords : [];
+    applyMaintTicketDraft(nextTicket, detail.materials, state.maintInitAndErrors);
+    state.maintNotice = '';
+    renderConfirm();
+    if (state.maintTab === 'materials') {
+      loadMaintMaterialCatalogs({ forceReload: true });
+    }
+  }
+
+  async function refreshMaintDetailInModal() {
+    const contract = state.maintContract;
+    const ticket = state.maintTicket;
+    if (!ticket) return;
+    const detail = await fetchMaintenanceTicketDetail({
+      objId: ticket.objId || (contract && contract.objId) || 0,
+      supId: ticket.supId,
+      ticket,
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+    state.maintInitAndErrors = Array.isArray(detail.initAndErrors) ? detail.initAndErrors : [];
+    state.maintDiscussions = Array.isArray(detail.discussions) ? detail.discussions : [];
+    state.maintReimbursementStatus = Number(detail.reimbursementStatus ?? 0);
+    state.maintBbntRecords = Array.isArray(detail.bbntRecords) ? detail.bbntRecords : [];
+    applyMaintTicketDraft(ticket, detail.materials, state.maintInitAndErrors);
+    renderConfirm();
+  }
+
+  async function loadMaintMaterialCatalogs({ forceReload = false } = {}) {
+    const ticket = state.maintTicket;
+    const contract = state.maintContract;
+    if (!ticket || state.maintMatCatalogLoading) return;
+    if (!forceReload && state.maintMatCatalogLoaded) return;
+
+    state.maintMatCatalogLoading = true;
+    state.maintMatCatalogError = '';
+    renderConfirm();
+    try {
+      const res = await fetchMaintenanceMaterialCatalogs({
+        objId: ticket.objId || (contract && contract.objId) || 0,
+        supId: ticket.supId,
+        locationId:
+          (contract && contract.locationId) ||
+          (ticket && ticket.locationId) ||
+          (state.maintUserInfo && state.maintUserInfo.LocationId) ||
+          0,
+        accountEmp: (ticket.mainEmp && ticket.mainEmp.account) || '',
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintMatCatalogLoading = false;
+      state.maintMatCatalogLoaded = true;
+      if (res.status === 'ok') {
+        state.maintEquipInfos = Array.isArray(res.equipInfos) ? res.equipInfos : [];
+        state.maintMacPartners = Array.isArray(res.macPartners) ? res.macPartners : [];
+        state.maintMacUseds = Array.isArray(res.macUseds) ? res.macUseds : [];
+        state.maintCamHistory = Array.isArray(res.camHistoryMacs) ? res.camHistoryMacs : [];
+        state.maintModemCallerId = String(res.modemCallerId || '');
+        if (!state.maintEquipPickUse && state.maintEquipInfos.length > 0) {
+          state.maintEquipPickUse = String(state.maintEquipInfos[0].IdCode);
+        }
+        if (!state.maintEquipPickRet && state.maintEquipInfos.length > 0) {
+          state.maintEquipPickRet = String(state.maintEquipInfos[0].IdCode);
+        }
+      } else {
+        state.maintMatCatalogError = res.message || 'Không tải được danh mục vật tư / kho MAC.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintMatCatalogLoading = false;
+      state.maintMatCatalogError =
+        err && err.message ? err.message : 'Lỗi tải danh mục vật tư.';
+    }
+    renderConfirm();
+  }
+
+  function handleMaintAddMaterial(isReturnFlag) {
+    const isUse = isReturnFlag === 2;
+    const pickId = isUse ? state.maintEquipPickUse : state.maintEquipPickRet;
+    const qtyRaw = Number(isUse ? state.maintEquipQtyUse : state.maintEquipQtyRet);
+    const catalogItem = (state.maintEquipInfos || []).find(
+      (item) => String(item.IdCode) === String(pickId || '')
+    );
+    if (!catalogItem) {
+      state.maintNotice = 'Vui lòng chọn vật tư trong danh sách trước khi bấm Thêm.';
+      state.maintNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+
+    const list = isUse ? state.maintEditUse : state.maintEditReturn;
+    let qty = Number.isFinite(qtyRaw) && qtyRaw >= 1 ? Math.floor(qtyRaw) : 1;
+    if (Number(catalogItem.IsMac) !== 1) {
+      const existing = list.find((r) => Number(r.CodeID) === Number(catalogItem.IdCode));
+      if (existing) {
+        existing.Quantity = Math.max(1, Number(existing.Quantity || 0) + qty);
+      } else {
+        list.push({
+          ID: 0,
+          CodeID: catalogItem.IdCode,
+          EQuipmentName: catalogItem.Description || catalogItem.Name,
+          DBName: catalogItem.Name || '',
+          FunctionName: isUse ? catalogItem.ParentName || '' : '',
+          Quantity: qty,
+          MacAddress: '',
+          Type: catalogItem.Type,
+          ParentName: catalogItem.ParentName || '',
+          Orderby: 0,
+          ParentOrder: 0,
+          AccountReplace: '',
+          CheckReplace: 0,
+          IsMac: catalogItem.IsMac,
+          CauseReturn: 0,
+          IsReturn: isReturnFlag,
+        });
+      }
+    } else {
+      if (qty > 10) {
+        qty = 10;
+        state.maintNotice = 'Chỉ thêm tối đa 10 thiết bị quản lý theo MAC trong 1 lần bấm.';
+        state.maintNoticeTone = 'info';
+      } else {
+        state.maintNotice = '';
+      }
+      const autoMac =
+        isUse && catalogItem.ParentName === 'Modem' ? state.maintModemCallerId || '' : '';
+      for (let i = 0; i < qty; i++) {
+        const camCount = list.filter((r) => r.ParentName === 'FPT Camera').length;
+        list.push({
+          ID: 0,
+          CodeID: catalogItem.IdCode,
+          EQuipmentName: catalogItem.Description || catalogItem.Name,
+          DBName: catalogItem.Name || '',
+          FunctionName: isUse ? catalogItem.ParentName || '' : '',
+          Quantity: 1,
+          MacAddress: autoMac,
+          Type: catalogItem.Type,
+          ParentName: catalogItem.ParentName || '',
+          Orderby: 0,
+          ParentOrder: catalogItem.ParentName === 'FPT Camera' ? camCount + 1 : 0,
+          AccountReplace: '',
+          CheckReplace: 0,
+          IsMac: catalogItem.IsMac,
+          CauseReturn: 0,
+          IsReturn: isReturnFlag,
+        });
+      }
+    }
+    if (isUse) {
+      state.maintEquipQtyUse = '1';
+    } else {
+      state.maintEquipQtyRet = '1';
+    }
+    renderConfirm();
+  }
+
+  async function loadMaintErrorCatalogForService(serviceCode) {
+    const cleanSvc = String(serviceCode || '').trim();
+    const ticket = state.maintTicket;
+    if (!cleanSvc || !ticket) return;
+    const needed = [...new Set([
+      cleanSvc,
+      ...(state.maintEditErrors || []).map((r) => String(r.ServiceCode || '').trim()),
+    ].filter((s) => s && !(state.maintErrorCatalog && state.maintErrorCatalog[s])))];
+    if (needed.length === 0) return;
+
+    state.maintErrorCatalogLoading = true;
+    renderConfirm();
+    try {
+      const results = await Promise.allSettled(
+        needed.map(async (svc) => ({
+          svc,
+          res: await fetchMaintenanceErrorCatalog({
+            objId: ticket.objId,
+            supId: ticket.supId,
+            serviceCodes: [svc],
+          }),
+        }))
+      );
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintErrorCatalogLoading = false;
+      const nextMap = { ...(state.maintErrorCatalog || {}) };
+      for (const item of results) {
+        if (
+          item.status === 'fulfilled' &&
+          item.value &&
+          item.value.res &&
+          item.value.res.status === 'ok' &&
+          item.value.res.data
+        ) {
+          nextMap[item.value.svc] = item.value.res.data;
+        }
+      }
+      state.maintErrorCatalog = nextMap;
+    } catch {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintErrorCatalogLoading = false;
+    }
+    renderConfirm();
+  }
+
+  async function runMaintMutation({
+    busyKey,
+    pendingText,
+    fallbackErr,
+    logAction,
+    fn,
+    onOk,
+  }) {
+    const contract = state.maintContract;
+    const ticket = state.maintTicket;
+    if (!ticket || state.maintBusyKey) return;
+    state.maintArmedAction = '';
+    state.maintBusyKey = busyKey;
+    state.maintNotice = pendingText;
+    state.maintNoticeTone = 'info';
+    renderConfirm();
+
+    try {
+      const res = await fn(contract, ticket);
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintBusyKey = '';
+      if (res.status === 'ok') {
+        state.maintNotice = res.message || 'Thao tác thành công.';
+        state.maintNoticeTone = 'ok';
+        addLog(
+          'Inside',
+          logAction,
+          ticket.no || (contract && contract.contract) || '',
+          res.mode === 'demo' ? 'demo' : 'ok'
+        );
+        if (onOk) {
+          await onOk(res);
+          if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+        }
+      } else {
+        state.maintNotice = res.message || fallbackErr;
+        state.maintNoticeTone = 'error';
+        if (res.loginUrl) {
+          state.maintLoginUrl = res.loginUrl;
+        }
+        addLog('Inside', logAction, ticket.no || '', 'error');
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintBusyKey = '';
+      state.maintNotice = err && err.message ? err.message : fallbackErr;
+      state.maintNoticeTone = 'error';
+    }
+    renderConfirm();
+  }
+
+  function handleMaintSaveMaterials() {
+    const contract = state.maintContract;
+    const logonUser = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const locationId =
+      (contract && contract.locationId) ||
+      (state.maintUserInfo && state.maintUserInfo.LocationId) ||
+      0;
+    return runMaintMutation({
+      busyKey: 'save_materials',
+      pendingText: 'Đang lưu vật tư giao & thu hồi lên FOX-ERP…',
+      fallbackErr: 'Cập nhật vật tư không thành công.',
+      logAction: 'Lưu vật tư phiếu BT',
+      fn: (_, ticket) =>
+        updateMaintenanceEquipments({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          locationId,
+          logonUser,
+          lstUse: state.maintEditUse,
+          lstReturn: state.maintEditReturn,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo') {
+          state.maintMaterials = res.materials || normalizeMaintenanceMaterials({
+            lstUse: state.maintEditUse,
+            lstReturn: state.maintEditReturn,
+          });
+          state.maintEditUse = cloneMaintEquipmentRows(state.maintMaterials.lstUse);
+          state.maintEditReturn = cloneMaintEquipmentRows(state.maintMaterials.lstReturn);
+          return;
+        }
+        await refreshMaintDetailInModal();
+      },
+    });
+  }
+
+  function handleMaintSaveRep() {
+    const contract = state.maintContract;
+    const accountModify = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'save_rep',
+      pendingText: 'Đang lưu thông tin đại diện…',
+      fallbackErr: 'Cập nhật thông tin đại diện thất bại.',
+      logAction: 'Cập nhật đại diện phiếu BT',
+      fn: (_, ticket) =>
+        updateMaintenanceTicketInfoAndStatus({
+          contract: (contract && contract.contract) || '',
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          accountModify,
+          finalStatus: ticket.finalStatus,
+          repreName: state.maintRepName,
+          repreRelation: state.maintRepRelation,
+          reprePhone: state.maintRepPhone,
+        }),
+      onOk: () => {
+        if (state.maintTicket) {
+          state.maintTicket.repreName = state.maintRepName.trim();
+          state.maintTicket.repreRelation = state.maintRepRelation.trim();
+          state.maintTicket.reprePhone = state.maintRepPhone.trim();
+        }
+      },
+    });
+  }
+
+  function handleMaintSaveErrors() {
+    const contract = state.maintContract;
+    const username = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'save_errors',
+      pendingText: 'Đang cập nhật ghi nhận ban đầu & nguyên nhân lỗi…',
+      fallbackErr: 'Cập nhật nguyên nhân lỗi thất bại.',
+      logAction: 'Cập nhật lỗi phiếu BT',
+      fn: async (_, ticket) => {
+        const initRows = state.maintEditErrors.filter((r) => r.ServiceCode && r.InitStatusCode);
+        if (initRows.length > 0) {
+          const r1 = await updateMaintenanceServiceInit({
+            supId: ticket.supId,
+            accountModify: username,
+            dataUpdates: initRows,
+          });
+          if (r1.status !== 'ok') return r1;
+        }
+        return updateMaintenanceErrorComplete({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy: username,
+          dataUpdates: state.maintEditErrors,
+        });
+      },
+      onOk: async (res) => {
+        if (res.mode !== 'demo') {
+          await refreshMaintDetailInModal();
+        }
+      },
+    });
+  }
+
+  function handleMaintAddNote() {
+    const contract = state.maintContract;
+    const logonUser = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const noteText = String(state.maintNoteDraft || '').trim();
+    const noteCode = state.maintNoteCode || MAINT_DISCUSSION_CODES.TICKET_NOTE;
+    return runMaintMutation({
+      busyKey: 'add_note',
+      pendingText: 'Đang gửi ghi chú lên phiếu…',
+      fallbackErr: 'Gửi ghi chú thất bại.',
+      logAction: 'Ghi chú phiếu BT',
+      fn: (_, ticket) =>
+        addMaintenanceDiscussion({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          logonUser,
+          newDescription: noteText,
+          code: noteCode,
+        }),
+      onOk: async (res) => {
+        state.maintNoteDraft = '';
+        if (res.mode === 'demo' && res.item) {
+          state.maintDiscussions = [res.item, ...(state.maintDiscussions || [])];
+        } else {
+          await refreshMaintDetailInModal();
+        }
+      },
+    });
+  }
+
+  function handleMaintSaveInfoOrStatus(isStatusUpdate) {
+    const contract = state.maintContract;
+    const accountModify = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const statusOpts = parseMaintenanceComboOptions(
+      state.maintComboConfig,
+      MAINT_CATALOG_KEYS.TICKET_STATUS
+    );
+    const chosenStatusOpt = statusOpts.find(
+      (s) => String(s.value) === String(state.maintTargetStatus)
+    );
+    const nextFinalStatus = isStatusUpdate
+      ? Number(state.maintTargetStatus)
+      : Number((state.maintTicket && state.maintTicket.finalStatus) ?? 1);
+    const nextStatusCode = isStatusUpdate && chosenStatusOpt ? chosenStatusOpt.code : '';
+
+    return runMaintMutation({
+      busyKey: isStatusUpdate ? 'update_status' : 'save_info',
+      pendingText: isStatusUpdate
+        ? 'Đang cập nhật kết quả xử lý / đóng phiếu…'
+        : 'Đang lưu thông tin bảo trì…',
+      fallbackErr: isStatusUpdate
+        ? 'Cập nhật kết quả xử lý không thành công.'
+        : 'Lưu thông tin bảo trì thất bại.',
+      logAction: isStatusUpdate ? 'Đóng / Cập nhật kết quả BT' : 'Lưu thông tin BT',
+      fn: (_, ticket) =>
+        updateMaintenanceTicketInfoAndStatus({
+          contract: (contract && contract.contract) || '',
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          accountModify,
+          urgentType: state.maintUrgent || null,
+          nonSetHiFpt: state.maintNonSetHiFpt || null,
+          reasonInCable: state.maintReasonInCable || null,
+          reasonMyBao: state.maintReasonMyBao || null,
+          link1: state.maintLink1 || '',
+          link2: state.maintLink2 || '',
+          lengthLink: Number(state.maintLengthLink) || 0,
+          finalStatus: nextFinalStatus,
+          statusCode: nextStatusCode,
+          errorCompletes: state.maintEditErrors.filter(
+            (r) => r.ErrorElementCode || r.ErrorReasonCode
+          ),
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTicket.finalStatus = nextFinalStatus;
+          if (chosenStatusOpt && isStatusUpdate) {
+            state.maintTicket.statusName = chosenStatusOpt.title;
+            state.maintTicket.statusBucket = [1, 3, 5].includes(nextFinalStatus)
+              ? 'complete'
+              : 'backlog';
+            if (!state.maintTicket.finishDate && state.maintTicket.statusBucket === 'complete') {
+              state.maintTicket.finishDate = new Date().toISOString();
+            }
+          }
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
+      },
+    });
+  }
+
+  function handleMaintReturnStatus() {
+    const contract = state.maintContract;
+    const updateBy = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'return_status',
+      pendingText: 'Đang trả tình trạng phiếu về Đang xử lý…',
+      fallbackErr: 'Trả tình trạng phiếu thất bại.',
+      logAction: 'Trả tình trạng phiếu BT',
+      fn: (_, ticket) =>
+        returnMaintenanceTicketStatus({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTicket.finalStatus = 10;
+          state.maintTicket.statusName = 'Đang xử lý';
+          state.maintTicket.statusBucket = 'backlog';
+          state.maintTargetStatus = '10';
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
+      },
+    });
+  }
+
+  function handleMaintSwapLastTicket() {
+    const contract = state.maintContract;
+    const updateBy = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'swap_last',
+      pendingText: 'Đang đặt phiếu này làm phiếu cuối…',
+      fallbackErr: 'Đổi phiếu cuối không thành công.',
+      logAction: 'Đặt phiếu cuối BT',
+      fn: (_, ticket) =>
+        swapMaintenanceLastTicket({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTickets = state.maintTickets.map((t) => ({
+            ...t,
+            flag: t.supId === state.maintTicket.supId ? 1 : 0,
+            isActive: t.supId === state.maintTicket.supId,
+          }));
+          state.maintTicket.flag = 1;
+          state.maintTicket.isActive = true;
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
       },
     });
   }
@@ -3520,6 +4333,8 @@ export function mountRemoteInside({
         loadInsideByPassModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'deploy_ticket') {
         loadDeployTicketModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'maint_ticket') {
+        loadMaintTicketModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'release_port') {
         loadPortReleaseModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
@@ -5929,6 +6744,7 @@ export function mountRemoteInside({
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
     const isInsideBypass = portal.id === 'inside' && act.id === 'bypass';
     const isInsideDeploy = portal.id === 'inside' && act.id === 'deploy_ticket';
+    const isInsideMaint = portal.id === 'inside' && act.id === 'maint_ticket';
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
@@ -5953,6 +6769,8 @@ export function mountRemoteInside({
             ? 'Kill Session — Phiên đang chạy'
             : isInsideDeploy
             ? 'Phiếu triển khai FOX-ERP'
+            : isInsideMaint
+            ? 'Phiếu bảo trì & Chuyển Cloud'
             : isInsideBypass
             ? 'CheckList ByPass'
             : isRecallManage
@@ -5981,6 +6799,8 @@ export function mountRemoteInside({
               ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
               : isInsideDeploy
               ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
+              : isInsideMaint
+              ? 'Điều chỉnh vật tư giao/thu hồi, mở Chuyển Cloud Camera (Partner 1 chạm), cập nhật lỗi/ghi chú và đóng phiếu.'
               : isRecallManage
               ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
               : isEquipmentDebt
@@ -6018,6 +6838,7 @@ export function mountRemoteInside({
         (isInsideBox && state.boxTab === 'history') ||
         isInsideKill ||
         isInsideDeploy ||
+        isInsideMaint ||
         isRecallManage ||
         isEquipmentDebt
           ? 'Đóng'
@@ -6035,6 +6856,65 @@ export function mountRemoteInside({
     });
 
     let showConfirmBtn = true;
+
+    function buildSheetKvList(rows) {
+      const filtered = rows.filter(([, val]) => val !== '' && val !== undefined && val !== null);
+      return el(
+        'div',
+        { className: 'ri-kv-list' },
+        filtered.map(([k, val]) =>
+          el('div', { className: 'ri-kv-item' }, [
+            el('span', { className: 'ri-kv-key', text: k }),
+            el('span', { className: 'ri-kv-val', text: String(val) }),
+          ])
+        )
+      );
+    }
+
+    function buildSheetArmedConfirmRow({
+      armedField = 'deployArmedAction',
+      busyField = 'deployBusyAction',
+      armKey,
+      idleLabel,
+      idleClass = 'ri-danger-btn',
+      confirmLabel,
+      busyKey,
+      onConfirm,
+    }) {
+      const busyVal = String(state[busyField] || '');
+      const isRowBusy = Boolean(busyVal);
+      if (state[armedField] === armKey) {
+        return el('div', { className: 'ri-result-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            disabled: isRowBusy,
+            text: 'Hủy',
+            onClick: () => {
+              state[armedField] = '';
+              renderConfirm();
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: idleClass,
+            disabled: isRowBusy,
+            text: busyVal === busyKey ? 'Đang gửi…' : confirmLabel,
+            onClick: onConfirm,
+          }),
+        ]);
+      }
+      return el('button', {
+        type: 'button',
+        className: idleClass,
+        disabled: isRowBusy,
+        text: busyVal === busyKey ? 'Đang xử lý…' : idleLabel,
+        onClick: () => {
+          state[armedField] = armKey;
+          renderConfirm();
+        },
+      });
+    }
 
     function buildByPassStatusAndReasonFields({
       typeId,
@@ -7368,61 +8248,13 @@ export function mountRemoteInside({
           );
         }
 
-        function buildDeployKvList(rows) {
-          const filtered = rows.filter(([, val]) => val !== '' && val !== undefined && val !== null);
-          return el(
-            'div',
-            { className: 'ri-kv-list' },
-            filtered.map(([k, val]) =>
-              el('div', { className: 'ri-kv-item' }, [
-                el('span', { className: 'ri-kv-key', text: k }),
-                el('span', { className: 'ri-kv-val', text: String(val) }),
-              ])
-            )
-          );
-        }
-
-        function buildArmedConfirmRow({
-          armKey,
-          idleLabel,
-          idleClass = 'ri-danger-btn',
-          confirmLabel,
-          busyKey,
-          onConfirm,
-        }) {
-          const isArmed = state.deployArmedAction === armKey;
-          if (isArmed) {
-            return el('div', { className: 'ri-result-actions' }, [
-              el('button', {
-                type: 'button',
-                className: 'ri-secondary-btn',
-                disabled: isBusy,
-                text: 'Hủy',
-                onClick: () => {
-                  state.deployArmedAction = '';
-                  renderConfirm();
-                },
-              }),
-              el('button', {
-                type: 'button',
-                className: idleClass,
-                disabled: isBusy,
-                text: state.deployBusyAction === busyKey ? 'Đang gửi…' : confirmLabel,
-                onClick: onConfirm,
-              }),
-            ]);
-          }
-          return el('button', {
-            type: 'button',
-            className: idleClass,
-            disabled: isBusy,
-            text: state.deployBusyAction === busyKey ? 'Đang xử lý…' : idleLabel,
-            onClick: () => {
-              state.deployArmedAction = armKey;
-              renderConfirm();
-            },
+        const buildDeployKvList = buildSheetKvList;
+        const buildArmedConfirmRow = (opts) =>
+          buildSheetArmedConfirmRow({
+            armedField: 'deployArmedAction',
+            busyField: 'deployBusyAction',
+            ...opts,
           });
-        }
 
         if (state.deployTab === 'overview') {
           const mainEmpText = ticket.mainEmp
@@ -8356,6 +9188,1125 @@ export function mountRemoteInside({
                   busyKey: 'reassign_emp',
                   onConfirm: handleDeployReassignSubmit,
                 }),
+              ])
+            );
+          }
+        }
+      }
+    } else if (isInsideMaint) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.maintLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', {
+              text: contractId
+                ? `Đang tải phiếu bảo trì FOX-ERP cho ${contractId}…`
+                : 'Đang tải phiếu bảo trì từ FOX-ERP…',
+            }),
+          ])
+        );
+      } else if (state.maintError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadMaintTicketModal(contractId),
+          }),
+        ];
+        if (state.maintLoginUrl) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: state.maintLoginLabel || 'Đăng nhập IAM',
+              onClick: () => {
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.maintLoginUrl,
+                  title: state.maintLoginLabel || 'Đăng nhập FOX-ERP / Partner',
+                  clearIamIdentity: false,
+                });
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.maintError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+      } else if (!state.maintTicket) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status' }, [
+            el('div', {
+              text: `Chưa có phiếu bảo trì trên hợp đồng ${(state.maintContract && state.maintContract.contract) || contractId || ''}.`,
+            }),
+            state.maintFoxUrl
+              ? el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-secondary-btn',
+                    text: 'Mở FOX-ERP BT',
+                    onClick: () =>
+                      openExternalOrPortalUrl(state.maintFoxUrl, {
+                        mode: 'portal',
+                        title: 'Phiếu bảo trì FOX-ERP',
+                        pageWindow,
+                      }),
+                  }),
+                ])
+              : null,
+          ])
+        );
+      } else {
+        const contract = state.maintContract || {};
+        const ticket = state.maintTicket;
+        const isBusy = Boolean(state.maintBusyKey);
+        const cloudSummary = evaluateMaintenanceCameraCloud(
+          state.maintEditUse,
+          state.maintEditReturn
+        );
+        const buildMaintArmedRow = (opts) =>
+          buildSheetArmedConfirmRow({
+            armedField: 'maintArmedAction',
+            busyField: 'maintBusyKey',
+            ...opts,
+          });
+
+        if (state.maintTickets.length > 1) {
+          const tSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-maint-ticket-select' },
+            state.maintTickets.map((t) =>
+              el('option', {
+                value: String(t.supId),
+                text: `${t.no} — ${t.statusName}${t.flag === 1 ? ' ★Phiếu cuối' : ''}`,
+              })
+            )
+          );
+          tSel.value = String(ticket.supId);
+          tSel.addEventListener('change', (e) => switchMaintTicketSupId(e.target.value));
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-maint-ticket-select',
+                text: `Chọn phiếu bảo trì (${state.maintTickets.length} phiếu)`,
+              }),
+              tSel,
+            ])
+          );
+        }
+
+        const utilBtns = [];
+        if (state.maintPartnerUrl) {
+          utilBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Mở Chuyển Cloud (Partner)',
+              onClick: () =>
+                openExternalOrPortalUrl(state.maintPartnerUrl, {
+                  mode: 'portal',
+                  title: `Chuyển Cloud — ${ticket.no}`,
+                  pageWindow,
+                }),
+            })
+          );
+        }
+        if (state.maintFoxUrl) {
+          utilBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Mở FOX-ERP',
+              onClick: () =>
+                openExternalOrPortalUrl(state.maintFoxUrl, {
+                  mode: 'portal',
+                  title: ticket.no || 'Phiếu bảo trì FOX-ERP',
+                  pageWindow,
+                }),
+            })
+          );
+        }
+        utilBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Tải lại',
+            onClick: () => loadMaintTicketModal(contract.contract || contractId, ticket.supId),
+          })
+        );
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `${ticket.no} • ${ticket.statusName}${ticket.flag === 1 ? ' • Phiếu cuối' : ''}`,
+              }),
+              el('div', { className: 'ri-result-actions' }, utilBtns),
+            ]),
+            el('div', { className: 'ri-mode-row' }, [
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'overview' ? ' is-active' : ''}`,
+                text: 'Tổng quan',
+                onClick: () => {
+                  state.maintTab = 'overview';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'materials' ? ' is-active' : ''}`,
+                text: `Vật tư & Cloud (${state.maintEditUse.length + state.maintEditReturn.length})`,
+                onClick: () => {
+                  state.maintTab = 'materials';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                  loadMaintMaterialCatalogs();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'service' ? ' is-active' : ''}`,
+                text: `Lỗi & Ghi chú (${state.maintEditErrors.length})`,
+                onClick: () => {
+                  state.maintTab = 'service';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                  if (state.maintErrServiceCode) {
+                    loadMaintErrorCatalogForService(state.maintErrServiceCode);
+                  }
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'complete' ? ' is-active' : ''}`,
+                text: 'Thông tin & Đóng',
+                onClick: () => {
+                  state.maintTab = 'complete';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+            ]),
+          ])
+        );
+
+        if (state.maintNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.maintNoticeTone || 'info',
+            }, [el('div', { text: state.maintNotice })])
+          );
+        }
+
+        if (state.maintTab === 'overview') {
+          const empLine =
+            ticket.mainEmp && ticket.mainEmp.account
+              ? [ticket.mainEmp.account, ticket.mainEmp.code ? `(${ticket.mainEmp.code})` : '', ticket.mainEmp.phone]
+                  .filter(Boolean)
+                  .join(' ')
+              : 'Chưa phân công';
+          sheetParts.push(
+            buildSheetKvList([
+              ['Mã phiếu', ticket.no],
+              ['Tình trạng', `${ticket.statusName} (${ticket.finalStatus})`],
+              ['Khách hàng', contract.fullName],
+              ['Địa chỉ', ticket.addressUse || contract.address],
+              ['SĐT KH / Hỗ trợ', ticket.supportPhone || contract.phone],
+              ['Gói / Loại KN', contract.localTypeDesc],
+              ['Tập điểm / POP', ticket.odcCableType || ticket.groupPoints || ticket.popCode],
+              ['KTV chính', empLine],
+              ['Đối tác / Block', [ticket.mainEmp && ticket.mainEmp.partnerName, ticket.mainEmp && ticket.mainEmp.blockName].filter(Boolean).join(' • ')],
+              ['Lịch hẹn', ticket.appointmentSummary],
+              ['Tồn / Lặp 30N', `${ticket.backlogHours} giờ • Lặp: ${ticket.thirtyRepeat}`],
+              ['Ghi nhận C.L', ticket.initDesc || ticket.description],
+              ['Camera Cloud', cloudSummary.statusLabel],
+            ])
+          );
+
+          if (ticket.flag !== 1) {
+            sheetParts.push(
+              el('div', { className: 'ri-result-actions' }, [
+                buildMaintArmedRow({
+                  armKey: 'swap_last',
+                  idleLabel: 'Đặt làm phiếu cuối',
+                  idleClass: 'ri-secondary-btn',
+                  confirmLabel: 'Xác nhận đặt phiếu cuối',
+                  busyKey: 'swap_last',
+                  onConfirm: handleMaintSwapLastTicket,
+                }),
+              ])
+            );
+          }
+
+          const repNameIn = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-name',
+            placeholder: 'Họ tên người đại diện…',
+            value: state.maintRepName || '',
+          });
+          repNameIn.value = state.maintRepName || '';
+          repNameIn.addEventListener('input', (e) => {
+            state.maintRepName = e.target.value;
+          });
+
+          const repRelIn = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-rel',
+            placeholder: 'Quan hệ với chủ hợp đồng…',
+            value: state.maintRepRelation || '',
+          });
+          repRelIn.value = state.maintRepRelation || '';
+          repRelIn.addEventListener('input', (e) => {
+            state.maintRepRelation = e.target.value;
+          });
+
+          const repPhoneIn = el('input', {
+            type: 'tel',
+            inputmode: 'numeric',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-phone',
+            placeholder: 'Số điện thoại người đại diện…',
+            value: state.maintRepPhone || '',
+          });
+          repPhoneIn.value = state.maintRepPhone || '';
+          repPhoneIn.addEventListener('input', (e) => {
+            state.maintRepPhone = e.target.value;
+          });
+
+          sheetParts.push(
+            el('details', { className: 'ri-confirm-input-wrap' }, [
+              el('summary', { className: 'ri-summary-toggle', text: 'Thông tin người đại diện & Biên bản NT' }),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-name', text: 'Họ tên đại diện' }),
+                repNameIn,
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-rel', text: 'Quan hệ' }),
+                repRelIn,
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-phone', text: 'SĐT đại diện' }),
+                repPhoneIn,
+                el('div', { className: 'ri-result-actions' }, [
+                  buildMaintArmedRow({
+                    armKey: 'save_rep',
+                    idleLabel: 'Lưu thông tin đại diện',
+                    idleClass: 'ri-primary-btn',
+                    confirmLabel: 'Xác nhận lưu đại diện',
+                    busyKey: 'save_rep',
+                    onConfirm: handleMaintSaveRep,
+                  }),
+                ]),
+              ]),
+              state.maintBbntRecords.length > 0
+                ? el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintBbntRecords.map((rec) =>
+                      el('div', { className: 'ri-history-card' }, [
+                        el('div', {
+                          className: 'ri-history-macs',
+                          text: `${rec.Code || 'BBNT'} • ${rec.Confirm ? 'Đã xác nhận' : rec.StatusRender === 1 ? 'Đã tạo' : 'Chưa tạo'}`,
+                        }),
+                        el('div', {
+                          className: 'ri-history-meta',
+                          text: [rec.Name || 'Biên bản nghiệm thu Bảo trì', rec.CreateDate || '']
+                            .filter(Boolean)
+                            .join(' • '),
+                        }),
+                      ])
+                    )
+                  )
+                : el('div', { className: 'ri-field-hint', text: 'Chưa có Biên bản nghiệm thu bảo trì.' }),
+            ])
+          );
+        } else if (state.maintTab === 'materials') {
+          const badgeTone =
+            cloudSummary.statusCode === 'transferred'
+              ? 'is-done'
+              : cloudSummary.statusCode === 'ready'
+              ? 'is-ready'
+              : 'is-pending';
+
+          sheetParts.push(
+            el('div', { className: 'ri-cloud-card' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Reset MAC Camera / Chuyển Cloud' }),
+                el('span', {
+                  className: `ri-cloud-badge ${badgeTone}`,
+                  text: cloudSummary.statusLabel,
+                }),
+              ]),
+              el('div', { className: 'ri-cloud-hint', text: cloudSummary.hint }),
+              el('div', { className: 'ri-result-actions' }, [
+                state.maintPartnerUrl
+                  ? el('button', {
+                      type: 'button',
+                      className: 'ri-primary-btn',
+                      disabled: isBusy,
+                      text: 'Mở Chuyển Cloud (Partner)',
+                      onClick: () =>
+                        openExternalOrPortalUrl(state.maintPartnerUrl, {
+                          mode: 'portal',
+                          title: `Chuyển Cloud — ${ticket.no}`,
+                          pageWindow,
+                        }),
+                    })
+                  : null,
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  disabled: isBusy || state.maintMatCatalogLoading,
+                  text: 'Tải lại vật tư',
+                  onClick: async () => {
+                    await refreshMaintDetailInModal();
+                    await loadMaintMaterialCatalogs({ forceReload: true });
+                  },
+                }),
+              ]),
+            ])
+          );
+
+          if (state.maintMatCatalogLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh mục vật tư, kho MAC & lịch sử MAC Camera…' }),
+              ])
+            );
+          } else if (state.maintMatCatalogError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', { text: state.maintMatCatalogError }),
+              ])
+            );
+          }
+
+          const svcOpts = parseMaintenanceComboOptions(
+            state.maintComboConfig,
+            MAINT_CATALOG_KEYS.SERVICES
+          );
+          const causeOpts = parseMaintenanceComboOptions(
+            state.maintComboConfig,
+            MAINT_CATALOG_KEYS.EQUIP_RETURN_CAUSE
+          );
+
+          function buildMaintMatSection(isRetFlag) {
+            const isUse = isRetFlag === 2;
+            const rows = isUse ? state.maintEditUse : state.maintEditReturn;
+            const searchField = isUse ? 'maintEquipSearchUse' : 'maintEquipSearchRet';
+            const pickField = isUse ? 'maintEquipPickUse' : 'maintEquipPickRet';
+            const qtyField = isUse ? 'maintEquipQtyUse' : 'maintEquipQtyRet';
+            const pickerSel = el('select', {
+              className: 'ri-select',
+              id: isUse ? 'ri-maint-mat-use-sel' : 'ri-maint-mat-ret-sel',
+            });
+
+            function fillCatalogSelect(filterRaw) {
+              const needle = maintFoldText(filterRaw);
+              const matched = (state.maintEquipInfos || []).filter(
+                (item) =>
+                  !needle ||
+                  maintFoldText(item.Description || item.Name).includes(needle) ||
+                  maintFoldText(item.ParentName).includes(needle)
+              );
+              pickerSel.textContent = '';
+              if (matched.length === 0) {
+                pickerSel.appendChild(
+                  el('option', { value: '', text: '-- Không tìm thấy vật tư --' })
+                );
+                state[pickField] = '';
+                return;
+              }
+              for (const item of matched) {
+                pickerSel.appendChild(
+                  el('option', {
+                    value: String(item.IdCode),
+                    text: `${item.Description || item.Name}${item.IsMac === 1 ? ' [MAC]' : ''}`,
+                  })
+                );
+              }
+              if (!matched.some((m) => String(m.IdCode) === String(state[pickField]))) {
+                state[pickField] = String(matched[0].IdCode);
+              }
+              pickerSel.value = String(state[pickField]);
+            }
+
+            fillCatalogSelect(state[searchField] || '');
+            pickerSel.addEventListener('change', (e) => {
+              state[pickField] = e.target.value;
+            });
+
+            const searchIn = el('input', {
+              type: 'search',
+              className: 'ri-confirm-input',
+              placeholder: isUse
+                ? 'Tìm vật tư sử dụng (VD: FCAM, AX1800, Cáp)…'
+                : 'Tìm vật tư thu hồi (VD: FCAM, Modem)…',
+              value: state[searchField] || '',
+            });
+            searchIn.value = state[searchField] || '';
+            searchIn.addEventListener('input', (e) => {
+              state[searchField] = e.target.value;
+              fillCatalogSelect(e.target.value);
+            });
+
+            const qtyIn = el('input', {
+              type: 'number',
+              min: '1',
+              className: 'ri-confirm-input ri-mat-qty',
+              value: state[qtyField] || '1',
+            });
+            qtyIn.value = state[qtyField] || '1';
+            qtyIn.addEventListener('input', (e) => {
+              state[qtyField] = e.target.value;
+            });
+
+            return el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `${isUse ? 'Vật tư sử dụng' : 'Vật tư thu hồi'} (${rows.length} dòng)`,
+              }),
+              searchIn,
+              el('div', { className: 'ri-mat-add-row' }, [
+                pickerSel,
+                qtyIn,
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn ri-mat-add-btn',
+                  disabled: isBusy || state.maintEquipInfos.length === 0,
+                  text: '+ Thêm',
+                  onClick: () => handleMaintAddMaterial(isRetFlag),
+                }),
+              ]),
+              rows.length === 0
+                ? el('div', { className: 'ri-field-hint', text: isUse ? 'Chưa có vật tư sử dụng.' : 'Chưa có vật tư thu hồi.' })
+                : el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    rows.map((row, idx) => {
+                      const isLockedCloud = Number(row.CheckReplace || 0) === 2;
+                      const macPool = isUse
+                        ? (state.maintMacPartners || [])
+                            .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                            .map((m) => String(m.mac || '').trim())
+                        : row.ParentName === 'FPT Camera'
+                        ? [
+                            ...new Set([
+                              ...(state.maintCamHistory || []),
+                              ...(state.maintMacUseds || [])
+                                .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                                .map((m) => String(m.mac || '').trim()),
+                            ]),
+                          ]
+                        : (state.maintMacUseds || [])
+                            .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                            .map((m) => String(m.mac || '').trim());
+                      const cleanMacPool = [...new Set(macPool.filter(Boolean))];
+                      if (row.MacAddress && !cleanMacPool.includes(row.MacAddress)) {
+                        cleanMacPool.unshift(row.MacAddress);
+                      }
+
+                      const rowControls = [];
+                      if (isUse) {
+                        const fnSel = el('select', { className: 'ri-select' });
+                        const fnTitles = [...new Set([
+                          ...(svcOpts.map((s) => s.title)),
+                          row.FunctionName || '',
+                          row.ParentName || '',
+                        ].filter(Boolean))];
+                        fnSel.appendChild(el('option', { value: '', text: '-- Chức năng --' }));
+                        for (const ft of fnTitles) {
+                          fnSel.appendChild(el('option', { value: ft, text: ft }));
+                        }
+                        fnSel.value = row.FunctionName || '';
+                        fnSel.disabled = isLockedCloud;
+                        fnSel.addEventListener('change', (e) => {
+                          row.FunctionName = e.target.value;
+                          if (Number(row.IsMac) === 1 && e.target.value === 'Modem' && state.maintModemCallerId) {
+                            row.MacAddress = state.maintModemCallerId;
+                            renderConfirm();
+                          }
+                        });
+                        rowControls.push(fnSel);
+                      }
+
+                      if (Number(row.IsMac) === 1) {
+                        const macSel = el('select', { className: 'ri-select' });
+                        macSel.appendChild(
+                          el('option', {
+                            value: '',
+                            text: cleanMacPool.length
+                              ? `-- Chọn MAC (${cleanMacPool.length}) --`
+                              : '-- Nhập MAC bên dưới --',
+                          })
+                        );
+                        for (const m of cleanMacPool) {
+                          macSel.appendChild(el('option', { value: m, text: m }));
+                        }
+                        macSel.value = row.MacAddress || '';
+                        macSel.disabled = isLockedCloud;
+                        const macIn = el('input', {
+                          type: 'text',
+                          className: 'ri-confirm-input',
+                          placeholder: isUse ? 'MAC sử dụng…' : 'MAC thu hồi…',
+                          value: row.MacAddress || '',
+                        });
+                        macIn.value = row.MacAddress || '';
+                        macIn.disabled = isLockedCloud;
+                        macSel.addEventListener('change', (e) => {
+                          row.MacAddress = e.target.value;
+                          macIn.value = e.target.value;
+                        });
+                        macIn.addEventListener('input', (e) => {
+                          row.MacAddress = e.target.value.trim();
+                        });
+                        rowControls.push(macSel, macIn);
+                      } else {
+                        const qIn = el('input', {
+                          type: 'number',
+                          min: '0',
+                          className: 'ri-confirm-input',
+                          value: String(row.Quantity ?? 1),
+                        });
+                        qIn.value = String(row.Quantity ?? 1);
+                        qIn.addEventListener('input', (e) => {
+                          row.Quantity = Number(e.target.value) || 0;
+                        });
+                        rowControls.push(qIn);
+                      }
+
+                      if (!isUse) {
+                        const causeSel = el('select', { className: 'ri-select' });
+                        const hasZero = causeOpts.some((c) => Number(c.value ?? c.code) === 0);
+                        if (!hasZero) {
+                          causeSel.appendChild(
+                            el('option', { value: '0', text: 'Thu hồi bình thường (nhập MAC)' })
+                          );
+                        }
+                        for (const c of causeOpts) {
+                          const cVal = c.value !== null ? String(c.value) : String(c.code);
+                          causeSel.appendChild(el('option', { value: cVal, text: c.title }));
+                        }
+                        causeSel.value = String(row.CauseReturn ?? 0);
+                        causeSel.addEventListener('change', (e) => {
+                          row.CauseReturn = Number(e.target.value) || 0;
+                        });
+                        rowControls.push(causeSel);
+                      }
+
+                      return el('div', { className: 'ri-mat-card' }, [
+                        el('div', { className: 'ri-inline-head' }, [
+                          el('span', {
+                            className: 'ri-history-macs',
+                            text: `${row.EQuipmentName || row.DBName || 'Thiết bị'}${Number(row.IsMac) === 1 ? '' : ` (SL: ${row.Quantity})`}`,
+                          }),
+                          isLockedCloud
+                            ? el('span', {
+                                className: 'ri-cloud-badge is-done',
+                                text: 'Đã chuyển Cloud (Khóa)',
+                              })
+                            : el('button', {
+                                type: 'button',
+                                className: 'ri-text-btn',
+                                disabled: isBusy,
+                                text: 'Xóa',
+                                onClick: () => {
+                                  rows.splice(idx, 1);
+                                  renderConfirm();
+                                },
+                              }),
+                        ]),
+                        el('div', { className: 'ri-mat-row-grid' }, rowControls),
+                      ]);
+                    })
+                  ),
+            ]);
+          }
+
+          sheetParts.push(
+            buildMaintMatSection(2),
+            buildMaintMatSection(1),
+            el('div', { className: 'ri-result-actions' }, [
+              buildMaintArmedRow({
+                armKey: 'save_materials',
+                idleLabel: 'Lưu vật tư sử dụng & thu hồi',
+                idleClass: 'ri-primary-btn',
+                confirmLabel: 'Xác nhận lưu vật tư lên FOX-ERP',
+                busyKey: 'save_materials',
+                onConfirm: handleMaintSaveMaterials,
+              }),
+            ])
+          );
+        } else if (state.maintTab === 'service') {
+          const catInit = state.maintCatalogInit || {};
+          const svcList = (catInit.Service && catInit.Service.Infos) || [];
+          const initAll = (catInit.InitStatus && catInit.InitStatus.Infos) || [];
+          const curSvc = String(state.maintErrServiceCode || '');
+          const filteredInits = initAll.filter(
+            (i) =>
+              i &&
+              i.Enabled !== false &&
+              (!Array.isArray(i.InfoBases) ||
+                i.InfoBases.length === 0 ||
+                i.InfoBases.some((b) => Number(b.LevelId) === 1 && String(b.Code) === curSvc))
+          );
+
+          const errCat = (state.maintErrorCatalog && state.maintErrorCatalog[curSvc]) || {};
+          const elAll = (errCat.ErrorElement && errCat.ErrorElement.Infos) || [];
+          const filteredEls = elAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrInitCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 2 && String(b.Code) === String(state.maintErrInitCode)
+                ))
+          );
+
+          const rsAll = (errCat.ErrorReason && errCat.ErrorReason.Infos) || [];
+          const filteredReasons = rsAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrElementCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 3 && String(b.Code) === String(state.maintErrElementCode)
+                ))
+          );
+
+          const procAll = (errCat.ProcessingDiretions && errCat.ProcessingDiretions.Infos) || [];
+          const filteredProcs = procAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrReasonCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 4 && String(b.Code) === String(state.maintErrReasonCode)
+                ))
+          );
+
+          const svcSel = el('select', { className: 'ri-select', id: 'ri-maint-err-svc' }, [
+            el('option', { value: '', text: '-- Chọn dịch vụ --' }),
+            ...svcList.map((s) => el('option', { value: String(s.Code), text: s.Desc || s.Code })),
+          ]);
+          svcSel.value = curSvc;
+          svcSel.addEventListener('change', (e) => {
+            state.maintErrServiceCode = e.target.value;
+            state.maintErrInitCode = '';
+            state.maintErrElementCode = '';
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+            if (e.target.value) loadMaintErrorCatalogForService(e.target.value);
+          });
+
+          const initSel = el('select', { className: 'ri-select', id: 'ri-maint-err-init' }, [
+            el('option', { value: '', text: '-- Chọn tình trạng ban đầu --' }),
+            ...filteredInits.map((i) => el('option', { value: String(i.Code), text: i.Desc || i.Code })),
+          ]);
+          initSel.value = state.maintErrInitCode || '';
+          initSel.addEventListener('change', (e) => {
+            state.maintErrInitCode = e.target.value;
+            state.maintErrElementCode = '';
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const elSel = el('select', { className: 'ri-select', id: 'ri-maint-err-el' }, [
+            el('option', { value: '', text: '-- Chọn phần tử lỗi --' }),
+            ...filteredEls.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          elSel.value = state.maintErrElementCode || '';
+          elSel.addEventListener('change', (e) => {
+            state.maintErrElementCode = e.target.value;
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const rsSel = el('select', { className: 'ri-select', id: 'ri-maint-err-rs' }, [
+            el('option', { value: '', text: '-- Chọn nguyên nhân lỗi --' }),
+            ...filteredReasons.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          rsSel.value = state.maintErrReasonCode || '';
+          rsSel.addEventListener('change', (e) => {
+            state.maintErrReasonCode = e.target.value;
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const procSel = el('select', { className: 'ri-select', id: 'ri-maint-err-proc' }, [
+            el('option', { value: '', text: '-- Chọn hướng xử lý --' }),
+            ...filteredProcs.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          procSel.value = state.maintErrProcCode || '';
+          procSel.addEventListener('change', (e) => {
+            state.maintErrProcCode = e.target.value;
+          });
+
+          const resolveDesc = (arr, code) => {
+            const hit = (arr || []).find((x) => String(x.Code) === String(code));
+            return (hit && (hit.Desc || hit.Tittle)) || String(code || '—');
+          };
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Ghi nhận ban đầu & Nguyên nhân lỗi' }),
+              svcSel,
+              initSel,
+              state.maintErrorCatalogLoading
+                ? el('div', { className: 'ri-field-hint', text: 'Đang tải cây nguyên nhân lỗi…' })
+                : null,
+              elSel,
+              rsSel,
+              procSel,
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  disabled: isBusy,
+                  text: '+ Thêm dòng lỗi',
+                  onClick: () => {
+                    if (!state.maintErrServiceCode || !state.maintErrInitCode) {
+                      state.maintNotice = 'Vui lòng chọn ít nhất Dịch vụ và Tình trạng ban đầu.';
+                      state.maintNoticeTone = 'error';
+                      renderConfirm();
+                      return;
+                    }
+                    const chosenProc = filteredProcs.find(
+                      (p) => String(p.Code) === String(state.maintErrProcCode)
+                    );
+                    state.maintEditErrors.push({
+                      ServiceCode: state.maintErrServiceCode,
+                      InitStatusCode: state.maintErrInitCode,
+                      ErrorElementCode: state.maintErrElementCode || '',
+                      ErrorReasonCode: state.maintErrReasonCode || '',
+                      ProcessingDiretions: state.maintErrProcCode
+                        ? [
+                            {
+                              ProcessingDiretionCode: state.maintErrProcCode,
+                              LevelId: Number((chosenProc && chosenProc.LevelId) || 4),
+                            },
+                          ]
+                        : [],
+                    });
+                    state.maintNotice = '';
+                    renderConfirm();
+                  },
+                }),
+                buildMaintArmedRow({
+                  armKey: 'save_errors',
+                  idleLabel: 'Lưu nguyên nhân lỗi',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận lưu nguyên nhân lỗi',
+                  busyKey: 'save_errors',
+                  onConfirm: handleMaintSaveErrors,
+                }),
+              ]),
+              state.maintEditErrors.length === 0
+                ? el('div', { className: 'ri-field-hint', text: 'Chưa có dòng nguyên nhân lỗi nào trên phiếu.' })
+                : el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintEditErrors.map((errRow, idx) => {
+                      const catForSvc =
+                        (state.maintErrorCatalog && state.maintErrorCatalog[errRow.ServiceCode]) || {};
+                      const elTxt = errRow.ErrorElementCode
+                        ? resolveDesc(catForSvc.ErrorElement && catForSvc.ErrorElement.Infos, errRow.ErrorElementCode)
+                        : '';
+                      const rsTxt = errRow.ErrorReasonCode
+                        ? resolveDesc(catForSvc.ErrorReason && catForSvc.ErrorReason.Infos, errRow.ErrorReasonCode)
+                        : '';
+                      const prTxt = (errRow.ProcessingDiretions || [])
+                        .map((d) =>
+                          resolveDesc(
+                            catForSvc.ProcessingDiretions && catForSvc.ProcessingDiretions.Infos,
+                            d.ProcessingDiretionCode
+                          )
+                        )
+                        .filter(Boolean)
+                        .join(', ');
+                      return el('div', { className: 'ri-history-card' }, [
+                        el('div', { className: 'ri-inline-head' }, [
+                          el('span', {
+                            className: 'ri-history-macs',
+                            text: `${resolveDesc(svcList, errRow.ServiceCode)} • ${resolveDesc(initAll, errRow.InitStatusCode)}`,
+                          }),
+                          el('button', {
+                            type: 'button',
+                            className: 'ri-text-btn',
+                            disabled: isBusy,
+                            text: 'Xóa',
+                            onClick: () => {
+                              state.maintEditErrors.splice(idx, 1);
+                              renderConfirm();
+                            },
+                          }),
+                        ]),
+                        el('div', {
+                          className: 'ri-history-meta',
+                          text: [elTxt && `Phần tử: ${elTxt}`, rsTxt && `Lỗi: ${rsTxt}`, prTxt && `Xử lý: ${prTxt}`]
+                            .filter(Boolean)
+                            .join(' • ') || 'Chưa chọn chi tiết phần tử / nguyên nhân.',
+                        }),
+                      ]);
+                    })
+                  ),
+            ])
+          );
+
+          const noteCodeSel = el('select', { className: 'ri-select', id: 'ri-maint-note-code' }, [
+            el('option', { value: MAINT_DISCUSSION_CODES.TICKET_NOTE, text: 'Ghi chú phiếu (TICKET_NOTE)' }),
+            el('option', { value: MAINT_DISCUSSION_CODES.ERROR_REASON_DESC, text: 'Ghi chú nguyên nhân (ERROR_REASON_DESC)' }),
+          ]);
+          noteCodeSel.value = state.maintNoteCode || MAINT_DISCUSSION_CODES.TICKET_NOTE;
+          noteCodeSel.addEventListener('change', (e) => {
+            state.maintNoteCode = e.target.value;
+          });
+
+          const noteArea = el('textarea', {
+            className: 'ri-textarea',
+            id: 'ri-maint-note-input',
+            placeholder: 'Nhập ghi chú xử lý / nguyên nhân lỗi…',
+          });
+          noteArea.value = state.maintNoteDraft || '';
+          noteArea.addEventListener('input', (e) => {
+            state.maintNoteDraft = e.target.value;
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', { className: 'ri-confirm-label', text: `Ghi chú trên phiếu (${state.maintDiscussions.length})` }),
+              noteCodeSel,
+              noteArea,
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-primary-btn',
+                  disabled: isBusy,
+                  text: state.maintBusyKey === 'add_note' ? 'Đang gửi…' : 'Gửi ghi chú',
+                  onClick: handleMaintAddNote,
+                }),
+              ]),
+              state.maintDiscussions.length > 0
+                ? el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintDiscussions.map((d) =>
+                      el('div', { className: 'ri-history-card' }, [
+                        el('div', {
+                          className: 'ri-history-macs',
+                          text: `${d.Code || 'NOTE'} • ${d.CreateBy || 'Hệ thống'}${d.CreateAt ? ` • ${d.CreateAt}` : ''}`,
+                        }),
+                        el('div', { className: 'ri-history-meta', text: d.Note || d.Description || '' }),
+                      ])
+                    )
+                  )
+                : el('div', { className: 'ri-field-hint', text: 'Chưa có ghi chú nào.' }),
+            ])
+          );
+        } else if (state.maintTab === 'complete') {
+          function buildMaintComboSelect(id, label, key, curVal, onChange) {
+            const opts = parseMaintenanceComboOptions(state.maintComboConfig, key);
+            const sel = el('select', { className: 'ri-select', id }, [
+              el('option', { value: '', text: '-- Không chọn --' }),
+              ...opts.map((o) => el('option', { value: o.code, text: o.title || o.code })),
+            ]);
+            sel.value = String(curVal || '');
+            sel.addEventListener('change', (e) => onChange(e.target.value));
+            return el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: id, text: label }),
+              sel,
+            ]);
+          }
+
+          const l1In = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-link1',
+            placeholder: 'Mối nối 1…',
+            value: state.maintLink1 || '',
+          });
+          l1In.value = state.maintLink1 || '';
+          l1In.addEventListener('input', (e) => {
+            state.maintLink1 = e.target.value;
+          });
+
+          const l2In = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-link2',
+            placeholder: 'Mối nối 2…',
+            value: state.maintLink2 || '',
+          });
+          l2In.value = state.maintLink2 || '';
+          l2In.addEventListener('input', (e) => {
+            state.maintLink2 = e.target.value;
+          });
+
+          const lenIn = el('input', {
+            type: 'number',
+            min: '0',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-len-link',
+            value: state.maintLengthLink || '0',
+          });
+          lenIn.value = state.maintLengthLink || '0';
+          lenIn.addEventListener('input', (e) => {
+            state.maintLengthLink = e.target.value;
+          });
+
+          const allowedStatuses = filterAllowedMaintenanceStatuses(
+            state.maintComboConfig,
+            ticket.finalStatus,
+            Boolean(state.maintPermissions && state.maintPermissions.IsUpdateCompleteAndFollowing)
+          );
+          const statusSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-maint-final-status' },
+            allowedStatuses.map((s) =>
+              el('option', { value: String(s.value ?? s.code), text: s.title })
+            )
+          );
+          if (allowedStatuses.some((s) => String(s.value ?? s.code) === String(state.maintTargetStatus))) {
+            statusSel.value = String(state.maintTargetStatus);
+          }
+          statusSel.addEventListener('change', (e) => {
+            state.maintTargetStatus = e.target.value;
+            renderConfirm();
+          });
+
+          const selectedStatusObj = allowedStatuses.find(
+            (s) => String(s.value ?? s.code) === String(state.maintTargetStatus)
+          );
+          const canReturn = canReturnMaintenanceTicketStatus({
+            ticket,
+            permissions: state.maintPermissions,
+            reimbursementStatus: state.maintReimbursementStatus,
+          });
+
+          sheetParts.push(
+            buildMaintComboSelect(
+              'ri-maint-urgent',
+              'Độ ưu tiên',
+              MAINT_CATALOG_KEYS.URGENT,
+              state.maintUrgent,
+              (v) => {
+                state.maintUrgent = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-hifpt',
+              'Nguyên nhân chưa cài đặt HiFPT',
+              MAINT_CATALOG_KEYS.NON_SET_HIFPT,
+              state.maintNonSetHiFpt,
+              (v) => {
+                state.maintNonSetHiFpt = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-incable',
+              'Nguyên nhân sử dụng măng xông',
+              MAINT_CATALOG_KEYS.REASON_IN_CABLE,
+              state.maintReasonInCable,
+              (v) => {
+                state.maintReasonInCable = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-mybao',
+              'Nguyên nhân chưa nghiệm thu Mỹ Báo',
+              MAINT_CATALOG_KEYS.REASON_MY_BAO,
+              state.maintReasonMyBao,
+              (v) => {
+                state.maintReasonMyBao = v;
+              }
+            ),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-maint-link1', text: 'Mối nối 1 / Mối nối 2 / Chiều dài (m)' }),
+              el('div', { className: 'ri-mat-row-grid' }, [l1In, l2In, lenIn]),
+            ]),
+            el('div', { className: 'ri-result-actions' }, [
+              buildMaintArmedRow({
+                armKey: 'save_info',
+                idleLabel: 'Lưu thông tin bảo trì',
+                idleClass: 'ri-secondary-btn',
+                confirmLabel: 'Xác nhận lưu thông tin',
+                busyKey: 'save_info',
+                onConfirm: () => handleMaintSaveInfoOrStatus(false),
+              }),
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-maint-final-status',
+                text: 'Kết quả xử lý / Đóng phiếu bảo trì',
+              }),
+              statusSel,
+              selectedStatusObj && selectedStatusObj.code === 'Complete'
+                ? el('div', {
+                    className: 'ri-field-hint',
+                    text: `Khi chọn Hoàn tất, hệ thống sẽ gửi kèm ${state.maintEditErrors.filter((r) => r.ErrorElementCode || r.ErrorReasonCode).length} dòng Nguyên nhân lỗi đã khai báo.`,
+                  })
+                : null,
+              el('div', { className: 'ri-result-actions' }, [
+                buildMaintArmedRow({
+                  armKey: 'update_status',
+                  idleLabel: 'Cập nhật kết quả xử lý',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận cập nhật / đóng phiếu',
+                  busyKey: 'update_status',
+                  onConfirm: () => handleMaintSaveInfoOrStatus(true),
+                }),
+              ]),
+            ])
+          );
+
+          if (ticket.statusBucket === 'complete' || ticket.statusBucket === 'close') {
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                state.maintReimbursementStatus === 1
+                  ? el('div', {
+                      className: 'ri-sheet-status',
+                      'data-tone': 'info',
+                      text: 'Vật tư đã đề nghị hoàn ứng — không thể trả tình trạng trực tiếp.',
+                    })
+                  : state.maintReimbursementStatus > 1
+                  ? el('div', {
+                      className: 'ri-sheet-status',
+                      'data-tone': 'ok',
+                      text: 'Vật tư đã hoàn ứng.',
+                    })
+                  : canReturn
+                  ? buildMaintArmedRow({
+                      armKey: 'return_status',
+                      idleLabel: 'Trả tình trạng phiếu',
+                      idleClass: 'ri-danger-btn',
+                      confirmLabel: 'Xác nhận trả tình trạng về Đang xử lý',
+                      busyKey: 'return_status',
+                      onConfirm: handleMaintReturnStatus,
+                    })
+                  : el('div', {
+                      className: 'ri-field-hint',
+                      text: 'Phiếu đã kết thúc ngoài tháng hiện tại hoặc không phải phiếu cuối — không mở Trả tình trạng.',
+                    }),
               ])
             );
           }

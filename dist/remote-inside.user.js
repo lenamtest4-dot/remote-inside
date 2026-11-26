@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Remote Inside — Bảng điều khiển hiện trường FPT
 // @namespace    remote-inside.local
-// @version      0.17.4
+// @version      0.18.0
 // @description  Giao diện 1 màn hình tối ưu di động cho 5 công cụ nội bộ FPT (Inside, Port, Camera, Vật tư, Radius)
 // @homepageURL  https://github.com/lenamtest4-dot/remote-inside
 // @updateURL    https://raw.githubusercontent.com/lenamtest4-dot/remote-inside/main/dist/remote-inside.meta.js
@@ -52,8 +52,8 @@
 
 (function () {
   'use strict';
-  const __REMOTE_INSIDE_VERSION__ = "0.17.4";
-  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n  -webkit-text-size-adjust: 100%;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab.is-locked,\n.ri-tab:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n  background: var(--bg-subtle);\n  border-style: dashed;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover:not(:disabled) {\n  background: var(--bg-subtle);\n}\n\n.ri-secondary-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-mode-btn--wide {\n  grid-column: 1 / -1;\n}\n\n.ri-reassign-results {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  margin-top: 8px;\n  max-height: 220px;\n  overflow-y: auto;\n}\n\n.ri-reassign-emp-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 2px;\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 10px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-reassign-emp-btn:hover {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-reassign-emp-btn.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  box-shadow: inset 0 0 0 1px var(--accent-signal);\n}\n\n.ri-reassign-emp-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-reassign-emp-meta {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--ink-muted);\n}\n\n.ri-reassign-preview {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-menu-switch-toggle {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-height: 40px;\n  margin: 6px 0 4px;\n  padding: 6px 8px;\n  border-radius: 8px;\n  background: var(--bg-subtle);\n  font-size: 12.5px;\n  font-weight: 600;\n  color: var(--ink-primary);\n  cursor: pointer;\n}\n\n.ri-menu-switch-toggle input[type=\"checkbox\"] {\n  width: 17px;\n  height: 17px;\n  flex-shrink: 0;\n  accent-color: var(--accent-signal);\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions {\n  flex-wrap: wrap;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 110px;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-staff-panel {\n  padding: 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ri-recall-staff-search-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-staff-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-staff-search-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 14px;\n  padding-right: 14px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n\n/* Prevent iOS Safari / WKWebView auto-zoom when focusing inputs < 16px */\n@supports (-webkit-touch-callout: none) {\n  .ri-root input,\n  .ri-root select,\n  .ri-root textarea {\n    font-size: 16px;\n  }\n}\n";
+  const __REMOTE_INSIDE_VERSION__ = "0.18.0";
+  const __REMOTE_INSIDE_CSS__ = ":host,\n.ri-root {\n  --bg-canvas: #F2F4F7;\n  --bg-surface: #FFFFFF;\n  --bg-subtle: #E9EEF4;\n  --ink-primary: #141B24;\n  --ink-muted: #526072;\n  --accent-signal: #E85D04;\n  --accent-signal-hover: #C94E02;\n  --accent-signal-soft: #FFF3EB;\n  --border-crisp: #D5DCE4;\n  --state-ok: #0F8A5F;\n  --state-ok-soft: #E9F7F1;\n  --state-warn: #B45309;\n  --state-warn-soft: #FEF6E7;\n  --state-danger: #C81E1E;\n  --state-danger-soft: #FDECEC;\n  --state-danger-border: #F5B8B8;\n\n  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Roboto', 'Segoe UI', sans-serif;\n  font-size: 15px;\n  line-height: 1.45;\n  color: var(--ink-primary);\n  box-sizing: border-box;\n  -webkit-font-smoothing: antialiased;\n  -webkit-text-size-adjust: 100%;\n}\n\n.ri-root *,\n.ri-root *::before,\n.ri-root *::after {\n  box-sizing: border-box;\n}\n\n.ri-root button,\n.ri-root input,\n.ri-root select {\n  font-family: inherit;\n  font-size: inherit;\n}\n\n.ri-root button:focus-visible,\n.ri-root input:focus-visible,\n.ri-root select:focus-visible,\n.ri-root a:focus-visible {\n  outline: 2px solid var(--accent-signal);\n  outline-offset: 2px;\n}\n\n/* Nen boc khi mo dang hop thoai tren trang FPT (Userscript mode) */\n.ri-overlay {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483640;\n  background: rgba(20, 27, 36, 0.45);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  padding: 0;\n}\n\n/* Khung doc lap khi chay tren preview.html */\n.ri-standalone-wrap {\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  justify-content: center;\n  align-items: flex-start;\n  padding: 0;\n}\n\n.ri-shell {\n  width: 100%;\n  max-width: 480px;\n  min-height: 100dvh;\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  padding-bottom: max(20px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-overlay,\n  .ri-standalone-wrap {\n    padding: 20px 16px;\n  }\n\n  .ri-shell {\n    min-height: auto;\n    border: 1px solid var(--border-crisp);\n    border-radius: 14px;\n    overflow: hidden;\n    box-shadow: 0 8px 28px rgba(20, 27, 36, 0.12);\n  }\n}\n\n.ri-wide-btn {\n  display: none;\n}\n\n@media (min-width: 640px) {\n  .ri-wide-btn {\n    display: inline-flex;\n    align-items: center;\n    justify-content: center;\n  }\n\n  .ri-shell.is-wide {\n    max-width: 960px;\n  }\n}\n\n/* Thanh top-bar 52px dinh co dinh */\n.ri-topbar {\n  position: sticky;\n  top: 0;\n  z-index: 20;\n  min-height: 52px;\n  background: var(--bg-surface);\n  border-bottom: 1px solid var(--border-crisp);\n  padding: 8px 12px;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-brand {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-width: 0;\n}\n\n.ri-brand-mark {\n  width: 10px;\n  height: 10px;\n  border-radius: 2px;\n  background: var(--accent-signal);\n  flex-shrink: 0;\n}\n\n.ri-brand-title {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  white-space: nowrap;\n}\n\n.ri-topbar-actions {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  flex-wrap: wrap;\n  justify-content: flex-end;\n}\n\n.ri-status-pill {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  min-height: 32px;\n  padding: 4px 10px;\n  border-radius: 999px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-status-dot {\n  width: 7px;\n  height: 7px;\n  border-radius: 999px;\n  background: var(--ink-muted);\n}\n\n.ri-status-pill[data-state=\"ok\"] {\n  background: var(--state-ok-soft);\n  border-color: #B4E2D0;\n  color: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"ok\"] .ri-status-dot {\n  background: var(--state-ok);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] {\n  background: var(--state-warn-soft);\n  border-color: #F3D19E;\n  color: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"iam_expired\"] .ri-status-dot {\n  background: var(--state-warn);\n}\n\n.ri-status-pill[data-state=\"offline\"] {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-status-pill[data-state=\"offline\"] .ri-status-dot {\n  background: var(--state-danger);\n}\n\n.ri-icon-btn {\n  min-height: 34px;\n  padding: 6px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-icon-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-icon-btn:active {\n  transform: translateY(1px);\n}\n\n.ri-main {\n  padding: 12px;\n  display: flex;\n  flex-direction: column;\n  gap: 12px;\n}\n\n.ri-card {\n  background: var(--bg-surface);\n  border: 1px solid var(--border-crisp);\n  border-radius: 12px;\n  padding: 12px;\n}\n\n/* Khu nhap Ma Hop Dong dung chung */\n.ri-contract-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-contract-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-contract-input {\n  flex: 1;\n  min-width: 0;\n  min-height: 48px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 17px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n}\n\n.ri-contract-input::placeholder {\n  font-weight: 400;\n  color: #7D8B9C;\n}\n\n.ri-contract-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-input-tool {\n  min-height: 48px;\n  min-width: 56px;\n  padding: 0 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-input-tool:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-recent-wrap {\n  margin-top: 10px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-recent-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-text-btn {\n  background: transparent;\n  border: none;\n  padding: 4px 6px;\n  color: var(--ink-muted);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  border-radius: 6px;\n}\n\n.ri-text-btn:hover {\n  background: var(--bg-subtle);\n  color: var(--ink-primary);\n}\n\n.ri-recent-chips {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding-bottom: 2px;\n  scrollbar-width: thin;\n}\n\n.ri-chip {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n/* Thanh 5 tab cong cu */\n.ri-tabs {\n  display: flex;\n  gap: 6px;\n  overflow-x: auto;\n  padding: 2px 0;\n  scrollbar-width: none;\n}\n\n.ri-tabs::-webkit-scrollbar {\n  display: none;\n}\n\n.ri-tab {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-muted);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-tab.is-active {\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  box-shadow: inset 0 -2.5px 0 var(--accent-signal);\n}\n\n.ri-tab.is-planned {\n  opacity: 0.72;\n  border-style: dashed;\n}\n\n.ri-tab.is-planned.is-active {\n  opacity: 1;\n  border-style: solid;\n}\n\n.ri-tab.is-locked,\n.ri-tab:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n  background: var(--bg-subtle);\n  border-style: dashed;\n}\n\n.ri-tab-sep {\n  width: 1px;\n  align-self: stretch;\n  margin: 6px 2px;\n  background: var(--border-crisp);\n  flex-shrink: 0;\n}\n\n.ri-tab-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"priority\"] {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-tab.is-active .ri-tab-badge[data-tier=\"in_progress\"] {\n  background: #FEF3C7;\n  color: var(--state-warn);\n}\n\n/* Bang nut lenh thao tac */\n.ri-portal-head {\n  display: flex;\n  justify-content: space-between;\n  align-items: flex-start;\n  gap: 8px;\n  margin-bottom: 12px;\n}\n\n.ri-portal-name {\n  margin: 0;\n  font-size: 16px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-portal-desc {\n  margin: 2px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-portal-host {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  border-radius: 6px;\n  padding: 3px 8px;\n  white-space: nowrap;\n}\n\n.ri-planned-note {\n  margin: 0 0 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  background: #FFFBEB;\n  border: 1px solid #FDE68A;\n  color: #92400E;\n  font-size: 12px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-primary-btn {\n  width: 100%;\n  min-height: 50px;\n  padding: 12px 16px;\n  border: none;\n  border-radius: 10px;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n}\n\n.ri-primary-btn:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-primary-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-primary-btn:disabled,\n.ri-action-btn:disabled {\n  opacity: 0.6;\n  cursor: not-allowed;\n}\n\n.ri-ops-pad {\n  margin-top: 12px;\n  padding: 10px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n}\n\n.ri-ops-label {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 8px;\n}\n\n.ri-action-grid {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-action-btn {\n  min-height: 48px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n  text-align: center;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-action-btn.is-primary {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-action-btn.is-primary:hover:not(:disabled) {\n  background: #FFE8D6;\n}\n\n.ri-action-btn.is-danger {\n  border-color: var(--state-danger-border);\n  color: var(--state-danger);\n}\n\n.ri-action-btn.is-danger:hover:not(:disabled) {\n  background: var(--state-danger-soft);\n  border-color: var(--state-danger);\n}\n\n.ri-action-btn:active:not(:disabled) {\n  transform: translateY(1px);\n}\n\n.ri-utility-row {\n  margin-top: 10px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  gap: 8px;\n}\n\n.ri-secondary-btn {\n  flex: 1;\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  justify-content: center;\n  gap: 6px;\n}\n\n.ri-secondary-btn:hover:not(:disabled) {\n  background: var(--bg-subtle);\n}\n\n.ri-secondary-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n/* Khung ket qua tra ve */\n.ri-result-card {\n  border-radius: 12px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  padding: 12px;\n}\n\n.ri-result-card[data-tone=\"ok\"] {\n  border-color: #B4E2D0;\n}\n\n.ri-result-card[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n}\n\n.ri-result-card[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n}\n\n.ri-result-title {\n  margin: 0;\n  font-size: 15px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-result-msg {\n  margin: 4px 0 0;\n  font-size: 14px;\n  color: var(--ink-primary);\n}\n\n.ri-result-hint {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-result-actions {\n  margin-top: 10px;\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-kv-list {\n  margin: 10px 0 0;\n  padding: 0;\n  list-style: none;\n  border-top: 1px solid var(--border-crisp);\n}\n\n.ri-kv-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: baseline;\n  gap: 12px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-kv-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-kv-key {\n  color: var(--ink-muted);\n  flex-shrink: 0;\n}\n\n.ri-kv-val {\n  color: var(--ink-primary);\n  font-weight: 600;\n  text-align: right;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-sub-section-title {\n  margin: 12px 0 4px;\n  padding-top: 10px;\n  border-top: 1px solid var(--border-crisp);\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-muted);\n}\n\n/* Cac khoi nhung chi tiet 5 muc tu he thong */\n.ri-embed-group {\n  margin-top: 14px;\n  padding-top: 12px;\n  border-top: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-embed-toolbar {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-toolbar-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-toolbar-btns {\n  display: flex;\n  gap: 4px;\n}\n\n.ri-embed-card {\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  overflow: hidden;\n}\n\n.ri-embed-head {\n  min-height: 44px;\n  padding: 6px 10px;\n  background: var(--bg-surface);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-title-wrap {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n  min-width: 0;\n}\n\n.ri-embed-title {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-embed-badge {\n  font-size: 11px;\n  font-weight: 600;\n  padding: 2px 6px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-embed-actions {\n  display: flex;\n  align-items: center;\n  gap: 4px;\n  flex-wrap: wrap;\n}\n\n.ri-embed-open-link,\n.ri-embed-toggle {\n  min-height: 32px;\n  padding: 4px 9px;\n  border-radius: 7px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n  white-space: nowrap;\n}\n\n.ri-embed-open-link:hover,\n.ri-embed-toggle:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-embed-toggle.is-open {\n  border-color: var(--accent-signal);\n  color: var(--accent-signal-hover);\n  background: var(--accent-signal-soft);\n}\n\n.ri-embed-body {\n  border-top: 1px solid var(--border-crisp);\n  background: #FFFFFF;\n}\n\n.ri-embed-frame {\n  width: 100%;\n  border: 0;\n  display: block;\n  background: #FFFFFF;\n}\n\n.ri-embed-demo {\n  padding: 12px;\n  font-size: 13px;\n  color: var(--ink-muted);\n  background: var(--bg-canvas);\n}\n\n/* Nhat ky thao tac */\n.ri-log-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  margin-bottom: 6px;\n}\n\n.ri-section-title {\n  margin: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-log-empty {\n  margin: 6px 0 0;\n  font-size: 13px;\n  color: var(--ink-muted);\n}\n\n.ri-log-list {\n  list-style: none;\n  margin: 0;\n  padding: 0;\n}\n\n.ri-log-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  gap: 10px;\n  padding: 8px 0;\n  border-bottom: 1px solid #EEF2F6;\n  font-size: 13px;\n}\n\n.ri-log-item:last-child {\n  border-bottom: none;\n  padding-bottom: 0;\n}\n\n.ri-log-main {\n  min-width: 0;\n}\n\n.ri-log-action {\n  font-weight: 600;\n  color: var(--ink-primary);\n}\n\n.ri-log-contract {\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-muted);\n  margin-left: 6px;\n}\n\n.ri-log-meta {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  flex-shrink: 0;\n}\n\n.ri-badge {\n  font-size: 11px;\n  font-weight: 700;\n  padding: 2px 7px;\n  border-radius: 6px;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-badge[data-status=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-badge[data-status=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-badge[data-status=\"error\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-log-time {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n/* Hop thoai xac nhan & Ngan quet cau truc */\n.ri-sheet-backdrop {\n  position: fixed;\n  inset: 0;\n  z-index: 2147483645;\n  background: rgba(20, 27, 36, 0.52);\n  display: flex;\n  align-items: flex-end;\n  justify-content: center;\n  padding: 0;\n}\n\n.ri-sheet {\n  width: 100%;\n  max-width: 480px;\n  max-height: 88dvh;\n  overflow-y: auto;\n  -webkit-overflow-scrolling: touch;\n  background: var(--bg-surface);\n  border-top-left-radius: 16px;\n  border-top-right-radius: 16px;\n  border: 1px solid var(--border-crisp);\n  padding: 16px 14px max(18px, env(safe-area-inset-bottom));\n}\n\n@media (min-width: 560px) {\n  .ri-sheet-backdrop {\n    align-items: center;\n    padding: 16px;\n  }\n\n  .ri-sheet {\n    border-radius: 14px;\n    padding: 18px;\n  }\n}\n\n.ri-sheet-title {\n  margin: 0;\n  font-size: 17px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-sheet-sub {\n  margin: 6px 0 0;\n  font-size: 14px;\n  color: var(--ink-muted);\n}\n\n.ri-confirm-contract {\n  margin: 12px 0;\n  padding: 10px 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n}\n\n.ri-confirm-code {\n  font-size: 18px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n.ri-confirm-meta {\n  margin-top: -6px;\n  margin-bottom: 10px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input-wrap {\n  margin: 10px 0 4px;\n}\n\n.ri-confirm-label {\n  display: block;\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  margin-bottom: 6px;\n}\n\n.ri-confirm-input {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-confirm-input:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-inline-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n  margin-bottom: 6px;\n}\n\n.ri-inline-head .ri-confirm-label {\n  margin-bottom: 0;\n}\n\n.ri-select {\n  width: 100%;\n  min-height: 44px;\n  padding: 9px 11px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-select:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n  background: var(--bg-surface);\n}\n\n.ri-field-hint {\n  margin-top: 6px;\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-field-hint[data-state=\"ok\"] {\n  color: var(--state-ok);\n}\n\n.ri-field-hint[data-state=\"warn\"] {\n  color: var(--state-warn);\n}\n\n.ri-field-hint[data-state=\"error\"] {\n  color: var(--state-danger);\n}\n\n.ri-modem-info {\n  margin: 10px 0 6px;\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n}\n\n.ri-modem-mac {\n  margin-top: 4px;\n  font-size: 16px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  letter-spacing: 0.02em;\n  word-break: break-all;\n}\n\n.ri-history-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 280px;\n  overflow-y: auto;\n}\n\n.ri-history-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-history-macs {\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-history-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  word-break: break-word;\n}\n\n.ri-conn-box {\n  margin: 10px 0 4px;\n}\n\n.ri-olt-detected {\n  margin: 8px 0 4px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B6A49;\n}\n\n.ri-olt-detected-title {\n  font-size: 13px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-olt-detected-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 600;\n}\n\n.ri-session-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n  max-height: 300px;\n  overflow-y: auto;\n  margin-bottom: 4px;\n}\n\n.ri-session-card {\n  padding: 11px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-session-ip {\n  font-size: 15px;\n  font-weight: 800;\n  color: var(--ink-primary);\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-session-meta {\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  word-break: break-word;\n}\n\n.ri-session-actions {\n  margin-top: 6px;\n  display: flex;\n  gap: 8px;\n}\n\n.ri-session-kill-btn {\n  min-height: 44px;\n}\n\n.ri-sheet-status {\n  margin: 10px 0;\n  padding: 12px;\n  border-radius: 10px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-sheet-status.is-loading {\n  flex-direction: row;\n  align-items: center;\n  gap: 10px;\n}\n\n.ri-sheet-status[data-tone=\"error\"] {\n  border-color: var(--state-danger-border);\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-sheet-status[data-tone=\"warn\"] {\n  border-color: #F3D19E;\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-list {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-box-item {\n  width: 100%;\n  min-height: 52px;\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-box-item:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-box-item.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-box-item-main {\n  min-width: 0;\n}\n\n.ri-box-mac {\n  font-size: 15px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n  word-break: break-all;\n}\n\n.ri-box-sub {\n  margin-top: 2px;\n  font-size: 12px;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-box-item.is-selected .ri-tab-badge {\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-mode-row {\n  display: grid;\n  grid-template-columns: repeat(2, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-mode-btn {\n  min-height: 44px;\n  padding: 8px 12px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 14px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-mode-btn:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-mode-btn.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-weight: 700;\n}\n\n.ri-mode-btn--wide {\n  grid-column: 1 / -1;\n}\n\n.ri-reassign-results {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n  margin-top: 8px;\n  max-height: 220px;\n  overflow-y: auto;\n}\n\n.ri-reassign-emp-btn {\n  display: flex;\n  flex-direction: column;\n  align-items: flex-start;\n  gap: 2px;\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 10px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-reassign-emp-btn:hover {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n}\n\n.ri-reassign-emp-btn.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  box-shadow: inset 0 0 0 1px var(--accent-signal);\n}\n\n.ri-reassign-emp-title {\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-primary);\n}\n\n.ri-reassign-emp-meta {\n  font-size: 12px;\n  font-weight: 500;\n  color: var(--ink-muted);\n}\n\n.ri-reassign-preview {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n  font-size: 13px;\n  font-weight: 600;\n  line-height: 1.4;\n}\n\n.ri-port-grid {\n  display: grid;\n  grid-template-columns: repeat(4, minmax(0, 1fr));\n  gap: 8px;\n}\n\n.ri-port-chip {\n  min-height: 44px;\n  padding: 6px 4px;\n  border-radius: 9px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  color: var(--ink-primary);\n  font-size: 13px;\n  font-weight: 600;\n  font-variant-numeric: tabular-nums;\n  cursor: pointer;\n  text-align: center;\n}\n\n.ri-port-chip:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-port-chip.is-selected {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-weight: 700;\n}\n\n.ri-port-chip.is-busy,\n.ri-port-chip:disabled {\n  background: #F4F5F7;\n  color: #9AA5B4;\n  border-color: #E2E7EE;\n  text-decoration: line-through;\n  cursor: not-allowed;\n  opacity: 0.72;\n}\n\n.ri-textarea {\n  width: 100%;\n  min-height: 70px;\n  padding: 10px 12px;\n  border: 1.5px solid var(--border-crisp);\n  border-radius: 10px;\n  font-family: inherit;\n  font-size: 14px;\n  color: var(--ink-primary);\n  background: var(--bg-surface);\n  resize: vertical;\n}\n\n.ri-textarea:focus {\n  outline: none;\n  border-color: var(--accent-signal);\n}\n\n.ri-sheet-buttons {\n  margin-top: 14px;\n  display: flex;\n  gap: 8px;\n  position: sticky;\n  bottom: -18px;\n  background: var(--bg-surface);\n  padding-top: 10px;\n  padding-bottom: 4px;\n  border-top: 1px solid var(--border-crisp);\n  z-index: 2;\n}\n\n.ri-danger-btn {\n  flex: 1;\n  min-height: 48px;\n  padding: 10px 14px;\n  border: none;\n  border-radius: 10px;\n  background: var(--state-danger);\n  color: #FFFFFF;\n  font-size: 15px;\n  font-weight: 700;\n  cursor: pointer;\n}\n\n.ri-danger-btn:hover:not(:disabled) {\n  background: #A81818;\n}\n\n.ri-danger-btn:disabled {\n  opacity: 0.48;\n  cursor: not-allowed;\n}\n\n.ri-summary-toggle {\n  cursor: pointer;\n  font-size: 13px;\n  font-weight: 700;\n  color: var(--ink-secondary);\n  padding: 6px 2px;\n  user-select: none;\n}\n\n.ri-menu-switch-toggle {\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-height: 40px;\n  margin: 6px 0 4px;\n  padding: 6px 8px;\n  border-radius: 8px;\n  background: var(--bg-subtle);\n  font-size: 12.5px;\n  font-weight: 600;\n  color: var(--ink-primary);\n  cursor: pointer;\n}\n\n.ri-menu-switch-toggle input[type=\"checkbox\"] {\n  width: 17px;\n  height: 17px;\n  flex-shrink: 0;\n  accent-color: var(--accent-signal);\n}\n\n.ri-privacy-note {\n  margin: 10px 0;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--state-ok-soft);\n  border: 1px solid #B4E2D0;\n  color: #0B6A49;\n  font-size: 13px;\n}\n\n.ri-scan-stats {\n  margin-top: 10px;\n  padding: 10px;\n  border-radius: 9px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  font-size: 13px;\n  display: grid;\n  grid-template-columns: repeat(3, 1fr);\n  gap: 8px;\n  text-align: center;\n}\n\n.ri-scan-stat strong {\n  display: block;\n  font-size: 18px;\n  font-variant-numeric: tabular-nums;\n  color: var(--ink-primary);\n}\n\n/* Nut noi goc phai duoi trong Userscript mode */\n.ri-fab {\n  position: fixed;\n  right: 16px;\n  bottom: 16px;\n  z-index: 2147483642;\n  min-height: 46px;\n  padding: 10px 15px;\n  border-radius: 999px;\n  border: 1.5px solid #FFFFFF;\n  background: var(--accent-signal);\n  color: #FFFFFF;\n  font-size: 14px;\n  font-weight: 700;\n  box-shadow: 0 4px 14px rgba(20, 27, 36, 0.25);\n  cursor: pointer;\n  display: inline-flex;\n  align-items: center;\n  gap: 8px;\n}\n\n.ri-fab.is-recording {\n  background: var(--state-danger);\n}\n\n.ri-fab.is-return {\n  background: var(--state-ok);\n}\n\n.ri-recall-toolbar {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 8px;\n}\n\n.ri-recall-toolbar > button {\n  flex: 1 1 140px;\n}\n\n.ri-recall-card.is-accessory {\n  margin-left: 12px;\n  border-left: 3px solid var(--accent-signal);\n}\n\n.ri-recall-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  white-space: nowrap;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n}\n\n.ri-recall-badge[data-tone=\"ok\"] {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-recall-badge[data-tone=\"danger\"] {\n  background: var(--state-danger-soft);\n  color: var(--state-danger);\n}\n\n.ri-recall-badge[data-tone=\"warn\"] {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-box-item .ri-tab-badge {\n  white-space: nowrap;\n  flex-shrink: 0;\n}\n\n.ri-recall-card .ri-session-actions {\n  flex-wrap: wrap;\n}\n\n.ri-recall-card .ri-session-actions > button {\n  flex: 1 1 110px;\n  width: auto;\n  white-space: nowrap;\n}\n\n.ri-recall-list {\n  max-height: 360px;\n}\n\n.ri-recall-staff-panel {\n  padding: 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--accent-signal);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 10px;\n}\n\n.ri-recall-staff-search-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-staff-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-staff-search-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 14px;\n  padding-right: 14px;\n}\n\n.ri-recall-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-recall-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-recall-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding-left: 16px;\n  padding-right: 16px;\n}\n\n.ri-debt-topbar {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-meta-row {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-picker {\n  margin-top: 8px;\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n.ri-debt-picker .ri-select,\n.ri-debt-picker .ri-confirm-input {\n  min-height: 40px;\n  padding: 7px 10px;\n}\n\n.ri-debt-filter-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-debt-filter-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-chip {\n  flex: 0 0 auto;\n  min-height: 40px;\n  padding: 6px 11px;\n  font-size: 13px;\n  white-space: nowrap;\n}\n\n.ri-debt-search-row {\n  display: flex;\n  align-items: center;\n  gap: 6px;\n}\n\n.ri-debt-search-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-debt-match-count {\n  flex-shrink: 0;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n  padding: 0 4px;\n}\n\n.ri-debt-summary-bar {\n  margin-top: 10px;\n  padding: 9px 11px;\n  border-radius: 9px;\n  border: 1.5px solid #B4E2D0;\n  background: var(--state-ok-soft);\n  color: #0B5B3E;\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-debt-summary-info {\n  min-width: 0;\n}\n\n.ri-debt-summary-title {\n  font-size: 14px;\n  font-weight: 800;\n  line-height: 1.25;\n  word-break: break-word;\n}\n\n.ri-debt-summary-metric {\n  margin-top: 2px;\n  font-size: 12px;\n  font-weight: 700;\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-summary-actions {\n  display: flex;\n  gap: 6px;\n  flex-shrink: 0;\n}\n\n.ri-debt-pill-btn {\n  min-height: 36px;\n  padding: 6px 11px;\n  border-radius: 8px;\n  border: 1px solid #96C9B6;\n  background: #FFFFFF;\n  color: #0B5B3E;\n  font-size: 12px;\n  font-weight: 700;\n  white-space: nowrap;\n  cursor: pointer;\n}\n\n.ri-debt-pill-btn:hover:not(:disabled) {\n  background: #F4FBF8;\n}\n\n.ri-debt-pill-btn.is-accent {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal);\n  color: #FFFFFF;\n}\n\n.ri-debt-pill-btn.is-accent:hover:not(:disabled) {\n  background: var(--accent-signal-hover);\n}\n\n.ri-debt-pill-btn:disabled {\n  opacity: 0.45;\n  cursor: not-allowed;\n}\n\n.ri-debt-list {\n  display: flex;\n  flex-direction: column;\n  max-height: 380px;\n  overflow-y: auto;\n  margin-top: 8px;\n  border: 1px solid var(--border-crisp);\n  border-radius: 10px;\n  background: var(--bg-surface);\n}\n\n.ri-debt-row {\n  width: 100%;\n  min-height: 44px;\n  padding: 8px 11px;\n  border: none;\n  border-bottom: 1px solid #EEF2F6;\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 10px;\n  text-align: left;\n  cursor: pointer;\n}\n\n.ri-debt-row:nth-child(even) {\n  background: #F9FAFC;\n}\n\n.ri-debt-row:last-child {\n  border-bottom: none;\n}\n\n.ri-debt-row:hover {\n  background: var(--bg-subtle);\n}\n\n.ri-debt-rank {\n  flex-shrink: 0;\n  min-width: 24px;\n  font-size: 12px;\n  font-weight: 700;\n  color: var(--ink-muted);\n  font-variant-numeric: tabular-nums;\n}\n\n.ri-debt-row-main {\n  min-width: 0;\n  flex: 1 1 auto;\n}\n\n.ri-debt-name {\n  flex: 1 1 auto;\n  min-width: 0;\n  font-size: 14px;\n  font-weight: 700;\n  color: var(--ink-primary);\n  word-break: break-word;\n}\n\n.ri-debt-sub {\n  font-size: 11px;\n  color: var(--ink-muted);\n}\n\n.ri-debt-qty {\n  flex-shrink: 0;\n  min-width: 44px;\n  padding: 3px 10px;\n  border-radius: 999px;\n  background: var(--accent-signal-soft);\n  color: #B44302;\n  font-size: 14px;\n  font-weight: 800;\n  font-variant-numeric: tabular-nums;\n  text-align: center;\n}\n\n.ri-fab.is-left {\n  right: auto;\n  left: 16px;\n  background: #334155;\n}\n\n.ri-fab-dot {\n  width: 8px;\n  height: 8px;\n  border-radius: 999px;\n  background: #FFFFFF;\n}\n\n/* Spinner don gian */\n.ri-spinner {\n  width: 16px;\n  height: 16px;\n  border: 2px solid currentColor;\n  border-right-color: transparent;\n  border-radius: 999px;\n  display: inline-block;\n  animation: ri-spin 0.7s linear infinite;\n}\n\n@keyframes ri-spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n\n/* Radius IPNAT & IPv6 edit controls */\n.ri-radius-badges {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n  margin: 6px 0;\n}\n\n.ri-radius-card {\n  margin-top: 10px;\n  padding: 12px;\n  border-radius: 10px;\n  background: var(--bg-canvas);\n  border: 1px solid var(--border-crisp);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-radius-card-head {\n  display: flex;\n  align-items: center;\n  justify-content: space-between;\n  gap: 8px;\n}\n\n.ri-radius-card-head .ri-confirm-label {\n  margin: 0;\n}\n\n.ri-radius-diff {\n  display: inline-flex;\n  align-items: center;\n  padding: 2px 8px;\n  border-radius: 999px;\n  font-size: 11px;\n  font-weight: 700;\n  background: var(--bg-subtle);\n  color: var(--ink-muted);\n  white-space: nowrap;\n}\n\n.ri-radius-diff.is-changed {\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-note-row {\n  display: flex;\n  gap: 8px;\n  align-items: stretch;\n}\n\n.ri-radius-note-row .ri-confirm-input {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-radius-note-row > button {\n  flex: 0 0 auto;\n  width: auto;\n  white-space: nowrap;\n  padding: 0 12px;\n}\n\n.ri-radius-presets {\n  display: flex;\n  flex-wrap: wrap;\n  gap: 6px;\n}\n\n.ri-radius-chip {\n  min-height: 34px;\n  padding: 5px 10px;\n  border-radius: 8px;\n  border: 1px solid var(--border-crisp);\n  background: var(--bg-surface);\n  color: var(--ink-primary);\n  font-size: 12px;\n  font-weight: 600;\n  cursor: pointer;\n}\n\n.ri-radius-chip.is-active {\n  border-color: var(--accent-signal);\n  background: var(--accent-signal-soft);\n  color: #B44302;\n}\n\n.ri-radius-err {\n  font-size: 12px;\n  font-weight: 600;\n  color: var(--state-danger);\n}\n\n/* Android FPT Internal Portal Login Gate */\n.ri-shell.ri-auth-gate-shell {\n  max-width: 520px;\n  margin: 0 auto;\n}\n\n.ri-auth-gate {\n  padding: 20px 16px 22px;\n  display: flex;\n  flex-direction: column;\n  gap: 14px;\n}\n\n.ri-auth-gate-head {\n  display: flex;\n  flex-direction: column;\n  gap: 4px;\n}\n\n.ri-auth-gate-sub {\n  font-size: 13px;\n  font-weight: 600;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-detail {\n  margin-top: 6px;\n  font-size: 12px;\n  color: var(--ink-muted);\n}\n\n.ri-auth-gate-actions {\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n/* Phieu bao tri & Chuyen Cloud Camera */\n.ri-cloud-card {\n  padding: 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-cloud-hint {\n  font-size: 13px;\n  line-height: 1.4;\n  color: var(--ink-muted);\n}\n\n.ri-cloud-badge {\n  display: inline-flex;\n  align-items: center;\n  padding: 3px 9px;\n  border-radius: 999px;\n  font-size: 11.5px;\n  font-weight: 700;\n  white-space: nowrap;\n}\n\n.ri-cloud-badge.is-done {\n  background: var(--state-ok-soft);\n  color: var(--state-ok);\n}\n\n.ri-cloud-badge.is-ready {\n  background: var(--accent-signal-soft);\n  color: var(--accent-signal-hover);\n}\n\n.ri-cloud-badge.is-pending {\n  background: var(--state-warn-soft);\n  color: var(--state-warn);\n}\n\n.ri-mat-add-row {\n  display: flex;\n  gap: 6px;\n  align-items: stretch;\n}\n\n.ri-mat-add-row .ri-select {\n  flex: 1 1 auto;\n  min-width: 0;\n}\n\n.ri-mat-qty {\n  width: 68px !important;\n  flex: 0 0 68px;\n  text-align: center;\n}\n\n.ri-mat-add-btn {\n  flex: 0 0 auto;\n  width: auto !important;\n  white-space: nowrap;\n  padding-left: 12px !important;\n  padding-right: 12px !important;\n}\n\n.ri-mat-card {\n  padding: 10px 12px;\n  border-radius: 10px;\n  border: 1.5px solid var(--border-crisp);\n  background: var(--bg-canvas);\n  display: flex;\n  flex-direction: column;\n  gap: 8px;\n}\n\n.ri-mat-row-grid {\n  display: flex;\n  flex-direction: column;\n  gap: 6px;\n}\n\n@media (prefers-reduced-motion: reduce) {\n  .ri-spinner {\n    animation: none;\n    border-style: dotted;\n  }\n  .ri-icon-btn:active,\n  .ri-primary-btn:active,\n  .ri-action-btn:active {\n    transform: none;\n  }\n}\n\n/* Prevent iOS Safari / WKWebView auto-zoom when focusing inputs < 16px */\n@supports (-webkit-touch-callout: none) {\n  .ri-root input,\n  .ri-root select,\n  .ri-root textarea {\n    font-size: 16px;\n  }\n}\n";
 
 // --- config/portals.js ---
 /**
@@ -91,8 +91,9 @@ const PORTALS = {
     },
     iamSso: true,
     status: 'priority',
-    statusLabel: 'Đủ 7 lệnh',
-    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
+    statusLabel: 'Đủ 8 lệnh',
+    description:
+      'Tra thông tin HĐ, Phiếu triển khai, Phiếu bảo trì & Chuyển Cloud Camera, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',
     actions: [
       {
         id: 'lookup',
@@ -111,6 +112,17 @@ const PORTALS = {
         requiresContract: false,
         confirmNote:
           'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
+      },
+      {
+        id: 'maint_ticket',
+        label: 'Phiếu bảo trì',
+        description:
+          'Mở phiếu bảo trì FOX-ERP: Điều chỉnh vật tư, Chuyển Cloud Camera (Partner 1 chạm), Nguyên nhân lỗi, Ghi chú và Đóng phiếu.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tra cứu và thao tác trực tiếp trên phiếu bảo trì FOX-ERP (kèm nút mở nhanh Chuyển Cloud trên Partner).',
       },
       {
         id: 'bypass',
@@ -8760,6 +8772,2223 @@ async function fetchDeploymentAssignedEmps({
   };
 }
 
+// --- adapters/maintenance.js ---
+/**
+ * Adapter thao tac Phieu bao tri & Chuyen Cloud Camera FOX-ERP / Partner.
+ * Chay truc tiep qua VPN & phien IAM hien tai, khong luu mat khau xuong bo nho.
+ */
+const MAINT_ENDPOINTS = {
+  partnerMonitor: 'http://partner.fpt.net/pt-portal/monitor',
+  partnerGetContract: 'http://partner.fpt.net/pt-portal/api/portals/configs/getContract',
+  partnerTicketPage: 'http://partner.fpt.net/tkbt/bt/ticket',
+  foxBase: 'https://fox-erp.fpt.net/app/tkbt/bt',
+  foxTicketPage: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket',
+  userInfo: 'https://fox-erp.fpt.net/app/tkbt/bt/api/user/info',
+  loadComboConfig: 'https://fox-erp.fpt.net/app/tkbt/bt/api/configs/load-combo-config',
+  getTicketStatus: 'https://fox-erp.fpt.net/app/tkbt/bt/api/tickets/get-ticket-status',
+  decryptRequest: 'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/decrypt-request',
+  encryptGeneral: 'https://fox-erp.fpt.net/app/tkbt/bt/api/generals/encrypt',
+  getContractFromMicro:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-contract-from-micro',
+  getContractInfo: 'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-contract-info',
+  getListContractInfo: 'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-list-contract-info',
+  getContractProduct: 'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-contract-product',
+  checkOnlineSession:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/check-online-session-by-objid',
+  getTicketEquipments:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-ticket-equipments',
+  getEquipmentInfos: 'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-equipment-infos',
+  getEquipmentExport: 'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-equipment-export',
+  getEquipmentMac: 'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-equipment-mac',
+  updateEquipment: 'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/update-equipment',
+  getMacHistoryCameraOtt:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-mac-history-camera-ott',
+  getMacHistoryCameraCombo:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/materials/get-mac-history-camera-combo',
+  getInitAndErrorByTicket:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/origins/get-init-status-and-error-complete-by-ticket',
+  catalogGetInfoInit: 'https://fox-erp.fpt.net/app/tkbt/bt/api/origins/catalog-get-info-init',
+  updateServiceInit: 'https://fox-erp.fpt.net/app/tkbt/bt/api/origins/update-service-init',
+  getInfoErrorComplete:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-info-errror-complete',
+  ticketUpdateErrorComplete:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/ticket-update-error-complete',
+  getDiscussionByCode:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/get-discussion-by-code',
+  updateDiscussion: 'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/update-discussion',
+  ticketUpdateAndComplete:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/contracts/ticket-update-and-complete',
+  returnFinalStatus:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/maintenances/return-final-status',
+  getReimbursementStatusNextGen:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/maintenances/get-reimbursement-status-nextgen',
+  getReimbursementStatus:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/maintenances/get-reimbursement-status',
+  getListRecordTicket:
+    'https://fox-erp.fpt.net/app/tkbt/bt/api/maintenances/get-list-record-ticket',
+  updateFlag: 'https://fox-erp.fpt.net/app/tkbt/bt/api/implementfunctions/update-flag',
+};
+const MAINT_STATUS = {
+  DaPhanCong: 0,
+  DaXuLy: 1,
+  ChuaPhanCong: 2,
+  DaXuLyHoanTatQuaPhone: 3,
+  DaXuLyVaDangTheoDoi: 5,
+  DaNhanCa: 6,
+  DangDiChuyen: 7,
+  DangXuLy: 10,
+  DongCheckList: 97,
+  HuyCheckList: 100,
+};
+const MAINT_CATALOG_KEYS = {
+  TICKET_STATUS: 'MaintenanceTicketStatus',
+  URGENT: 'MaintenanceTicketUrgent',
+  NON_SET_HIFPT: 'MaintenanceReasonNonSetHiFPT',
+  REASON_IN_CABLE: 'MaintenanceReasonUseCapbleJoinR',
+  REASON_MY_BAO: 'MaintenanceReasonMyBaoUnAcceptance',
+  EQUIP_RETURN_CAUSE: 'MaintenanceEquipReturnCause',
+  SERVICES: 'MaintenanceServices',
+  WEB_NAVIGATE: 'MaintenanceWebNavigate',
+};
+const MAINT_DISCUSSION_CODES = {
+  TICKET_NOTE: 'TICKET_NOTE',
+  ERROR_REASON_DESC: 'ERROR_REASON_DESC',
+  CUSTOMER_URGENT: 'CUSTOMER_URGENT',
+};
+
+const MAINT_CONTRACT_FIELDS = [
+  'objid',
+  'contract',
+  'status',
+  'name',
+  'fullname',
+  'fullnamevn',
+  'createdate',
+  'firstaccess',
+  'localtype',
+  'localtypedesc',
+  'branchcode',
+  'locationid',
+  'location',
+  'locationl3',
+  'locationname',
+  'locationnumber',
+  'locationstreet',
+  'locationward',
+  'locationdistrict',
+  'macstb',
+  'grouppoints',
+  'odccabletype',
+  'locationphone',
+  'type',
+  'email',
+  'macaddress',
+  'idclength',
+  'odclength',
+  'isvip',
+];
+
+function maintDecodeSafeQueryParam(rawVal) {
+  if (!rawVal) return '';
+  try {
+    return decodeURIComponent(String(rawVal));
+  } catch {
+    return String(rawVal);
+  }
+}
+
+function maintExtractQueryQ(rawUrl) {
+  const m = String(rawUrl || '').match(/[?&]q=([^&#]+)/i);
+  return m && m[1] ? maintDecodeSafeQueryParam(m[1]).trim() : '';
+}
+
+function maintFoldText(raw) {
+  return String(raw || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd')
+    .toLowerCase()
+    .trim();
+}
+
+function maintSafeJsonParse(rawText) {
+  if (typeof rawText !== 'string') return rawText;
+  const trimmed = rawText.trim();
+  if (!trimmed) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tao cap URL mo Phieu bao tri tren FOX-ERP va Partner Blazor tu cung ma hash q.
+ */
+function buildMaintenanceTicketUrls(hash) {
+  const clean = String(hash || '').trim();
+  if (!clean) {
+    return { foxUrl: '', partnerUrl: '' };
+  }
+  const encoded = encodeURIComponent(clean);
+  return {
+    foxUrl: `${MAINT_ENDPOINTS.foxTicketPage}?q=${encoded}`,
+    partnerUrl: `${MAINT_ENDPOINTS.partnerTicketPage}?q=${encoded}`,
+  };
+}
+
+/**
+ * Tim lien ket phieu bao tri (/tkbt/bt/ticket) trong phan hoi getContract cua Partner.
+ */
+function extractMaintenanceTicketLink(partnerData) {
+  const list = Array.isArray(partnerData) ? partnerData : [];
+  if (list.length === 0) {
+    return {
+      found: false,
+      reason: 'not_found',
+      message: 'Partner không trả về phiếu đang mở cho hợp đồng này.',
+    };
+  }
+
+  for (const item of list) {
+    if (!item || typeof item.url !== 'string') continue;
+    const rawUrl = item.url.trim();
+    if (/\/(?:app\/)?tkbt\/bt\/ticket/i.test(rawUrl)) {
+      const hash = maintExtractQueryQ(rawUrl);
+      if (hash) {
+        const urls = buildMaintenanceTicketUrls(hash);
+        const foxUrl = /\/app\/tkbt\/bt\/ticket/i.test(rawUrl) && /^https?:\/\//i.test(rawUrl)
+          ? rawUrl
+          : urls.foxUrl;
+        return {
+          found: true,
+          url: foxUrl,
+          partnerUrl: urls.partnerUrl,
+          hash,
+          isBackLog: Boolean(item.isBackLog),
+          type: String(item.type || ''),
+        };
+      }
+    }
+  }
+
+  return {
+    found: false,
+    reason: 'not_found',
+    message: 'Hợp đồng này chưa có phiếu Bảo trì (/bt/ticket) trong kết quả Partner.',
+  };
+}
+
+/**
+ * Trich tham so q khi nguoi dung dang mo san trang bao tri tren fox-erp.fpt.net hoac partner.fpt.net.
+ */
+function extractMaintenanceHashFromLocation(loc) {
+  if (!loc) return '';
+  try {
+    const hostname = String(loc.hostname || '').toLowerCase();
+    const pathname = String(loc.pathname || '').toLowerCase();
+    const isFoxBt =
+      hostname === 'fox-erp.fpt.net' &&
+      (pathname.startsWith('/app/tkbt/bt/ticket') ||
+        pathname.startsWith('/app/tkbt/bt/temp/ticket'));
+    const isPartnerBt =
+      hostname === 'partner.fpt.net' && pathname.startsWith('/tkbt/bt/ticket');
+    if (!isFoxBt && !isPartnerBt) {
+      return '';
+    }
+    return maintExtractQueryQ(String(loc.search || loc.href || ''));
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Doc danh sach lua chon tu mang load-combo-config theo ParentName.
+ */
+function parseMaintenanceComboOptions(comboConfig, parentName) {
+  if (!Array.isArray(comboConfig) || !parentName) {
+    return [];
+  }
+  const group = comboConfig.find((g) => g && g.ParentName === parentName);
+  const datas = group && Array.isArray(group.Datas) ? group.Datas : [];
+  return datas
+    .filter((d) => d && (d.Code !== undefined || d.Value !== undefined))
+    .map((d) => ({
+      code: d.Code !== undefined && d.Code !== null ? String(d.Code) : '',
+      value: d.Value !== undefined && d.Value !== null ? Number(d.Value) : null,
+      title: String(d.Tittle ?? d.Title ?? d.Desc ?? '').trim(),
+      enabled: d.Enabled !== false,
+      position: Number(d.Position ?? 0),
+      content: String(d.Content ?? ''),
+    }))
+    .sort((a, b) => a.position - b.position);
+}
+
+/**
+ * Sinh ma phieu chuan theo cong thuc ae(contract, createdate, index) cua FOX-ERP BT.
+ */
+function buildMaintenanceTicketNo(contract, createDate, index1Based = 1, isOld = false) {
+  const cleanContract = String(contract || '').trim();
+  let stamp = '';
+  if (createDate) {
+    const d = createDate instanceof Date ? createDate : new Date(createDate);
+    if (!Number.isNaN(d.getTime())) {
+      const yy = String(d.getFullYear()).slice(-2);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mi = String(d.getMinutes()).padStart(2, '0');
+      stamp = `${yy}${mm}${dd}${hh}${mi}`;
+    }
+  }
+  return `BT.${cleanContract}.${stamp}${isOld ? ' [cũ]' : `-${index1Based}`}`;
+}
+
+function maintResolveTicketStatusBucket(finalStatus, ticketStatusCfg) {
+  const num = Number(finalStatus);
+  const cfg = ticketStatusCfg && typeof ticketStatusCfg === 'object' ? ticketStatusCfg : {};
+  const checkIn = (arr) =>
+    Array.isArray(arr) &&
+    arr.some((x) => {
+      if (typeof x === 'number' || typeof x === 'string') return Number(x) === num;
+      return x && Number(x.Value ?? x.Code ?? x.Id) === num;
+    });
+  if (checkIn(cfg.Backlogs)) return 'backlog';
+  if (checkIn(cfg.Completes)) return 'complete';
+  if (checkIn(cfg.Closes)) return 'close';
+  if (checkIn(cfg.Others)) return 'other';
+  if ([0, 2, 6, 7, 10].includes(num)) return 'backlog';
+  if ([1, 3, 5].includes(num)) return 'complete';
+  if ([97, 100].includes(num)) return 'close';
+  return 'other';
+}
+
+function maintResolveStatusTitle(comboConfig, finalStatus) {
+  const opts = parseMaintenanceComboOptions(comboConfig, MAINT_CATALOG_KEYS.TICKET_STATUS);
+  const hit = opts.find((o) => Number(o.value) === Number(finalStatus));
+  if (hit && hit.title) return hit.title;
+  const fallback = {
+    0: 'Đã phân công',
+    1: 'Đã xử lý',
+    2: 'Chưa phân công',
+    3: 'Đã xử lý hoàn tất qua Phone',
+    5: 'Đã xử lý và đang theo dõi',
+    6: 'Đã nhận ca',
+    7: 'Đang di chuyển',
+    10: 'Đang xử lý',
+    97: 'Đóng CheckList',
+    100: 'Hủy CheckList',
+  };
+  return fallback[Number(finalStatus)] || `Mã ${finalStatus}`;
+}
+
+function maintFormatAppointmentSummary(appt) {
+  if (!appt || typeof appt !== 'object') return '';
+  const pairs = [
+    [appt.timezonered, appt.appointmentdatered],
+    [appt.timezoneblue, appt.appointmentdateblue],
+  ];
+  for (const [tz, dt] of pairs) {
+    const parts = [String(tz || '').trim(), String(dt || '').trim()].filter(Boolean);
+    if (parts.length) {
+      const count =
+        Number(appt.appointmenttimes || 0) + Number(appt.appointmenttimestinpn || 0);
+      return count > 0 ? `${parts.join(' • ')} (${count} lần)` : parts.join(' • ');
+    }
+  }
+  return '';
+}
+
+function maintCalcBacklogHours(dateRef) {
+  if (!dateRef) return 0;
+  const d = new Date(dateRef);
+  if (Number.isNaN(d.getTime())) return 0;
+  const start = new Date(d);
+  start.setMinutes(0, 0, 0);
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  return Math.max(0, Math.floor((now.getTime() - start.getTime()) / 3600000));
+}
+
+/**
+ * Chuan hoa du lieu hop dong tu get-contract-from-micro hoac get-contract-info.
+ */
+function normalizeMaintenanceContract(contractData, queryInfo = {}) {
+  const microList =
+    contractData &&
+    contractData.ContractFromMicro &&
+    Array.isArray(contractData.ContractFromMicro.maintenancecontract)
+      ? contractData.ContractFromMicro.maintenancecontract
+      : Array.isArray(contractData && contractData.maintenancecontract)
+      ? contractData.maintenancecontract
+      : null;
+
+  const row = (microList && microList[0]) || (contractData && contractData.Contract) || contractData || {};
+  const objPhones = Array.isArray(row.objphone)
+    ? row.objphone
+    : Array.isArray(contractData && contractData.Objphone)
+    ? contractData.Objphone
+    : [];
+  const mainPhoneObj = objPhones.find((p) => p && Number(p.type) === 5) || objPhones[0] || null;
+  const statusNum = Number(row.status ?? 0);
+
+  return {
+    objId: Number(row.objid ?? row.id ?? queryInfo.ObjId ?? 0),
+    contract: String(row.contract || queryInfo.Contract || '').trim(),
+    fullName: String(row.fullnamevn || row.fullname || row.name || '').trim(),
+    address: String(row.location || row.address || row.locationl3 || '').trim(),
+    status: statusNum,
+    statusName: statusNum === 1 ? 'Bình thường' : statusNum === 0 ? 'Chờ kích hoạt' : `Mã ${statusNum}`,
+    localType: Number(row.localtype ?? 0),
+    localTypeDesc: String(row.localtypedesc || row.detailservice || '').trim(),
+    phone: String(row.locationphone || (mainPhoneObj && mainPhoneObj.phone) || '').trim(),
+    accessName: String(row.name || '').trim(),
+    firstAccess: String(row.firstaccess || '').trim(),
+    locationId: Number(row.locationid ?? 0),
+    branchCode: Number(row.branchcode ?? 0),
+    groupPoints: String(row.grouppoints || '').trim(),
+    odcCableType: String(row.odccabletype || '').trim(),
+    macAddress: String(row.macaddress || '').trim(),
+    isVip: Number(row.isvip ?? row.typeVip ?? 0),
+    idclength: Number(row.idclength ?? 0),
+    odclength: Number(row.odclength ?? 0),
+  };
+}
+
+/**
+ * Chuan hoa danh sach phieu bao tri tu /api/contracts/get-list-contract-info.
+ */
+function normalizeMaintenanceTicketList(
+  rawListData,
+  contract,
+  comboConfig = [],
+  ticketStatusCfg = null
+) {
+  const src = rawListData && typeof rawListData === 'object' ? rawListData : {};
+  const splists = Array.isArray(src.splist) ? src.splist : [];
+  const details = Array.isArray(src.splistdetail) ? src.splistdetail : [];
+  const appts = Array.isArray(src.maintenance_appointment) ? src.maintenance_appointment : [];
+  const assigns = Array.isArray(src.maintenance_assignment) ? src.maintenance_assignment : [];
+
+  const filtered = splists
+    .filter((t) => t && (t.lladdressid == null || Number(t.lladdressid) === 0))
+    .slice()
+    .sort((a, b) => {
+      const ta = a.createdate ? new Date(a.createdate).getTime() : 0;
+      const tb = b.createdate ? new Date(b.createdate).getTime() : 0;
+      return ta - tb;
+    });
+
+  const mapped = filtered.map((t, idx) => {
+    const supId = Number(t.id ?? 0);
+    const det = details.find((d) => d && Number(d.supportlistid) === supId) || {};
+    const appt = appts.find((a) => a && Number(a.supid) === supId) || {};
+    const ticketAssigns = assigns.filter((a) => a && Number(a.supid) === supId);
+    const mainAssign = ticketAssigns.find((a) => Number(a.empstatus) === 1) || {};
+    const extraAssigns = ticketAssigns.filter((a) => Number(a.empstatus) === 2);
+
+    const finalStatus = Number(t.finalstatus ?? MAINT_STATUS.DaXuLy);
+    const no = buildMaintenanceTicketNo(contract, t.createdate, idx + 1, false);
+    const flag = Number(t.flag ?? 0);
+    const statusBucket = maintResolveTicketStatusBucket(finalStatus, ticketStatusCfg);
+
+    return {
+      objId: Number(t.objid ?? 0),
+      supId,
+      no,
+      flag,
+      isActive: flag === 1,
+      finalStatus,
+      statusName: maintResolveStatusTitle(comboConfig, finalStatus),
+      statusBucket,
+      createDate: String(t.createdate || '').trim(),
+      finishDate: String(t.finishdate || '').trim(),
+      createBy: String(t.createby || '').trim(),
+      addressUse: String(t.supportlocation || '').trim(),
+      locationId: Number(det.locationid ?? 0),
+      deptId: Number(t.deptid ?? 0),
+      partnerId: Number(det.partnerid ?? 0),
+      description: String(t.description || '').trim(),
+      initDesc: String(t.initdesc || '').trim(),
+      initStatus: Number(t.initstatus ?? 0),
+      urgentNew: t.urgentnew ?? null,
+      nonSetHiFpt: t.nonsethifpt ?? null,
+      reasonInCable: det.reasonincable ?? null,
+      reasonMyBaoUnAcceptance: det.reasonmybaounacceptance ?? null,
+      link1: String(t.link1 || '').trim(),
+      link2: String(t.link2 || '').trim(),
+      lengthLink: Number(t.lengthlink ?? 0),
+      repreName: String(det.reprename || '').trim(),
+      repreRelation: String(det.reprerelation || '').trim(),
+      reprePhone: String(det.reprephone || '').trim(),
+      supportPhone: String(t.supportphone || '').trim(),
+      popCode: String(t.popcode || '').trim(),
+      groupPoints: String(t.grouppoints || det.grouppointcore || '').trim(),
+      odcCableType: String(t.odccabletype || '').trim(),
+      thirtyRepeat: Math.max(0, Number(t.thirtyrepeat ?? 0) - 1),
+      backlogHours: maintCalcBacklogHours(appt.appointmentdateblue || t.createdate),
+      mainEmp: {
+        account: String(mainAssign.accountemp || '').trim(),
+        code: String(mainAssign.codeemp || '').trim(),
+        phone: String(mainAssign.empphone || '').trim(),
+        email: String(mainAssign.empemail || '').trim(),
+        blockName: String(mainAssign.blocknameemp || det.blockname || '').trim(),
+        partnerName: String(mainAssign.partnername || '').trim(),
+        plotsName: String(mainAssign.plotsname || det.plotsname || '').trim(),
+        deptId: Number(mainAssign.deptid ?? t.deptid ?? 0),
+      },
+      extraEmps: extraAssigns.map((e) => ({
+        account: String(e.accountemp || '').trim(),
+        code: String(e.codeemp || '').trim(),
+        phone: String(e.empphone || '').trim(),
+      })),
+      appointmentSummary: maintFormatAppointmentSummary(appt),
+      raw: {
+        ObjId: Number(t.objid ?? 0),
+        SupportListId: supId,
+        Flag: flag,
+        CheckListFinalStatus: finalStatus,
+        FinishDate: t.finishdate || null,
+        SupportListUrgentNew: t.urgentnew ?? null,
+        NonSetHiFPT: t.nonsethifpt ?? null,
+        SupportLIstDetail_ReasonInCable: det.reasonincable ?? null,
+        SupportListDetail_ReasonMyBaoUnAcceptance: det.reasonmybaounacceptance ?? null,
+        Link1: t.link1 ?? '',
+        Link2: t.link2 ?? '',
+        SupportListLengthLink: Number(t.lengthlink ?? 0),
+        AssignmentMainDeptId: Number(mainAssign.deptid ?? t.deptid ?? 0),
+        AssignmentAccountEmp: String(mainAssign.accountemp || '').trim(),
+        SpListLocationId: Number(det.locationid ?? 0),
+      },
+    };
+  });
+
+  return mapped.sort((a, b) => {
+    const ta = a.createDate ? new Date(a.createDate).getTime() : 0;
+    const tb = b.createDate ? new Date(b.createDate).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+/**
+ * Chon phieu dang thao tac uu tien: selectedSupId -> Flag=1 -> dang xu ly (backlog) -> moi nhat.
+ */
+function selectActiveMaintenanceTicket(tickets, selectedSupId = 0) {
+  const list = Array.isArray(tickets) ? tickets : [];
+  const target = Number(selectedSupId || 0);
+  if (target > 0) {
+    const byId = list.find((t) => Number(t && t.supId) === target);
+    if (byId) return byId;
+  }
+  return (
+    list.find((t) => t && Number(t.flag) === 1) ||
+    list.find((t) => t && t.statusBucket === 'backlog') ||
+    list[0] ||
+    null
+  );
+}
+
+function maintNormalizeEquipmentItem(raw, defaultIsReturn) {
+  const item = raw && typeof raw === 'object' ? raw : {};
+  return {
+    ID: Number(item.ID ?? 0),
+    CodeID: Number(item.CodeID ?? 0),
+    EQuipmentName: String(item.EQuipmentName ?? item.Description ?? '').trim(),
+    DBName: String(item.DBName ?? item.Name ?? '').trim(),
+    FunctionName: String(item.FunctionName ?? '').trim(),
+    Quantity: Number(item.Quantity ?? 1),
+    MacAddress: String(item.MacAddress ?? '').trim(),
+    Type: Number(item.Type ?? item.EQType ?? 0),
+    ParentName: String(item.ParentName ?? '').trim(),
+    Orderby: Number(item.Orderby ?? 0),
+    ParentOrder: Number(item.ParentOrder ?? 0),
+    AccountReplace: String(item.AccountReplace ?? '').trim(),
+    CheckReplace: Number(item.CheckReplace ?? 0),
+    IsMac: Number(item.IsMac ?? 0),
+    CauseReturn: Number(item.CauseReturn ?? 0),
+    IsReturn: Number(item.IsReturn ?? defaultIsReturn),
+  };
+}
+
+function maintIsFptCamera(item) {
+  return String((item && item.ParentName) || '').trim() === 'FPT Camera';
+}
+
+/**
+ * Danh gia trang thai san sang Chuyen Cloud Camera tren Partner dua tren lstUse & lstReturn.
+ */
+function evaluateMaintenanceCameraCloud(lstUse = [], lstReturn = []) {
+  const useList = Array.isArray(lstUse) ? lstUse : [];
+  const retList = Array.isArray(lstReturn) ? lstReturn : [];
+  const useCams = useList.filter(maintIsFptCamera);
+  const retCams = retList.filter(maintIsFptCamera);
+  const hasCameras = useCams.length > 0 || retCams.length > 0;
+
+  if (!hasCameras) {
+    return {
+      hasCameras: false,
+      useCameraCount: 0,
+      returnCameraCount: 0,
+      countsMatch: true,
+      allMacsFilled: false,
+      transferredCount: 0,
+      allTransferred: false,
+      readyForPartnerCloud: false,
+      statusCode: 'none',
+      statusLabel: 'Chưa gắn thiết bị FPT Camera trên phiếu',
+      hint: 'Thêm đủ Camera sử dụng (đã gắn mới trên FPT Fife) và Camera thu hồi để mở Chuyển Cloud trên Partner.',
+    };
+  }
+
+  const countsMatch = useCams.length > 0 && useCams.length === retCams.length;
+  const allUseMacs = useCams.every((c) => Boolean(String(c.MacAddress || '').trim()));
+  const allRetMacs = retCams.every(
+    (c) => Boolean(String(c.MacAddress || '').trim()) || Number(c.CauseReturn || 0) > 0
+  );
+  const allMacsFilled = countsMatch && allUseMacs && allRetMacs;
+  const allCamRows = [...useCams, ...retCams];
+  const transferredRows = allCamRows.filter((c) => Number(c.CheckReplace || 0) === 2);
+  const transferredCount = transferredRows.length;
+  const allTransferred = allCamRows.length > 0 && transferredCount === allCamRows.length;
+
+  if (transferredCount > 0 && allTransferred) {
+    return {
+      hasCameras: true,
+      useCameraCount: useCams.length,
+      returnCameraCount: retCams.length,
+      countsMatch,
+      allMacsFilled,
+      transferredCount,
+      allTransferred: true,
+      readyForPartnerCloud: false,
+      statusCode: 'transferred',
+      statusLabel: 'Đã chuyển Cloud (MAC Camera đã khóa)',
+      hint: 'Hệ thống đánh dấu CheckReplace=2 (đã chuyển Cloud xong). Không xóa dòng thu hồi vì sẽ báo lỗi yêu cầu thao tác trên app Camera.',
+    };
+  }
+
+  if (allMacsFilled) {
+    return {
+      hasCameras: true,
+      useCameraCount: useCams.length,
+      returnCameraCount: retCams.length,
+      countsMatch: true,
+      allMacsFilled: true,
+      transferredCount,
+      allTransferred: false,
+      readyForPartnerCloud: true,
+      statusCode: 'ready',
+      statusLabel: `Sẵn sàng Chuyển Cloud (${useCams.length} giao / ${retCams.length} thu hồi)`,
+      hint: 'Đã có đủ Camera giao và Camera thu hồi. Lưu vật tư trên phiếu rồi bấm "Mở Chuyển Cloud (Partner)" để bấm nút chuyển Cloud 1 chạm.',
+    };
+  }
+
+  let reason = `Camera sử dụng: ${useCams.length} • Camera thu hồi: ${retCams.length}.`;
+  if (!countsMatch) {
+    reason = `Số lượng Camera sử dụng (${useCams.length}) chưa bằng Camera thu hồi (${retCams.length}).`;
+  } else if (!allUseMacs || !allRetMacs) {
+    reason = 'Vui lòng chọn đủ MAC Camera sử dụng và MAC Camera thu hồi (hoặc nguyên nhân không thu hồi).';
+  }
+
+  return {
+    hasCameras: true,
+    useCameraCount: useCams.length,
+    returnCameraCount: retCams.length,
+    countsMatch,
+    allMacsFilled,
+    transferredCount,
+    allTransferred: false,
+    readyForPartnerCloud: false,
+    statusCode: 'incomplete',
+    statusLabel: 'Chưa đủ điều kiện Chuyển Cloud',
+    hint: `${reason} Lưu ý: Camera sử dụng phải đã thêm mới trên ứng dụng FPT Fife.`,
+  };
+}
+
+/**
+ * Chuan hoa danh sach vat tu bao tri (lstUse & lstReturn) + danh gia trang thai Camera Cloud.
+ */
+function normalizeMaintenanceMaterials(rawData) {
+  const src = rawData && typeof rawData === 'object' ? rawData : {};
+  const lstUse = (Array.isArray(src.lstUse) ? src.lstUse : []).map((r) =>
+    maintNormalizeEquipmentItem(r, 2)
+  );
+  const lstReturn = (Array.isArray(src.lstReturn) ? src.lstReturn : []).map((r) =>
+    maintNormalizeEquipmentItem(r, 1)
+  );
+  return {
+    lstUse,
+    lstReturn,
+    cameraCloudSummary: evaluateMaintenanceCameraCloud(lstUse, lstReturn),
+  };
+}
+
+/**
+ * Kiem tra quy tac nghiep vu vat tu bao tri truoc khi goi /api/materials/update-equipment.
+ */
+function validateMaintenanceMaterials({
+  objId = 0,
+  supId = 0,
+  locationId = 0,
+  logonUser = '',
+  lstUse = [],
+  lstReturn = [],
+} = {}) {
+  const useRows = Array.isArray(lstUse) ? lstUse.map((r) => maintNormalizeEquipmentItem(r, 2)) : [];
+  const retRows = Array.isArray(lstReturn)
+    ? lstReturn.map((r) => maintNormalizeEquipmentItem(r, 1))
+    : [];
+
+  if (
+    useRows.some((e) => e.MacAddress.length > 50) ||
+    retRows.some((e) => e.MacAddress.length > 50)
+  ) {
+    return { valid: false, error: 'MAC thiết bị không được vượt quá 50 ký tự!' };
+  }
+  if (useRows.some((e) => !e.FunctionName)) {
+    return { valid: false, error: 'Vui lòng chọn chức năng thiết bị sử dụng!' };
+  }
+  if (useRows.some((e) => Number(e.IsMac) === 1 && !e.MacAddress)) {
+    return { valid: false, error: 'Vui lòng chọn MAC thiết bị sử dụng!' };
+  }
+
+  const macCounts = new Map();
+  for (const row of [...useRows, ...retRows]) {
+    const key = row.MacAddress.toUpperCase();
+    if (!key) continue;
+    macCounts.set(key, (macCounts.get(key) || 0) + 1);
+  }
+  for (const [, count] of macCounts.entries()) {
+    if (count > 1) {
+      return { valid: false, error: 'MAC thiết bị không được trùng!' };
+    }
+  }
+
+  if (retRows.some((e) => Number(e.IsMac) === 1 && Number(e.CauseReturn || 0) === 0 && !e.MacAddress)) {
+    return {
+      valid: false,
+      error: 'Vui lòng chọn MAC thu hồi, nếu không thu hồi vui lòng chọn nguyên nhân!',
+    };
+  }
+
+  const useCamCount = useRows.filter(maintIsFptCamera).length;
+  const retCamCount = retRows.filter(maintIsFptCamera).length;
+  if (useCamCount !== retCamCount) {
+    return {
+      valid: false,
+      error: 'Vui lòng chọn số lượng camera sử dụng = số lượng camera thu hồi!',
+    };
+  }
+
+  let useCamIdx = 0;
+  let retCamIdx = 0;
+  const mapRow = (e, isRetFlag) => {
+    const isCam = maintIsFptCamera(e);
+    let parentOrder = 0;
+    if (isCam) {
+      parentOrder = isRetFlag === 2 ? ++useCamIdx : ++retCamIdx;
+    }
+    return {
+      ID: Number(e.ID || 0),
+      CauseReturn: Number(e.CauseReturn || 0),
+      CodeID: Number(e.CodeID || 0),
+      EQType: Number(e.Type || 0),
+      FunctionName: String(e.FunctionName || ''),
+      IsReturn: isRetFlag,
+      MacAddress: String(e.MacAddress || '').trim(),
+      ParentOrder: parentOrder,
+      Quantity: Number(e.Quantity ?? 1),
+      Description: String(e.EQuipmentName || ''),
+    };
+  };
+
+  return {
+    valid: true,
+    error: '',
+    payload: {
+      ObjId: Number(objId || 0),
+      SupId: Number(supId || 0),
+      LogonUser: String(logonUser || '').trim(),
+      LocationID: Number(locationId || 0),
+      Request: 0,
+      Equipment: [...useRows.map((r) => mapRow(r, 2)), ...retRows.map((r) => mapRow(r, 1))],
+    },
+  };
+}
+
+/**
+ * Loc danh sach trang thai ket qua xu ly cho phep chuyen doi theo trang thai hien tai & quyen user.
+ */
+function filterAllowedMaintenanceStatuses(
+  comboConfig,
+  currentFinalStatus,
+  canCompleteAndFollowing = false
+) {
+  const cur = Number(currentFinalStatus ?? MAINT_STATUS.DaXuLy);
+  const all = parseMaintenanceComboOptions(comboConfig, MAINT_CATALOG_KEYS.TICKET_STATUS);
+
+  let filtered =
+    cur === MAINT_STATUS.ChuaPhanCong
+      ? all.filter((s) => Number(s.value) === MAINT_STATUS.ChuaPhanCong)
+      : all.filter((s) => {
+          const v = Number(s.value);
+          if (v === MAINT_STATUS.ChuaPhanCong) return false;
+          if (v === MAINT_STATUS.DaNhanCa && cur !== MAINT_STATUS.DaNhanCa) return false;
+          if (v === MAINT_STATUS.DangDiChuyen && cur !== MAINT_STATUS.DangDiChuyen) return false;
+          if (v === MAINT_STATUS.DangXuLy && cur !== MAINT_STATUS.DangXuLy) return false;
+          if (
+            v === MAINT_STATUS.DaXuLyVaDangTheoDoi &&
+            !canCompleteAndFollowing &&
+            cur !== MAINT_STATUS.DaXuLyVaDangTheoDoi
+          ) {
+            return false;
+          }
+          return v === cur || Boolean(s.enabled);
+        });
+
+  if (!filtered.some((s) => Number(s.value) === cur)) {
+    const curOpt = all.find((s) => Number(s.value) === cur);
+    if (curOpt) {
+      filtered = [...filtered, curOpt];
+    }
+  }
+
+  return filtered.slice().sort((a, b) => a.position - b.position);
+}
+
+/**
+ * Kiem tra dinh dang So dien thoai nguoi dai dien (bo trong duoc phep).
+ */
+function validateMaintenanceRepPhone(phone) {
+  const cleaned = String(phone || '')
+    .trim()
+    .replace(/[\s.-]/g, '');
+  if (!cleaned) {
+    return { valid: true, cleaned: '', error: '' };
+  }
+  if (!/^(0[35789]\d{8}|84[35789]\d{8})$/.test(cleaned)) {
+    return {
+      valid: false,
+      cleaned,
+      error: 'Số điện thoại người đại diện không hợp lệ (cần 10 số 03/05/07/08/09 hoặc 84...).',
+    };
+  }
+  return { valid: true, cleaned, error: '' };
+}
+
+/**
+ * Tao payload cho POST /api/contracts/ticket-update-and-complete.
+ */
+function buildMaintenanceUpdateAndCompletePayload({
+  contract = '',
+  objId = 0,
+  supId = 0,
+  accountModify = '',
+  urgentType = null,
+  nonSetHiFpt = null,
+  reasonInCable = null,
+  reasonMyBao = null,
+  link1 = '',
+  link2 = '',
+  lengthLink = 0,
+  finalStatus = 0,
+  statusCode = '',
+  errorCompletes = [],
+  repreName,
+  repreRelation,
+  reprePhone,
+} = {}) {
+  const payload = {
+    Contract: String(contract || '').trim(),
+    ObjId: Number(objId || 0),
+    SupId: Number(supId || 0),
+    Request: 5,
+    AccountModify: String(accountModify || '').trim(),
+    Final_Status: Number(finalStatus ?? 0),
+  };
+
+  if (repreName !== undefined || repreRelation !== undefined || reprePhone !== undefined) {
+    payload.RepreName = String(repreName || '').trim();
+    payload.RepreRelation = String(repreRelation || '').trim();
+    payload.ReprePhone = String(reprePhone || '').trim();
+  } else {
+    payload.UrgentType = urgentType !== undefined && urgentType !== '' ? urgentType : null;
+    payload.NonSetHiFPT = nonSetHiFpt !== undefined && nonSetHiFpt !== '' ? nonSetHiFpt : null;
+    payload.ReasonInCable =
+      reasonInCable !== undefined && reasonInCable !== '' ? reasonInCable : null;
+    payload.Link1 = String(link1 || '');
+    payload.Link2 = String(link2 || '');
+    payload.LengthLink = Number(lengthLink) || 0;
+    payload.ReasonMyBaoUnAcceptance =
+      reasonMyBao !== undefined && reasonMyBao !== '' ? reasonMyBao : null;
+    if (String(statusCode || '') === 'Complete') {
+      payload.ErrrorCompletes = Array.isArray(errorCompletes) ? errorCompletes : [];
+    }
+  }
+
+  return payload;
+}
+
+function maintYearMonthKey(dateVal) {
+  if (!dateVal) return '';
+  const d = dateVal instanceof Date ? dateVal : new Date(dateVal);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Kiem tra dieu kien hien nut "Tra tinh trang" tren phieu da hoan tat.
+ */
+function canReturnMaintenanceTicketStatus({
+  ticket,
+  permissions,
+  reimbursementStatus = 0,
+  nowDate = new Date(),
+} = {}) {
+  if (!ticket) return false;
+  const isFinished = ticket.statusBucket === 'complete' || ticket.statusBucket === 'close';
+  if (!isFinished) return false;
+  if (Number(reimbursementStatus ?? 0) > 0) return false;
+  if (Number(ticket.flag ?? 0) !== 1) return false;
+  if (!(permissions && permissions.IsReturnStatus)) return false;
+  const finYm = maintYearMonthKey(ticket.finishDate);
+  const nowYm = maintYearMonthKey(nowDate);
+  return Boolean(finYm && nowYm && finYm === nowYm);
+}
+
+// --- Du lieu mau cho che do Preview / Demo (100% gia lap, 0 PII) ---
+
+const DEMO_MAINT_USER_INFO = {
+  Info: {
+    UserName: 'demo.ktv',
+    Email: 'demo@example.invalid',
+    LocationId: 4,
+    SubParentDesc: 'Vùng Demo',
+  },
+  Permissions: {
+    Permission: {
+      Maintenance: {
+        IsUpdateTicket: 1,
+        IsReturnStatus: 1,
+        IsUpdateCompleteAndFollowing: true,
+      },
+    },
+  },
+};
+
+const DEMO_MAINT_COMBO_CONFIG = [
+  {
+    ParentName: MAINT_CATALOG_KEYS.TICKET_STATUS,
+    Datas: [
+      { Code: 'Backlog', Value: 10, Tittle: 'Đang xử lý', Position: 1, Enabled: true },
+      { Code: 'Complete', Value: 1, Tittle: 'Đã xử lý', Position: 2, Enabled: true },
+      {
+        Code: 'CompletePhone',
+        Value: 3,
+        Tittle: 'Đã xử lý hoàn tất qua Phone',
+        Position: 3,
+        Enabled: true,
+      },
+      {
+        Code: 'Complete',
+        Value: 5,
+        Tittle: 'Đã xử lý và đang theo dõi',
+        Position: 4,
+        Enabled: true,
+      },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.URGENT,
+    Datas: [
+      { Code: '0', Tittle: 'Bình thường', Position: 1 },
+      { Code: '1', Tittle: 'Gấp / KH hối', Position: 2 },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.NON_SET_HIFPT,
+    Datas: [
+      { Code: '0', Tittle: 'Không chọn', Position: 1 },
+      { Code: '1', Tittle: 'KH không dùng smartphone', Position: 2 },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.REASON_IN_CABLE,
+    Datas: [
+      { Code: '0', Tittle: 'Không chọn', Position: 1 },
+      { Code: '1', Tittle: 'Đứt cáp ngang đường không kéo mới được', Position: 2 },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.REASON_MY_BAO,
+    Datas: [
+      { Code: '0', Tittle: 'Không chọn', Position: 1 },
+      { Code: '2', Tittle: 'Mặc định', Position: 2 },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.EQUIP_RETURN_CAUSE,
+    Datas: [
+      { Code: '0', Value: 0, Tittle: 'Thu hồi bình thường (nhập MAC)', Position: 1 },
+      { Code: '1', Value: 1, Tittle: 'KH giữ thiết bị / không thu hồi được', Position: 2 },
+    ],
+  },
+  {
+    ParentName: MAINT_CATALOG_KEYS.SERVICES,
+    Datas: [
+      { Code: '1', Tittle: 'Internet', Position: 1 },
+      { Code: '96', Tittle: 'FPT Camera', Position: 2 },
+    ],
+  },
+];
+
+const DEMO_MAINT_TICKET_STATUS_CFG = {
+  Backlogs: [0, 2, 6, 7, 10],
+  Completes: [1, 3, 5],
+  Closes: [97, 100],
+  Others: [],
+};
+
+const DEMO_MAINT_EQUIP_INFOS = [
+  {
+    IdCode: 4906,
+    Name: 'FCAM-IQ 3S',
+    Description: 'FCAM-IQ 3S [1]',
+    Type: 96,
+    ParentName: 'FPT Camera',
+    ReturnType: 1,
+    IsMac: 1,
+    UnitName: 'Cái',
+    Enabled: true,
+  },
+  {
+    IdCode: 4907,
+    Name: 'FCAM-IQ 4S',
+    Description: 'FCAM-IQ 4S [1]',
+    Type: 96,
+    ParentName: 'FPT Camera',
+    ReturnType: 1,
+    IsMac: 1,
+    UnitName: 'Cái',
+    Enabled: true,
+  },
+  {
+    IdCode: 101,
+    Name: 'AX1800GZ',
+    Description: 'Modem Wi-Fi 6 AX1800GZ',
+    Type: 1,
+    ParentName: 'Modem',
+    ReturnType: 1,
+    IsMac: 1,
+    UnitName: 'Cái',
+    Enabled: true,
+  },
+  {
+    IdCode: 5001,
+    Name: 'Dây thuê bao quang 1 core',
+    Description: 'Cáp thuê bao quang 1 core',
+    Type: 3,
+    ParentName: 'Cáp',
+    ReturnType: 0,
+    IsMac: 0,
+    UnitName: 'Mét',
+    Enabled: true,
+  },
+];
+
+const DEMO_MAINT_CATALOG_INIT = {
+  Service: {
+    Infos: [
+      { Code: '96', Desc: 'FPT Camera', Enabled: true, Position: 1 },
+      { Code: '1', Desc: 'Internet', Enabled: true, Position: 2 },
+    ],
+  },
+  InitStatus: {
+    Infos: [
+      {
+        Code: '9601',
+        Desc: 'Camera mất kết nối / ngoại tuyến',
+        Enabled: true,
+        Position: 1,
+        InfoBases: [{ LevelId: 1, Code: '96' }],
+      },
+      {
+        Code: '1001',
+        Desc: 'Modem mất tín hiệu LOS đỏ',
+        Enabled: true,
+        Position: 2,
+        InfoBases: [{ LevelId: 1, Code: '1' }],
+      },
+    ],
+  },
+};
+
+const DEMO_MAINT_ERROR_CATALOG = {
+  ErrorElement: {
+    Infos: [
+      {
+        Code: 'EL_CAM',
+        Desc: 'Thiết bị Camera hư hỏng',
+        Enabled: true,
+        InfoBases: [{ LevelId: 2, Code: '9601' }],
+      },
+      {
+        Code: 'EL_ONT',
+        Desc: 'Cáp quang đứt / suy hao cao',
+        Enabled: true,
+        InfoBases: [{ LevelId: 2, Code: '1001' }],
+      },
+    ],
+  },
+  ErrorReason: {
+    Infos: [
+      {
+        Code: 'RS_CAM_HW',
+        Desc: 'Lỗi phần cứng Camera — cần đổi mới & chuyển Cloud',
+        Enabled: true,
+        InfoBases: [{ LevelId: 3, Code: 'EL_CAM' }],
+      },
+      {
+        Code: 'RS_FIBER',
+        Desc: 'Đứt dây thuê bao ngoài trời',
+        Enabled: true,
+        InfoBases: [{ LevelId: 3, Code: 'EL_ONT' }],
+      },
+    ],
+  },
+  ProcessingDiretions: {
+    Infos: [
+      {
+        Code: 'DIR_SWAP_CAM',
+        Desc: 'Đổi Camera mới & Chuyển Cloud trên Partner',
+        Enabled: true,
+        LevelId: 4,
+        InfoBases: [{ LevelId: 4, Code: 'RS_CAM_HW' }],
+      },
+      {
+        Code: 'DIR_SPLICE',
+        Desc: 'Hàn nối lại cáp thuê bao',
+        Enabled: true,
+        LevelId: 4,
+        InfoBases: [{ LevelId: 4, Code: 'RS_FIBER' }],
+      },
+    ],
+  },
+};
+
+function buildDemoMaintenanceState(contractId = 'SGN123456', selectedSupId = 0) {
+  const cleanContract = normalizeContractId(contractId) || 'SGN123456';
+  const objId = 2000001;
+  const rawList = {
+    splist: [
+      {
+        id: 880101,
+        objid: objId,
+        createby: 'demo.cskh',
+        createdate: '2026-06-14T09:00:00',
+        finishdate: '2026-06-14T14:30:00',
+        finalstatus: 1,
+        flag: 0,
+        description: 'Kiểm tra suy hao quang định kỳ',
+        initdesc: 'Mất kết nối Internet',
+        supportlocation: '100 Đường Mẫu A, Phường Bến Nghé, TP.HCM',
+        popcode: 'POP-DEMO-01',
+        grouppoints: 'GP-DEMO-01',
+        odccabletype: 'GP-DEMO-01/1',
+        deptid: 10,
+      },
+      {
+        id: 880202,
+        objid: objId,
+        createby: 'demo.cskh',
+        createdate: '2026-11-26T08:15:00',
+        finishdate: null,
+        finalstatus: 10,
+        flag: 1,
+        description: 'Khách hàng báo Camera ngoại tuyến, yêu cầu kiểm tra đổi thiết bị',
+        initdesc: 'Camera ngoại tuyến',
+        supportlocation: '100 Đường Mẫu A, Phường Bến Nghé, TP.HCM',
+        popcode: 'POP-DEMO-01',
+        grouppoints: 'GP-DEMO-01',
+        odccabletype: 'GP-DEMO-01/1',
+        deptid: 10,
+        urgentnew: 0,
+        nonsethifpt: 0,
+        link1: '',
+        link2: '',
+        lengthlink: 0,
+      },
+    ],
+    splistdetail: [
+      {
+        supportlistid: 880101,
+        locationid: 4,
+        partnerid: 10,
+        blockname: 'Block Demo 1',
+      },
+      {
+        supportlistid: 880202,
+        locationid: 4,
+        partnerid: 10,
+        blockname: 'Block Demo 1',
+        reprename: 'Nguyễn Văn Mẫu',
+        reprerelation: 'Chính chủ',
+        reprephone: '0901234567',
+        reasonincable: 0,
+        reasonmybaounacceptance: 2,
+      },
+    ],
+    maintenance_appointment: [
+      {
+        supid: 880202,
+        timezoneblue: '08:00 - 10:00',
+        appointmentdateblue: '2026-11-26T10:00:00',
+        appointmenttimes: 1,
+        appointmenttimestinpn: 0,
+      },
+    ],
+    maintenance_assignment: [
+      {
+        supid: 880101,
+        empstatus: 1,
+        accountemp: 'demo.ktv1',
+        codeemp: 'KTV001',
+        empphone: '0900000001',
+        blocknameemp: 'Block Demo 1',
+        deptid: 10,
+      },
+      {
+        supid: 880202,
+        empstatus: 1,
+        accountemp: 'demo.ktv',
+        codeemp: 'KTV002',
+        empphone: '0900000002',
+        blocknameemp: 'Block Demo 1',
+        deptid: 10,
+      },
+    ],
+  };
+
+  const contract = normalizeMaintenanceContract({
+    objid: objId,
+    contract: cleanContract,
+    fullname: 'Khách hàng Bảo Trì Mẫu',
+    location: '100 Đường Mẫu A, Phường Bến Nghé, TP.HCM',
+    status: 1,
+    localtypedesc: 'Internet + FPT Camera (Mẫu)',
+    locationphone: '0901234567',
+    locationid: 4,
+    grouppoints: 'GP-DEMO-01',
+    odccabletype: 'GP-DEMO-01/1',
+  });
+
+  const tickets = normalizeMaintenanceTicketList(
+    rawList,
+    cleanContract,
+    DEMO_MAINT_COMBO_CONFIG,
+    DEMO_MAINT_TICKET_STATUS_CFG
+  );
+  const ticket = selectActiveMaintenanceTicket(tickets, selectedSupId);
+  const materials = normalizeMaintenanceMaterials({
+    lstUse: [
+      {
+        ID: 1,
+        CodeID: 4906,
+        EQuipmentName: 'FCAM-IQ 3S [1]',
+        DBName: 'FCAM-IQ 3S',
+        FunctionName: 'FPT Camera',
+        Quantity: 1,
+        MacAddress: 'DEMO-CAM-NEW-0001',
+        Type: 96,
+        ParentName: 'FPT Camera',
+        ParentOrder: 1,
+        CheckReplace: 0,
+        IsMac: 1,
+        CauseReturn: 0,
+        IsReturn: 2,
+      },
+    ],
+    lstReturn: [
+      {
+        ID: 2,
+        CodeID: 4907,
+        EQuipmentName: 'FCAM-IQ 4S [1]',
+        DBName: 'FCAM-IQ 4S',
+        FunctionName: '',
+        Quantity: 1,
+        MacAddress: 'DEMO-CAM-OLD-0001',
+        Type: 96,
+        ParentName: 'FPT Camera',
+        ParentOrder: 1,
+        CheckReplace: 0,
+        IsMac: 1,
+        CauseReturn: 0,
+        IsReturn: 1,
+      },
+    ],
+  });
+
+  return {
+    contract,
+    tickets,
+    ticket,
+    materials,
+    urls: buildMaintenanceTicketUrls('demo_bt_token'),
+  };
+}
+
+// --- Tang giao tiep HTTP JSON cho FOX-ERP /app/tkbt/bt ---
+
+async function maintRequestJson(
+  url,
+  bodyObj = null,
+  { method = 'POST', timeout = 15000, loginUrl = MAINT_ENDPOINTS.foxTicketPage } = {}
+) {
+  const headers = { Accept: 'application/json' };
+  let data = null;
+  if (method !== 'GET' && bodyObj !== null && bodyObj !== undefined) {
+    headers['Content-Type'] = 'application/json';
+    data = typeof bodyObj === 'string' ? bodyObj : JSON.stringify(bodyObj);
+  }
+
+  const res = await requestPortal({
+    url,
+    method,
+    headers,
+    data,
+    timeout,
+  });
+
+  if (res.error === 'NETWORK_ERROR' || res.error === 'TIMEOUT' || res.status === 0) {
+    return {
+      status: 'offline',
+      message: 'Không kết nối được tới FOX-ERP / Partner. Hãy kiểm tra lại VPN công ty.',
+      loginUrl,
+    };
+  }
+
+  const iamCheck = detectIamRedirect({
+    status: res.status,
+    finalUrl: res.finalUrl,
+    responseText: res.responseText,
+    requestedUrl: url,
+  });
+  if (iamCheck.expired) {
+    return {
+      status: 'iam_expired',
+      message: iamCheck.reason || 'Phiên đăng nhập IAM chưa sẵn sàng hoặc đã hết hạn.',
+      loginUrl,
+    };
+  }
+
+  const rawText = String(res.responseText || '').trim();
+  if (rawText.startsWith('<')) {
+    return {
+      status: 'iam_expired',
+      message: 'Máy chủ trả về trang đăng nhập thay vì JSON. Vui lòng đăng nhập IAM lại.',
+      loginUrl,
+    };
+  }
+
+  const json = maintSafeJsonParse(rawText);
+  if (json === null || (typeof json !== 'object' && !Array.isArray(json))) {
+    return {
+      status: 'error',
+      message: `Phản hồi không đúng định dạng JSON (HTTP ${res.status}).`,
+      httpStatus: res.status,
+      loginUrl,
+    };
+  }
+
+  return { status: 'ok', httpStatus: res.status, json, loginUrl };
+}
+
+async function maintWarmupAndRetryJson(url, bodyObj, warmupUrl, opts = {}) {
+  const first = await maintRequestJson(url, bodyObj, opts);
+  if (first.status !== 'iam_expired' || !warmupUrl) {
+    return first;
+  }
+  if (canWarmPortalSession()) {
+    await warmPortalSession(warmupUrl, { timeout: 12000 });
+  } else {
+    await requestPortal({ url: warmupUrl, method: 'GET', timeout: 10000 });
+  }
+  return maintRequestJson(url, bodyObj, opts);
+}
+
+function maintBuildContractMicroQuery(contractId) {
+  const escaped = String(contractId || '').replace(/"/g, '\\"');
+  return `{ maintenancecontract ( contract:"${escaped}" ){ ${MAINT_CONTRACT_FIELDS.join(',')} } }`;
+}
+
+function maintBuildCoreContractQuery(contractId) {
+  const escaped = String(contractId || '').replace(/"/g, '\\"');
+  return `query{contractInfo(contractNo:"${escaped}"){contractId,contractNo,status,createBy,name,fullName,fullNameVn,startDate,firstAccess,localType,localTypeDesc,branchCode,locationId,location,locationName,locationNumber,locationStreet,locationWard,locationDistrict,macstb,groupPoints,odccableType,locationPhone,email,type,macaddress,idclength,odclength},objPhones(contractNo:"${escaped}"){contractNo,contractId,type,phone},customerVips(contractNo:"${escaped}"){contractNo,contractId,typeVip,status}}`;
+}
+
+function maintNormalizeCoreFallbackContract(coreData, contractId) {
+  const ci = (coreData && coreData.contractInfo) || null;
+  if (!ci) return null;
+  const vips = Array.isArray(coreData.customerVips) ? coreData.customerVips : [];
+  const activeVips = vips.filter((v) => v && Number(v.status) === 1).map((v) => Number(v.typeVip ?? 0));
+  return normalizeMaintenanceContract({
+    objid: ci.contractId ?? 0,
+    contract: ci.contractNo || contractId,
+    fullname: ci.fullName || '',
+    fullnamevn: ci.fullNameVn || '',
+    name: ci.name || '',
+    status: ci.status ?? 0,
+    firstaccess: ci.firstAccess || '',
+    localtype: ci.localType ?? 0,
+    localtypedesc: ci.localTypeDesc || '',
+    branchcode: ci.branchCode ?? 0,
+    locationid: ci.locationId ?? 0,
+    location: ci.location || '',
+    locationphone: ci.locationPhone || '',
+    grouppoints: ci.groupPoints || '',
+    odccabletype: ci.odccableType || '',
+    macaddress: ci.macaddress || '',
+    idclength: ci.idclength ?? 0,
+    odclength: ci.odclength ?? 0,
+    isvip: activeVips.length ? Math.max(...activeVips) : 0,
+    objphone: coreData.objPhones || [],
+  });
+}
+
+/**
+ * Tai thong tin chi tiet (vat tu, loi ban dau, ghi chu, BBNT, hoan ung) cho 1 phieu bao tri cu the.
+ */
+async function fetchMaintenanceTicketDetail({
+  objId = 0,
+  supId = 0,
+  ticket = null,
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    const demo = buildDemoMaintenanceState(
+      (ticket && ticket.raw && ticket.raw.Contract) || 'SGN123456',
+      supId
+    );
+    return {
+      status: 'ok',
+      mode: 'demo',
+      materials: demo.materials,
+      initAndErrors: [
+        {
+          ServiceCode: '96',
+          InitStatusCode: '9601',
+          ErrorElementCode: 'EL_CAM',
+          ErrorReasonCode: 'RS_CAM_HW',
+          ProcessingDiretions: [{ ProcessingDiretionCode: 'DIR_SWAP_CAM', LevelId: 4 }],
+        },
+      ],
+      discussions: [
+        {
+          Code: MAINT_DISCUSSION_CODES.TICKET_NOTE,
+          CreateBy: 'demo.cskh',
+          CreateAt: '2026-11-26 08:20:00',
+          Note: 'Khách hàng báo Camera ngoại tuyến (Mẫu)',
+        },
+      ],
+      reimbursementStatus: 0,
+      bbntRecords: [
+        {
+          SupId: Number(supId || 880202),
+          Code: 'BT-BBNT-DEMO-01',
+          Name: 'Biên bản nghiệm thu Bảo trì',
+          CreateDate: '26/11/2026 08:30:00',
+          StatusRender: 1,
+          Confirm: false,
+        },
+      ],
+    };
+  }
+
+  const numObjId = Number(objId || (ticket && ticket.objId) || 0);
+  const numSupId = Number(supId || (ticket && ticket.supId) || 0);
+  if (!numObjId || !numSupId) {
+    return {
+      status: 'ok',
+      mode: 'live',
+      materials: normalizeMaintenanceMaterials({}),
+      initAndErrors: [],
+      discussions: [],
+      reimbursementStatus: 0,
+      bbntRecords: [],
+    };
+  }
+
+  const [eqRes, initErrRes, discRes, reimbRes, bbntRes] = await Promise.allSettled([
+    maintRequestJson(MAINT_ENDPOINTS.getTicketEquipments, { ObjId: numObjId, SupId: numSupId }),
+    maintRequestJson(MAINT_ENDPOINTS.getInitAndErrorByTicket, {
+      ObjId: numObjId,
+      SupId: numSupId,
+      Request: 1,
+    }),
+    maintRequestJson(MAINT_ENDPOINTS.getDiscussionByCode, {
+      objId: numObjId,
+      supId: numSupId,
+      Codes: [
+        MAINT_DISCUSSION_CODES.TICKET_NOTE,
+        MAINT_DISCUSSION_CODES.ERROR_REASON_DESC,
+        MAINT_DISCUSSION_CODES.CUSTOMER_URGENT,
+      ],
+    }),
+    maintRequestJson(MAINT_ENDPOINTS.getReimbursementStatusNextGen, {
+      supId: numSupId,
+      objId: numObjId,
+    }),
+    maintRequestJson(MAINT_ENDPOINTS.getListRecordTicket, { ObjId: numObjId }),
+  ]);
+
+  let reimbVal =
+    reimbRes.status === 'fulfilled' && reimbRes.value && reimbRes.value.status === 'ok'
+      ? Number(reimbRes.value.json?.data ?? reimbRes.value.json?.Data ?? 0)
+      : NaN;
+  if (!Number.isFinite(reimbVal)) {
+    const fb = await maintRequestJson(MAINT_ENDPOINTS.getReimbursementStatus, {
+      supId: numSupId,
+      objId: numObjId,
+    });
+    reimbVal = fb.status === 'ok' ? Number(fb.json?.data ?? fb.json?.Data ?? 0) || 0 : 0;
+  }
+
+  const eqData =
+    eqRes.status === 'fulfilled' && eqRes.value && eqRes.value.status === 'ok'
+      ? eqRes.value.json?.Data || {}
+      : {};
+  const initData =
+    initErrRes.status === 'fulfilled' && initErrRes.value && initErrRes.value.status === 'ok'
+      ? initErrRes.value.json?.Data || []
+      : [];
+  const discData =
+    discRes.status === 'fulfilled' && discRes.value && discRes.value.status === 'ok'
+      ? discRes.value.json?.Data || []
+      : [];
+  const bbntAll =
+    bbntRes.status === 'fulfilled' && bbntRes.value && bbntRes.value.status === 'ok'
+      ? bbntRes.value.json?.Data || []
+      : [];
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    materials: normalizeMaintenanceMaterials(eqData),
+    initAndErrors: Array.isArray(initData) ? initData : [],
+    discussions: Array.isArray(discData) ? discData : [],
+    reimbursementStatus: reimbVal,
+    bbntRecords: Array.isArray(bbntAll)
+      ? bbntAll.filter((r) => r && Number(r.SupId) === numSupId)
+      : [],
+  };
+}
+
+/**
+ * Tai day du thong tin Phieu bao tri tu Partner & FOX-ERP (tu fallback sang Micro/Core + Encrypt neu Partner khong co /bt/ticket).
+ */
+async function fetchMaintenanceTicket(
+  contractId = '',
+  { pageLocation = null, selectedSupId = 0, cachedObjId = 0, forceDemo = false } = {}
+) {
+  const cleanContract = normalizeContractId(contractId);
+
+  if (!isUserscriptEnv() || forceDemo) {
+    const demo = buildDemoMaintenanceState(cleanContract || 'SGN123456', selectedSupId);
+    const detail = await fetchMaintenanceTicketDetail({
+      objId: demo.contract.objId,
+      supId: demo.ticket ? demo.ticket.supId : 0,
+      ticket: demo.ticket,
+      forceDemo: true,
+    });
+    return {
+      status: 'ok',
+      mode: 'demo',
+      hash: 'demo_bt_token',
+      foxTicketUrl: demo.urls.foxUrl,
+      partnerTicketUrl: demo.urls.partnerUrl,
+      contract: demo.contract,
+      userInfo: DEMO_MAINT_USER_INFO.Info,
+      permissions: DEMO_MAINT_USER_INFO.Permissions.Permission.Maintenance,
+      comboConfig: DEMO_MAINT_COMBO_CONFIG,
+      ticketStatusCfg: DEMO_MAINT_TICKET_STATUS_CFG,
+      catalogInit: DEMO_MAINT_CATALOG_INIT,
+      contractProducts: [
+        { ServiceId: 1, ServiceName: 'Internet' },
+        { ServiceId: 96, ServiceName: 'FPT Camera' },
+      ],
+      tickets: demo.tickets,
+      ticket: demo.ticket,
+      materials: detail.materials,
+      initAndErrors: detail.initAndErrors,
+      discussions: detail.discussions,
+      reimbursementStatus: detail.reimbursementStatus,
+      bbntRecords: detail.bbntRecords,
+    };
+  }
+
+  let hash = '';
+  let resolvedContract = cleanContract;
+  let objId = Number(cachedObjId || 0);
+  let contract = null;
+
+  if (!cleanContract) {
+    hash = extractMaintenanceHashFromLocation(pageLocation);
+    if (!hash) {
+      return {
+        status: 'error',
+        message: 'Vui lòng nhập Mã hợp đồng trước khi mở Phiếu bảo trì.',
+      };
+    }
+    const decRes = await maintWarmupAndRetryJson(
+      MAINT_ENDPOINTS.decryptRequest,
+      { Q: hash },
+      MAINT_ENDPOINTS.foxTicketPage,
+      { loginUrl: MAINT_ENDPOINTS.foxTicketPage }
+    );
+    if (decRes.status !== 'ok') {
+      return {
+        status: decRes.status,
+        message: decRes.message,
+        loginUrl: MAINT_ENDPOINTS.foxTicketPage,
+        loginLabel: 'Đăng nhập FOX-ERP',
+      };
+    }
+    const parsed = maintSafeJsonParse(decRes.json?.Data);
+    if (!parsed || !parsed.Contract) {
+      return {
+        status: 'error',
+        message: 'Không giải mã được thông tin hợp đồng từ liên kết phiếu bảo trì.',
+      };
+    }
+    resolvedContract = normalizeContractId(parsed.Contract);
+    objId = Number(parsed.ObjId || 0);
+  } else {
+    const partnerRes = await maintWarmupAndRetryJson(
+      MAINT_ENDPOINTS.partnerGetContract,
+      { Contract: cleanContract },
+      MAINT_ENDPOINTS.partnerMonitor,
+      { loginUrl: MAINT_ENDPOINTS.partnerMonitor }
+    );
+    if (partnerRes.status !== 'ok') {
+      return {
+        status: partnerRes.status,
+        message: partnerRes.message,
+        loginUrl: MAINT_ENDPOINTS.partnerMonitor,
+        loginLabel: 'Đăng nhập Partner',
+      };
+    }
+    const linkInfo = extractMaintenanceTicketLink(partnerRes.json?.Data);
+    if (linkInfo.found) {
+      hash = linkInfo.hash;
+      const decRes = await maintWarmupAndRetryJson(
+        MAINT_ENDPOINTS.decryptRequest,
+        { Q: hash },
+        linkInfo.url || MAINT_ENDPOINTS.foxTicketPage,
+        { loginUrl: MAINT_ENDPOINTS.foxTicketPage }
+      );
+      if (decRes.status !== 'ok') {
+        return {
+          status: decRes.status,
+          message: decRes.message,
+          loginUrl: MAINT_ENDPOINTS.foxTicketPage,
+          loginLabel: 'Đăng nhập FOX-ERP',
+        };
+      }
+      const parsed = maintSafeJsonParse(decRes.json?.Data);
+      if (parsed && parsed.ObjId) {
+        objId = Number(parsed.ObjId);
+      }
+      if (parsed && parsed.Contract) {
+        resolvedContract = normalizeContractId(parsed.Contract);
+      }
+    }
+  }
+
+  // Tai thong tin hop dong tu FOX-ERP (neu chua co ObjId hoac de hien day du thong tin khach hang)
+  const microRes = await maintWarmupAndRetryJson(
+    MAINT_ENDPOINTS.getContractFromMicro,
+    { query: maintBuildContractMicroQuery(resolvedContract) },
+    MAINT_ENDPOINTS.foxTicketPage,
+    { loginUrl: MAINT_ENDPOINTS.foxTicketPage }
+  );
+  if (microRes.status === 'iam_expired' || microRes.status === 'offline') {
+    return {
+      status: microRes.status,
+      message: microRes.message,
+      loginUrl: MAINT_ENDPOINTS.foxTicketPage,
+      loginLabel: 'Đăng nhập FOX-ERP',
+    };
+  }
+  const microRows = microRes.status === 'ok' ? microRes.json?.Data?.maintenancecontract : null;
+  if (Array.isArray(microRows) && microRows.length > 0) {
+    contract = normalizeMaintenanceContract(
+      { ContractFromMicro: microRes.json.Data },
+      { Contract: resolvedContract, ObjId: objId }
+    );
+    if (!objId && contract.objId) objId = contract.objId;
+  } else {
+    const coreRes = await maintRequestJson(MAINT_ENDPOINTS.getContractInfo, {
+      query: maintBuildCoreContractQuery(resolvedContract),
+    });
+    if (coreRes.status === 'ok' && coreRes.json?.data) {
+      contract = maintNormalizeCoreFallbackContract(coreRes.json.data, resolvedContract);
+      if (contract && !objId && contract.objId) objId = contract.objId;
+    }
+  }
+
+  if (!contract) {
+    contract = normalizeMaintenanceContract({}, { Contract: resolvedContract, ObjId: objId });
+  }
+  if (!objId) {
+    return {
+      status: 'error',
+      message: `Không tìm thấy thông tin ObjId / Phiếu bảo trì cho hợp đồng ${resolvedContract}.`,
+    };
+  }
+
+  // Neu Partner khong tra ve ?q= (vi du phieu da hoan tat), goi /api/generals/encrypt de tao q dung chuan
+  if (!hash) {
+    const encRes = await maintRequestJson(
+      MAINT_ENDPOINTS.encryptGeneral,
+      JSON.stringify({ Id: 0, ObjId: objId, Contract: resolvedContract })
+    );
+    if (encRes.status === 'ok' && encRes.json?.Data) {
+      hash = String(encRes.json.Data).trim();
+    }
+  }
+
+  const [userRes, comboRes, statusCfgRes, listRes, catInitRes, prodRes] = await Promise.allSettled([
+    maintRequestJson(MAINT_ENDPOINTS.userInfo, null, { method: 'POST' }),
+    maintRequestJson(MAINT_ENDPOINTS.loadComboConfig, {}),
+    maintRequestJson(MAINT_ENDPOINTS.getTicketStatus, {}),
+    maintRequestJson(MAINT_ENDPOINTS.getListContractInfo, {
+      objId,
+      contract: resolvedContract,
+      supId: objId,
+    }),
+    maintRequestJson(MAINT_ENDPOINTS.catalogGetInfoInit, { ObjId: 0, IsGetAll: true }),
+    maintRequestJson(MAINT_ENDPOINTS.getContractProduct, {
+      query: `query { contractProducts(contractId: ${objId}) { contractId, contractNo, productId, productName } }`,
+    }),
+  ]);
+
+  const userJson =
+    userRes.status === 'fulfilled' && userRes.value?.status === 'ok' ? userRes.value.json : null;
+  const comboConfig =
+    comboRes.status === 'fulfilled' && comboRes.value?.status === 'ok'
+      ? comboRes.value.json?.Data || comboRes.value.json || []
+      : [];
+  const ticketStatusCfg =
+    statusCfgRes.status === 'fulfilled' && statusCfgRes.value?.status === 'ok'
+      ? statusCfgRes.value.json?.Data || {}
+      : {};
+  const listRaw =
+    listRes.status === 'fulfilled' && listRes.value?.status === 'ok'
+      ? listRes.value.json?.Data || {}
+      : {};
+  const catalogInit =
+    catInitRes.status === 'fulfilled' && catInitRes.value?.status === 'ok'
+      ? catInitRes.value.json?.Data || {}
+      : {};
+  const prodRaw =
+    prodRes.status === 'fulfilled' && prodRes.value?.status === 'ok'
+      ? prodRes.value.json?.data?.contractProducts || []
+      : [];
+
+  const tickets = normalizeMaintenanceTicketList(
+    listRaw,
+    resolvedContract,
+    Array.isArray(comboConfig) ? comboConfig : [],
+    ticketStatusCfg
+  );
+  const ticket = selectActiveMaintenanceTicket(tickets, selectedSupId);
+
+  const detail = ticket
+    ? await fetchMaintenanceTicketDetail({
+        objId: ticket.objId || objId,
+        supId: ticket.supId,
+        ticket,
+        forceDemo: false,
+      })
+    : {
+        materials: normalizeMaintenanceMaterials({}),
+        initAndErrors: [],
+        discussions: [],
+        reimbursementStatus: 0,
+        bbntRecords: [],
+      };
+
+  const urls = buildMaintenanceTicketUrls(hash);
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    hash,
+    foxTicketUrl: urls.foxUrl || MAINT_ENDPOINTS.foxTicketPage,
+    partnerTicketUrl: urls.partnerUrl || MAINT_ENDPOINTS.partnerTicketPage,
+    contract,
+    userInfo: (userJson && userJson.Info) || null,
+    permissions: (userJson && userJson.Permissions && userJson.Permissions.Permission && userJson.Permissions.Permission.Maintenance) || {},
+    comboConfig: Array.isArray(comboConfig) ? comboConfig : [],
+    ticketStatusCfg,
+    catalogInit,
+    contractProducts: Array.isArray(prodRaw)
+      ? prodRaw.map((p) => ({ ServiceId: p.productId, ServiceName: p.productName }))
+      : [],
+    tickets,
+    ticket,
+    materials: detail.materials,
+    initAndErrors: detail.initAndErrors,
+    discussions: detail.discussions,
+    reimbursementStatus: detail.reimbursementStatus,
+    bbntRecords: detail.bbntRecords,
+  };
+}
+
+/**
+ * Tai danh muc vat tu, kho MAC KTV (macPartners / macUseds), lich su MAC Camera & phien online Modem.
+ */
+async function fetchMaintenanceMaterialCatalogs({
+  objId = 0,
+  supId = 0,
+  locationId = 0,
+  accountEmp = '',
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      equipInfos: DEMO_MAINT_EQUIP_INFOS.slice(),
+      macPartners: [
+        { id: 4906, mac: 'DEMO-CAM-NEW-0001' },
+        { id: 4906, mac: 'DEMO-CAM-NEW-0002' },
+        { id: 101, mac: '00:11:22:33:44:66' },
+      ],
+      macUseds: [
+        { id: 4907, mac: 'DEMO-CAM-OLD-0001' },
+        { id: 4907, mac: 'DEMO-CAM-OLD-0002' },
+      ],
+      camHistoryMacs: ['DEMO-CAM-OLD-0001', 'DEMO-CAM-OLD-0002'],
+      modemCallerId: '00:11:22:33:44:55',
+    };
+  }
+
+  const numObjId = Number(objId || 0);
+  const numSupId = Number(supId || 0);
+  const numLoc = Number(locationId || 0);
+  const emp = String(accountEmp || '').trim();
+
+  async function fetchCamHistory(baseUrl) {
+    const qUrl = `${baseUrl}?ObjId=${encodeURIComponent(numObjId)}`;
+    const g = await maintRequestJson(qUrl, null, { method: 'GET' });
+    if (g.status === 'ok') {
+      const arr = Array.isArray(g.json?.data) ? g.json.data : Array.isArray(g.json?.Data) ? g.json.Data : Array.isArray(g.json) ? g.json : [];
+      if (arr.length > 0) return arr;
+    }
+    const p = await maintRequestJson(baseUrl, { ObjId: numObjId }, { method: 'POST' });
+    if (p.status === 'ok') {
+      return Array.isArray(p.json?.data) ? p.json.data : Array.isArray(p.json?.Data) ? p.json.Data : [];
+    }
+    return [];
+  }
+
+  const [infosRes, exportRes, ottRes, comboRes, onlineRes] = await Promise.allSettled([
+    maintRequestJson(MAINT_ENDPOINTS.getEquipmentInfos, {
+      ParentName: '',
+      IsReturn: -1,
+      IsMac: -1,
+      SaleClub: 0,
+    }),
+    maintRequestJson(MAINT_ENDPOINTS.getEquipmentExport, {
+      LocationId: numLoc,
+      ObjId: numObjId,
+      SupId: numSupId,
+      AccountEmp: emp,
+      TypeId: 2,
+    }),
+    fetchCamHistory(MAINT_ENDPOINTS.getMacHistoryCameraOtt),
+    fetchCamHistory(MAINT_ENDPOINTS.getMacHistoryCameraCombo),
+    maintRequestJson(MAINT_ENDPOINTS.checkOnlineSession, { objId: numObjId }),
+  ]);
+
+  const rawInfos =
+    infosRes.status === 'fulfilled' && infosRes.value?.status === 'ok'
+      ? infosRes.value.json?.data || infosRes.value.json?.Data || []
+      : [];
+  const equipInfos = Array.isArray(rawInfos)
+    ? rawInfos.map((e) => ({
+        IdCode: Number(e.id ?? e.IdCode ?? 0),
+        Name: String(e.name ?? e.Name ?? '').trim(),
+        Description: String(e.description ?? e.Description ?? '').trim(),
+        Type: Number(e.type ?? e.Type ?? 0),
+        ParentName: String(e.parentName ?? e.ParentName ?? '').trim(),
+        ReturnType: Number(e.returnType ?? e.ReturnType ?? 0),
+        IsMac: Number(e.isMac ?? e.IsMac ?? 0),
+        UnitName: String(e.unitName ?? e.UnitName ?? '').trim(),
+        Enabled: (e.enabled ?? e.Enabled) == 1 || e.enabled === true,
+      }))
+    : [];
+
+  let macExportData =
+    exportRes.status === 'fulfilled' && exportRes.value?.status === 'ok'
+      ? exportRes.value.json?.data || exportRes.value.json?.Data || {}
+      : {};
+  let macPartners = Array.isArray(macExportData.macPartners) ? macExportData.macPartners : [];
+  let macUseds = Array.isArray(macExportData.macUseds) ? macExportData.macUseds : [];
+
+  if (macPartners.length === 0 && macUseds.length === 0) {
+    const fbMac = await maintRequestJson(MAINT_ENDPOINTS.getEquipmentMac, {
+      LocationId: numLoc,
+      AccountEmp: emp,
+      ObjId: numObjId,
+      SupListId: numSupId,
+    });
+    if (fbMac.status === 'ok') {
+      const fbData = fbMac.json?.data || fbMac.json?.Data || {};
+      macPartners = Array.isArray(fbData.macPartners) ? fbData.macPartners : [];
+      macUseds = Array.isArray(fbData.macUseds) ? fbData.macUseds : [];
+    }
+  }
+
+  const ottList = ottRes.status === 'fulfilled' && Array.isArray(ottRes.value) ? ottRes.value : [];
+  const comboList =
+    comboRes.status === 'fulfilled' && Array.isArray(comboRes.value)
+      ? comboRes.value.map((c) => (typeof c === 'string' ? c : c && (c.SerialNumber || c.mac || ''))).filter(Boolean)
+      : [];
+  const camIdCodes = new Set(equipInfos.filter((e) => e.ParentName === 'FPT Camera').map((e) => e.IdCode));
+  const usedCamMacs = macUseds.filter((u) => u && camIdCodes.has(Number(u.id))).map((u) => u.mac || '').filter(Boolean);
+  const camHistoryMacs = [...new Set([...ottList, ...comboList, ...usedCamMacs].map((s) => String(s || '').trim()).filter(Boolean))];
+
+  const onlineData =
+    onlineRes.status === 'fulfilled' && onlineRes.value?.status === 'ok'
+      ? onlineRes.value.json?.Data?.[0] || null
+      : null;
+
+  return {
+    status: 'ok',
+    mode: 'live',
+    equipInfos,
+    macPartners,
+    macUseds,
+    camHistoryMacs,
+    modemCallerId: String((onlineData && onlineData.CallerID) || '').trim(),
+  };
+}
+
+/**
+ * Luu dieu chinh vat tu su dung & vat tu thu hoi len /api/materials/update-equipment.
+ */
+async function updateMaintenanceEquipments({
+  objId = 0,
+  supId = 0,
+  locationId = 0,
+  logonUser = '',
+  lstUse = [],
+  lstReturn = [],
+  forceDemo = false,
+} = {}) {
+  const check = validateMaintenanceMaterials({
+    objId,
+    supId,
+    locationId,
+    logonUser,
+    lstUse,
+    lstReturn,
+  });
+  if (!check.valid) {
+    return { status: 'validation_error', message: check.error };
+  }
+
+  if (!isUserscriptEnv() || forceDemo) {
+    const normalized = normalizeMaintenanceMaterials({ lstUse, lstReturn });
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Cập nhật vật tư thành công! (Mô phỏng)',
+      materials: normalized,
+      payload: check.payload,
+    };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.updateEquipment, check.payload);
+  if (res.status !== 'ok') return res;
+
+  const j = res.json || {};
+  const ok = Number(j.Data ?? j.data ?? 0) > 0 || j.Succeeded === true;
+  if (!ok) {
+    return {
+      status: 'error',
+      message: j.Message || j.message || 'Cập nhật vật tư không thành công.',
+    };
+  }
+  return {
+    status: 'ok',
+    mode: 'live',
+    message: j.Message || 'Cập nhật vật tư thành công!',
+  };
+}
+
+/**
+ * Tai danh muc Phan tu loi / Nguyen nhan loi / Huong xu ly cho ma dich vu.
+ */
+async function fetchMaintenanceErrorCatalog({
+  objId = 0,
+  supId = 0,
+  serviceCodes = [],
+  forceDemo = false,
+} = {}) {
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', data: DEMO_MAINT_ERROR_CATALOG };
+  }
+
+  const codes = (Array.isArray(serviceCodes) ? serviceCodes : [serviceCodes])
+    .map((c) => Number(c))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const res = await maintRequestJson(MAINT_ENDPOINTS.getInfoErrorComplete, {
+    ObjId: Number(objId || 0),
+    SupId: Number(supId || 0),
+    Request: 1,
+    IsGetAll: true,
+    ServiceCodes: codes,
+  });
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (j.Succeeded === false || j.error === true) {
+    return { status: 'error', message: j.Message || 'Không tải được danh mục nguyên nhân lỗi.' };
+  }
+  return { status: 'ok', mode: 'live', data: j.Data || {} };
+}
+
+/**
+ * Cap nhat ghi nhan ban dau (/api/origins/update-service-init).
+ */
+async function updateMaintenanceServiceInit({
+  supId = 0,
+  accountModify = '',
+  dataUpdates = [],
+  forceDemo = false,
+} = {}) {
+  const uniquePairs = [];
+  const seen = new Set();
+  for (const row of Array.isArray(dataUpdates) ? dataUpdates : []) {
+    const svc = String(row?.ServiceCode || '').trim();
+    const init = String(row?.InitStatusCode || '').trim();
+    if (!svc || !init) continue;
+    const key = `${svc},${init}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniquePairs.push({ ServiceCode: svc, InitStatusCode: init });
+    }
+  }
+  if (uniquePairs.length === 0) {
+    return { status: 'validation_error', message: 'Vui lòng chọn ít nhất 1 Dịch vụ & Tình trạng ban đầu.' };
+  }
+
+  const body = {
+    Request: 1,
+    SupId: Number(supId || 0),
+    AccountModify: String(accountModify || '').trim(),
+    Dataupdates: uniquePairs,
+  };
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: 'Cập nhật ghi nhận ban đầu thành công! (Mô phỏng)', body };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.updateServiceInit, body);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(j.Succeeded === true || Number(j.Data ?? 0) === 1)) {
+    return { status: 'error', message: j.Message || 'Cập nhật ghi nhận ban đầu thất bại.' };
+  }
+  return { status: 'ok', mode: 'live', message: 'Cập nhật ghi nhận ban đầu thành công!' };
+}
+
+/**
+ * Cap nhat Phan tu loi / Nguyen nhan loi / Huong xu ly (/api/contracts/ticket-update-error-complete).
+ */
+async function updateMaintenanceErrorComplete({
+  objId = 0,
+  supId = 0,
+  updateBy = '',
+  dataUpdates = [],
+  forceDemo = false,
+} = {}) {
+  const rows = Array.isArray(dataUpdates) ? dataUpdates : [];
+  if (rows.length === 0) {
+    return { status: 'validation_error', message: 'Chưa có dòng dịch vụ / nguyên nhân lỗi nào để cập nhật.' };
+  }
+
+  const body = {
+    ObjId: Number(objId || 0),
+    SupId: Number(supId || 0),
+    Request: 5,
+    UpdateBy: String(updateBy || '').trim(),
+    DataUpdates: rows.map((r) => ({
+      ServiceCode: String(r.ServiceCode || ''),
+      InitStatusCode: String(r.InitStatusCode || ''),
+      ErrorElementCode: String(r.ErrorElementCode || ''),
+      ErrorReasonCode: String(r.ErrorReasonCode || ''),
+      ProcessingDiretions: Array.isArray(r.ProcessingDiretions)
+        ? r.ProcessingDiretions.map((d) => ({
+            ProcessingDiretionCode: String(d.ProcessingDiretionCode || d.Code || ''),
+            LevelId: Number(d.LevelId ?? d.Value ?? 4),
+          }))
+        : [],
+    })),
+  };
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: 'Cập nhật nguyên nhân lỗi thành công! (Mô phỏng)', body };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.ticketUpdateErrorComplete, body);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(Number(j.Data ?? 0) === 1 || j.Succeeded === true)) {
+    return { status: 'error', message: j.Message || 'Cập nhật nguyên nhân lỗi thất bại.' };
+  }
+  return { status: 'ok', mode: 'live', message: 'Cập nhật nguyên nhân lỗi thành công!' };
+}
+
+/**
+ * Gui ghi chu moi len phieu bao tri (/api/contracts/update-discussion).
+ */
+async function addMaintenanceDiscussion({
+  objId = 0,
+  supId = 0,
+  logonUser = '',
+  newDescription = '',
+  code = MAINT_DISCUSSION_CODES.TICKET_NOTE,
+  forceDemo = false,
+} = {}) {
+  const cleanNote = String(newDescription || '').trim();
+  if (!cleanNote) {
+    return { status: 'validation_error', message: 'Vui lòng nhập nội dung ghi chú.' };
+  }
+
+  const body = {
+    SupId: Number(supId || 0),
+    ObjId: Number(objId || 0),
+    LogonUser: String(logonUser || '').trim(),
+    NewDescription: cleanNote,
+    Code: String(code || MAINT_DISCUSSION_CODES.TICKET_NOTE),
+  };
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Đã thêm ghi chú (Mô phỏng).',
+      item: {
+        Code: body.Code,
+        CreateBy: body.LogonUser || 'demo.ktv',
+        CreateAt: 'Vừa xong',
+        Note: body.NewDescription,
+      },
+    };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.updateDiscussion, body);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(Number(j.Data ?? j.data ?? 0) === 1 || j.Succeeded === true)) {
+    return { status: 'error', message: j.Message || 'Không gửi được ghi chú.' };
+  }
+  return { status: 'ok', mode: 'live', message: 'Đã thêm ghi chú lên phiếu!' };
+}
+
+/**
+ * Cap nhat Thong tin bao tri, Dai dien, hoac Dong / Cap nhat ket qua xu ly (/api/contracts/ticket-update-and-complete).
+ */
+async function updateMaintenanceTicketInfoAndStatus(params = {}) {
+  if (params.reprePhone !== undefined) {
+    const phoneCheck = validateMaintenanceRepPhone(params.reprePhone);
+    if (!phoneCheck.valid) {
+      return { status: 'validation_error', message: phoneCheck.error };
+    }
+    params = { ...params, reprePhone: phoneCheck.cleaned };
+  }
+
+  const payload = buildMaintenanceUpdateAndCompletePayload(params);
+
+  if (!isUserscriptEnv() || params.forceDemo) {
+    return {
+      status: 'ok',
+      mode: 'demo',
+      message: 'Cập nhật phiếu bảo trì thành công! (Mô phỏng)',
+      payload,
+    };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.ticketUpdateAndComplete, payload);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(Number(j.Data ?? 0) === 1 || j.Succeeded === true)) {
+    return { status: 'error', message: j.Message || 'Cập nhật không thành công.' };
+  }
+  return { status: 'ok', mode: 'live', message: j.Message || 'Cập nhật thành công!' };
+}
+
+/**
+ * Tra tinh trang phieu bao tri da hoan tat (/api/maintenances/return-final-status).
+ */
+async function returnMaintenanceTicketStatus({
+  objId = 0,
+  supId = 0,
+  updateBy = '',
+  forceDemo = false,
+} = {}) {
+  const body = {
+    SupId: Number(supId || 0),
+    ObjId: Number(objId || 0),
+    Final_Status: 0,
+    UpdateBy: String(updateBy || '').trim(),
+  };
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: 'Trả tình trạng phiếu thành công! (Mô phỏng)', body };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.returnFinalStatus, body);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(j.Succeeded === true && Number(j.Data ?? 0) === 1)) {
+    return { status: 'error', message: j.Message || 'Trả tình trạng không thành công!' };
+  }
+  return { status: 'ok', mode: 'live', message: 'Trả tình trạng phiếu thành công!' };
+}
+
+/**
+ * Dat phieu hien tai lam phieu cuoi (/api/implementfunctions/update-flag).
+ */
+async function swapMaintenanceLastTicket({
+  objId = 0,
+  supId = 0,
+  updateBy = '',
+  forceDemo = false,
+} = {}) {
+  const body = {
+    ObjId: Number(objId || 0),
+    SupId: Number(supId || 0),
+    UpdateBy: String(updateBy || '').trim(),
+  };
+
+  if (!isUserscriptEnv() || forceDemo) {
+    return { status: 'ok', mode: 'demo', message: 'Đổi phiếu cuối thành công! (Mô phỏng)', body };
+  }
+
+  const res = await maintRequestJson(MAINT_ENDPOINTS.updateFlag, body);
+  if (res.status !== 'ok') return res;
+  const j = res.json || {};
+  if (!(Number(j.Data ?? j.data ?? 0) >= 1 || j.Succeeded === true)) {
+    return { status: 'error', message: j.Message || 'Đổi phiếu cuối không thành công.' };
+  }
+  return { status: 'ok', mode: 'live', message: 'Đã đặt làm phiếu cuối!' };
+}
+
 // --- adapters/port.js ---
 /**
  * Adapter xu ly nghiep vu FTTH NEW Port cho cong port.fpt.net / mvcport.fpt.net:
@@ -15672,6 +17901,7 @@ async function executePortalAction(portalId, actionId, rawContractId, ctx = {}) 
 
 
 
+
 function formatVndAmount(amount) {
   const num = Number(amount ?? 0);
   if (!Number.isFinite(num)) return '0 đ';
@@ -15986,6 +18216,69 @@ function mountRemoteInside({
     deployReassignEmpCode: '',
     deployReassignReasonId: '',
     deployReassignSearch: '',
+    maintTab: 'overview',
+    maintLoading: false,
+    maintError: '',
+    maintLoginUrl: '',
+    maintLoginLabel: '',
+    maintNotice: '',
+    maintNoticeTone: 'info',
+    maintHash: '',
+    maintFoxUrl: '',
+    maintPartnerUrl: '',
+    maintContract: null,
+    maintUserInfo: null,
+    maintPermissions: null,
+    maintComboConfig: [],
+    maintTicketStatusCfg: null,
+    maintCatalogInit: null,
+    maintContractProducts: [],
+    maintTickets: [],
+    maintTicket: null,
+    maintMaterials: { lstUse: [], lstReturn: [], cameraCloudSummary: null },
+    maintEditUse: [],
+    maintEditReturn: [],
+    maintMatCatalogLoading: false,
+    maintMatCatalogLoaded: false,
+    maintMatCatalogError: '',
+    maintEquipInfos: [],
+    maintEquipSearchUse: '',
+    maintEquipPickUse: '',
+    maintEquipQtyUse: '1',
+    maintEquipSearchRet: '',
+    maintEquipPickRet: '',
+    maintEquipQtyRet: '1',
+    maintMacPartners: [],
+    maintMacUseds: [],
+    maintCamHistory: [],
+    maintModemCallerId: '',
+    maintInitAndErrors: [],
+    maintErrorCatalog: null,
+    maintErrorCatalogLoading: false,
+    maintErrServiceCode: '',
+    maintErrInitCode: '',
+    maintErrElementCode: '',
+    maintErrReasonCode: '',
+    maintErrProcCode: '',
+    maintEditErrors: [],
+    maintDiscussions: [],
+    maintNoteCode: MAINT_DISCUSSION_CODES.TICKET_NOTE,
+    maintNoteDraft: '',
+    maintReimbursementStatus: 0,
+    maintBbntRecords: [],
+    maintRepName: '',
+    maintRepRelation: '',
+    maintRepPhone: '',
+    maintUrgent: '',
+    maintNonSetHiFpt: '',
+    maintReasonInCable: '',
+    maintReasonMyBao: '',
+    maintLink1: '',
+    maintLink2: '',
+    maintLengthLink: '0',
+    maintTargetStatus: '1',
+    maintBusyKey: '',
+    maintArmedAction: '',
     recallLoading: false,
     recallProgress: '',
     recallError: '',
@@ -16536,6 +18829,72 @@ function mountRemoteInside({
     state.deployReassignSearch = '';
   }
 
+  function resetMaintModalState() {
+    state.maintTab = 'overview';
+    state.maintLoading = false;
+    state.maintError = '';
+    state.maintLoginUrl = '';
+    state.maintLoginLabel = '';
+    state.maintNotice = '';
+    state.maintNoticeTone = 'info';
+    state.maintHash = '';
+    state.maintFoxUrl = '';
+    state.maintPartnerUrl = '';
+    state.maintContract = null;
+    state.maintUserInfo = null;
+    state.maintPermissions = null;
+    state.maintComboConfig = [];
+    state.maintTicketStatusCfg = null;
+    state.maintCatalogInit = null;
+    state.maintContractProducts = [];
+    state.maintTickets = [];
+    state.maintTicket = null;
+    state.maintMaterials = { lstUse: [], lstReturn: [], cameraCloudSummary: null };
+    state.maintEditUse = [];
+    state.maintEditReturn = [];
+    state.maintMatCatalogLoading = false;
+    state.maintMatCatalogLoaded = false;
+    state.maintMatCatalogError = '';
+    state.maintEquipInfos = [];
+    state.maintEquipSearchUse = '';
+    state.maintEquipPickUse = '';
+    state.maintEquipQtyUse = '1';
+    state.maintEquipSearchRet = '';
+    state.maintEquipPickRet = '';
+    state.maintEquipQtyRet = '1';
+    state.maintMacPartners = [];
+    state.maintMacUseds = [];
+    state.maintCamHistory = [];
+    state.maintModemCallerId = '';
+    state.maintInitAndErrors = [];
+    state.maintErrorCatalog = null;
+    state.maintErrorCatalogLoading = false;
+    state.maintErrServiceCode = '';
+    state.maintErrInitCode = '';
+    state.maintErrElementCode = '';
+    state.maintErrReasonCode = '';
+    state.maintErrProcCode = '';
+    state.maintEditErrors = [];
+    state.maintDiscussions = [];
+    state.maintNoteCode = MAINT_DISCUSSION_CODES.TICKET_NOTE;
+    state.maintNoteDraft = '';
+    state.maintReimbursementStatus = 0;
+    state.maintBbntRecords = [];
+    state.maintRepName = '';
+    state.maintRepRelation = '';
+    state.maintRepPhone = '';
+    state.maintUrgent = '';
+    state.maintNonSetHiFpt = '';
+    state.maintReasonInCable = '';
+    state.maintReasonMyBao = '';
+    state.maintLink1 = '';
+    state.maintLink2 = '';
+    state.maintLengthLink = '0';
+    state.maintTargetStatus = '1';
+    state.maintBusyKey = '';
+    state.maintArmedAction = '';
+  }
+
   let recallStaffSearchTimer = null;
   let recallStaffSearchSeq = 0;
 
@@ -16700,6 +19059,7 @@ function mountRemoteInside({
     state.portHistoryError = '';
     state.portHistoryRows = [];
     resetDeployModalState();
+    resetMaintModalState();
     if (state.recallStaffEdit && state.recallMode !== 'demo') {
       closeRecallStaffEditor({
         pageDocument,
@@ -17612,6 +19972,665 @@ function mountRemoteInside({
         if (empRefreshWarn) {
           state.deployNotice = `${res.message} (Lưu ý đồng bộ lại KTV: ${empRefreshWarn})`;
         }
+      },
+    });
+  }
+
+  function cloneMaintEquipmentRows(rows = []) {
+    return (Array.isArray(rows) ? rows : []).map((r) => ({ ...r }));
+  }
+
+  function normalizeMaintErrorRowFromDb(row) {
+    const src = row && typeof row === 'object' ? row : {};
+    const procs = Array.isArray(src.ProcessingDiretions) ? src.ProcessingDiretions : [];
+    return {
+      ServiceCode: String(src.ServiceCode || ''),
+      InitStatusCode: String(src.InitStatusCode || ''),
+      ErrorElementCode: String(src.ErrorElementCode || ''),
+      ErrorReasonCode: String(src.ErrorReasonCode || ''),
+      ProcessingDiretions: procs
+        .map((d) => ({
+          ProcessingDiretionCode: String((d && (d.ProcessingDiretionCode || d.Code)) || ''),
+          LevelId: Number((d && (d.LevelId ?? d.Value ?? 4)) || 4),
+        }))
+        .filter((d) => Boolean(d.ProcessingDiretionCode)),
+    };
+  }
+
+  function applyMaintTicketDraft(ticket, materials, initAndErrors) {
+    const matNorm = normalizeMaintenanceMaterials(materials);
+    state.maintMaterials = matNorm;
+    state.maintEditUse = cloneMaintEquipmentRows(matNorm.lstUse);
+    state.maintEditReturn = cloneMaintEquipmentRows(matNorm.lstReturn);
+    state.maintEditErrors = (Array.isArray(initAndErrors) ? initAndErrors : []).map(
+      normalizeMaintErrorRowFromDb
+    );
+    state.maintRepName = ticket ? String(ticket.repreName || '') : '';
+    state.maintRepRelation = ticket ? String(ticket.repreRelation || '') : '';
+    state.maintRepPhone = ticket ? String(ticket.reprePhone || '') : '';
+    state.maintUrgent =
+      ticket && ticket.urgentNew !== null && ticket.urgentNew !== undefined
+        ? String(ticket.urgentNew)
+        : '';
+    state.maintNonSetHiFpt =
+      ticket && ticket.nonSetHiFpt !== null && ticket.nonSetHiFpt !== undefined
+        ? String(ticket.nonSetHiFpt)
+        : '';
+    state.maintReasonInCable =
+      ticket && ticket.reasonInCable !== null && ticket.reasonInCable !== undefined
+        ? String(ticket.reasonInCable)
+        : '';
+    state.maintReasonMyBao =
+      ticket && ticket.reasonMyBaoUnAcceptance !== null && ticket.reasonMyBaoUnAcceptance !== undefined
+        ? String(ticket.reasonMyBaoUnAcceptance)
+        : '';
+    state.maintLink1 = ticket ? String(ticket.link1 || '') : '';
+    state.maintLink2 = ticket ? String(ticket.link2 || '') : '';
+    state.maintLengthLink = ticket ? String(ticket.lengthLink ?? 0) : '0';
+    state.maintTargetStatus = ticket ? String(ticket.finalStatus ?? 1) : '1';
+    const initServices =
+      state.maintCatalogInit &&
+      state.maintCatalogInit.Service &&
+      Array.isArray(state.maintCatalogInit.Service.Infos)
+        ? state.maintCatalogInit.Service.Infos
+        : [];
+    if (!state.maintErrServiceCode && initServices.length > 0) {
+      state.maintErrServiceCode = String(initServices[0].Code || '');
+    }
+  }
+
+  async function loadMaintTicketModal(rawContractId, selectedSupId = 0) {
+    const prevTab = state.maintTab || 'overview';
+    resetMaintModalState();
+    state.maintTab = prevTab;
+    state.maintLoading = true;
+    renderConfirm();
+
+    const cleanId = normalizeContractId(rawContractId || '');
+    const cached = cleanId ? getCachedInsideContract(cleanId) : null;
+    try {
+      const res = await fetchMaintenanceTicket(cleanId, {
+        pageLocation: pageWindow ? pageWindow.location : null,
+        selectedSupId,
+        cachedObjId: (cached && Number(cached.objID)) || 0,
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintLoading = false;
+      if (res.status !== 'ok') {
+        state.maintError = res.message || 'Không tải được Phiếu bảo trì FOX-ERP.';
+        state.maintLoginUrl = res.loginUrl || MAINT_ENDPOINTS.foxTicketPage;
+        state.maintLoginLabel = res.loginLabel || 'Đăng nhập IAM';
+        renderConfirm();
+        return;
+      }
+
+      state.maintHash = res.hash || '';
+      state.maintFoxUrl = res.foxTicketUrl || '';
+      state.maintPartnerUrl = res.partnerTicketUrl || '';
+      state.maintContract = res.contract || null;
+      state.maintUserInfo = res.userInfo || null;
+      state.maintPermissions = res.permissions || {};
+      state.maintComboConfig = Array.isArray(res.comboConfig) ? res.comboConfig : [];
+      state.maintTicketStatusCfg = res.ticketStatusCfg || null;
+      state.maintCatalogInit = res.catalogInit || null;
+      state.maintContractProducts = Array.isArray(res.contractProducts) ? res.contractProducts : [];
+      state.maintTickets = Array.isArray(res.tickets) ? res.tickets : [];
+      state.maintTicket = res.ticket || null;
+      state.maintInitAndErrors = Array.isArray(res.initAndErrors) ? res.initAndErrors : [];
+      state.maintDiscussions = Array.isArray(res.discussions) ? res.discussions : [];
+      state.maintReimbursementStatus = Number(res.reimbursementStatus ?? 0);
+      state.maintBbntRecords = Array.isArray(res.bbntRecords) ? res.bbntRecords : [];
+      applyMaintTicketDraft(state.maintTicket, res.materials, state.maintInitAndErrors);
+
+      const resolvedContract =
+        (res.contract && res.contract.contract) || cleanId;
+      if (resolvedContract && normalizeContractId(state.contractInput) !== resolvedContract) {
+        state.contractInput = resolvedContract;
+        state.recentContracts = addRecentContract(resolvedContract);
+      }
+      addLog(
+        'Inside',
+        'Mở phiếu bảo trì',
+        (state.maintTicket && state.maintTicket.no) || resolvedContract,
+        res.mode === 'demo' ? 'demo' : 'ok'
+      );
+      renderConfirm();
+
+      if (state.maintTab === 'materials') {
+        loadMaintMaterialCatalogs({ forceReload: true });
+      } else if (state.maintTab === 'service' && state.maintErrServiceCode) {
+        loadMaintErrorCatalogForService(state.maintErrServiceCode);
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintLoading = false;
+      state.maintError = err && err.message ? err.message : 'Lỗi tải Phiếu bảo trì.';
+      state.maintLoginUrl = MAINT_ENDPOINTS.foxTicketPage;
+      state.maintLoginLabel = 'Mở FOX-ERP';
+      renderConfirm();
+    }
+  }
+
+  async function switchMaintTicketSupId(rawSupId) {
+    const nextTicket = selectActiveMaintenanceTicket(state.maintTickets, Number(rawSupId));
+    if (!nextTicket || (state.maintTicket && nextTicket.supId === state.maintTicket.supId)) return;
+    state.maintTicket = nextTicket;
+    state.maintArmedAction = '';
+    state.maintNotice = `Đang tải chi tiết ${nextTicket.no}…`;
+    state.maintNoticeTone = 'info';
+    state.maintMatCatalogLoaded = false;
+    renderConfirm();
+
+    const detail = await fetchMaintenanceTicketDetail({
+      objId: nextTicket.objId || (state.maintContract && state.maintContract.objId) || 0,
+      supId: nextTicket.supId,
+      ticket: nextTicket,
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+    state.maintInitAndErrors = Array.isArray(detail.initAndErrors) ? detail.initAndErrors : [];
+    state.maintDiscussions = Array.isArray(detail.discussions) ? detail.discussions : [];
+    state.maintReimbursementStatus = Number(detail.reimbursementStatus ?? 0);
+    state.maintBbntRecords = Array.isArray(detail.bbntRecords) ? detail.bbntRecords : [];
+    applyMaintTicketDraft(nextTicket, detail.materials, state.maintInitAndErrors);
+    state.maintNotice = '';
+    renderConfirm();
+    if (state.maintTab === 'materials') {
+      loadMaintMaterialCatalogs({ forceReload: true });
+    }
+  }
+
+  async function refreshMaintDetailInModal() {
+    const contract = state.maintContract;
+    const ticket = state.maintTicket;
+    if (!ticket) return;
+    const detail = await fetchMaintenanceTicketDetail({
+      objId: ticket.objId || (contract && contract.objId) || 0,
+      supId: ticket.supId,
+      ticket,
+    });
+    if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+    state.maintInitAndErrors = Array.isArray(detail.initAndErrors) ? detail.initAndErrors : [];
+    state.maintDiscussions = Array.isArray(detail.discussions) ? detail.discussions : [];
+    state.maintReimbursementStatus = Number(detail.reimbursementStatus ?? 0);
+    state.maintBbntRecords = Array.isArray(detail.bbntRecords) ? detail.bbntRecords : [];
+    applyMaintTicketDraft(ticket, detail.materials, state.maintInitAndErrors);
+    renderConfirm();
+  }
+
+  async function loadMaintMaterialCatalogs({ forceReload = false } = {}) {
+    const ticket = state.maintTicket;
+    const contract = state.maintContract;
+    if (!ticket || state.maintMatCatalogLoading) return;
+    if (!forceReload && state.maintMatCatalogLoaded) return;
+
+    state.maintMatCatalogLoading = true;
+    state.maintMatCatalogError = '';
+    renderConfirm();
+    try {
+      const res = await fetchMaintenanceMaterialCatalogs({
+        objId: ticket.objId || (contract && contract.objId) || 0,
+        supId: ticket.supId,
+        locationId:
+          (contract && contract.locationId) ||
+          (ticket && ticket.locationId) ||
+          (state.maintUserInfo && state.maintUserInfo.LocationId) ||
+          0,
+        accountEmp: (ticket.mainEmp && ticket.mainEmp.account) || '',
+      });
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintMatCatalogLoading = false;
+      state.maintMatCatalogLoaded = true;
+      if (res.status === 'ok') {
+        state.maintEquipInfos = Array.isArray(res.equipInfos) ? res.equipInfos : [];
+        state.maintMacPartners = Array.isArray(res.macPartners) ? res.macPartners : [];
+        state.maintMacUseds = Array.isArray(res.macUseds) ? res.macUseds : [];
+        state.maintCamHistory = Array.isArray(res.camHistoryMacs) ? res.camHistoryMacs : [];
+        state.maintModemCallerId = String(res.modemCallerId || '');
+        if (!state.maintEquipPickUse && state.maintEquipInfos.length > 0) {
+          state.maintEquipPickUse = String(state.maintEquipInfos[0].IdCode);
+        }
+        if (!state.maintEquipPickRet && state.maintEquipInfos.length > 0) {
+          state.maintEquipPickRet = String(state.maintEquipInfos[0].IdCode);
+        }
+      } else {
+        state.maintMatCatalogError = res.message || 'Không tải được danh mục vật tư / kho MAC.';
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintMatCatalogLoading = false;
+      state.maintMatCatalogError =
+        err && err.message ? err.message : 'Lỗi tải danh mục vật tư.';
+    }
+    renderConfirm();
+  }
+
+  function handleMaintAddMaterial(isReturnFlag) {
+    const isUse = isReturnFlag === 2;
+    const pickId = isUse ? state.maintEquipPickUse : state.maintEquipPickRet;
+    const qtyRaw = Number(isUse ? state.maintEquipQtyUse : state.maintEquipQtyRet);
+    const catalogItem = (state.maintEquipInfos || []).find(
+      (item) => String(item.IdCode) === String(pickId || '')
+    );
+    if (!catalogItem) {
+      state.maintNotice = 'Vui lòng chọn vật tư trong danh sách trước khi bấm Thêm.';
+      state.maintNoticeTone = 'error';
+      renderConfirm();
+      return;
+    }
+
+    const list = isUse ? state.maintEditUse : state.maintEditReturn;
+    let qty = Number.isFinite(qtyRaw) && qtyRaw >= 1 ? Math.floor(qtyRaw) : 1;
+    if (Number(catalogItem.IsMac) !== 1) {
+      const existing = list.find((r) => Number(r.CodeID) === Number(catalogItem.IdCode));
+      if (existing) {
+        existing.Quantity = Math.max(1, Number(existing.Quantity || 0) + qty);
+      } else {
+        list.push({
+          ID: 0,
+          CodeID: catalogItem.IdCode,
+          EQuipmentName: catalogItem.Description || catalogItem.Name,
+          DBName: catalogItem.Name || '',
+          FunctionName: isUse ? catalogItem.ParentName || '' : '',
+          Quantity: qty,
+          MacAddress: '',
+          Type: catalogItem.Type,
+          ParentName: catalogItem.ParentName || '',
+          Orderby: 0,
+          ParentOrder: 0,
+          AccountReplace: '',
+          CheckReplace: 0,
+          IsMac: catalogItem.IsMac,
+          CauseReturn: 0,
+          IsReturn: isReturnFlag,
+        });
+      }
+    } else {
+      if (qty > 10) {
+        qty = 10;
+        state.maintNotice = 'Chỉ thêm tối đa 10 thiết bị quản lý theo MAC trong 1 lần bấm.';
+        state.maintNoticeTone = 'info';
+      } else {
+        state.maintNotice = '';
+      }
+      const autoMac =
+        isUse && catalogItem.ParentName === 'Modem' ? state.maintModemCallerId || '' : '';
+      for (let i = 0; i < qty; i++) {
+        const camCount = list.filter((r) => r.ParentName === 'FPT Camera').length;
+        list.push({
+          ID: 0,
+          CodeID: catalogItem.IdCode,
+          EQuipmentName: catalogItem.Description || catalogItem.Name,
+          DBName: catalogItem.Name || '',
+          FunctionName: isUse ? catalogItem.ParentName || '' : '',
+          Quantity: 1,
+          MacAddress: autoMac,
+          Type: catalogItem.Type,
+          ParentName: catalogItem.ParentName || '',
+          Orderby: 0,
+          ParentOrder: catalogItem.ParentName === 'FPT Camera' ? camCount + 1 : 0,
+          AccountReplace: '',
+          CheckReplace: 0,
+          IsMac: catalogItem.IsMac,
+          CauseReturn: 0,
+          IsReturn: isReturnFlag,
+        });
+      }
+    }
+    if (isUse) {
+      state.maintEquipQtyUse = '1';
+    } else {
+      state.maintEquipQtyRet = '1';
+    }
+    renderConfirm();
+  }
+
+  async function loadMaintErrorCatalogForService(serviceCode) {
+    const cleanSvc = String(serviceCode || '').trim();
+    const ticket = state.maintTicket;
+    if (!cleanSvc || !ticket) return;
+    const needed = [...new Set([
+      cleanSvc,
+      ...(state.maintEditErrors || []).map((r) => String(r.ServiceCode || '').trim()),
+    ].filter((s) => s && !(state.maintErrorCatalog && state.maintErrorCatalog[s])))];
+    if (needed.length === 0) return;
+
+    state.maintErrorCatalogLoading = true;
+    renderConfirm();
+    try {
+      const results = await Promise.allSettled(
+        needed.map(async (svc) => ({
+          svc,
+          res: await fetchMaintenanceErrorCatalog({
+            objId: ticket.objId,
+            supId: ticket.supId,
+            serviceCodes: [svc],
+          }),
+        }))
+      );
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintErrorCatalogLoading = false;
+      const nextMap = { ...(state.maintErrorCatalog || {}) };
+      for (const item of results) {
+        if (
+          item.status === 'fulfilled' &&
+          item.value &&
+          item.value.res &&
+          item.value.res.status === 'ok' &&
+          item.value.res.data
+        ) {
+          nextMap[item.value.svc] = item.value.res.data;
+        }
+      }
+      state.maintErrorCatalog = nextMap;
+    } catch {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintErrorCatalogLoading = false;
+    }
+    renderConfirm();
+  }
+
+  async function runMaintMutation({
+    busyKey,
+    pendingText,
+    fallbackErr,
+    logAction,
+    fn,
+    onOk,
+  }) {
+    const contract = state.maintContract;
+    const ticket = state.maintTicket;
+    if (!ticket || state.maintBusyKey) return;
+    state.maintArmedAction = '';
+    state.maintBusyKey = busyKey;
+    state.maintNotice = pendingText;
+    state.maintNoticeTone = 'info';
+    renderConfirm();
+
+    try {
+      const res = await fn(contract, ticket);
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintBusyKey = '';
+      if (res.status === 'ok') {
+        state.maintNotice = res.message || 'Thao tác thành công.';
+        state.maintNoticeTone = 'ok';
+        addLog(
+          'Inside',
+          logAction,
+          ticket.no || (contract && contract.contract) || '',
+          res.mode === 'demo' ? 'demo' : 'ok'
+        );
+        if (onOk) {
+          await onOk(res);
+          if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+        }
+      } else {
+        state.maintNotice = res.message || fallbackErr;
+        state.maintNoticeTone = 'error';
+        if (res.loginUrl) {
+          state.maintLoginUrl = res.loginUrl;
+        }
+        addLog('Inside', logAction, ticket.no || '', 'error');
+      }
+    } catch (err) {
+      if (!state.confirmAction || state.confirmAction.id !== 'maint_ticket') return;
+      state.maintBusyKey = '';
+      state.maintNotice = err && err.message ? err.message : fallbackErr;
+      state.maintNoticeTone = 'error';
+    }
+    renderConfirm();
+  }
+
+  function handleMaintSaveMaterials() {
+    const contract = state.maintContract;
+    const logonUser = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const locationId =
+      (contract && contract.locationId) ||
+      (state.maintUserInfo && state.maintUserInfo.LocationId) ||
+      0;
+    return runMaintMutation({
+      busyKey: 'save_materials',
+      pendingText: 'Đang lưu vật tư giao & thu hồi lên FOX-ERP…',
+      fallbackErr: 'Cập nhật vật tư không thành công.',
+      logAction: 'Lưu vật tư phiếu BT',
+      fn: (_, ticket) =>
+        updateMaintenanceEquipments({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          locationId,
+          logonUser,
+          lstUse: state.maintEditUse,
+          lstReturn: state.maintEditReturn,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo') {
+          state.maintMaterials = res.materials || normalizeMaintenanceMaterials({
+            lstUse: state.maintEditUse,
+            lstReturn: state.maintEditReturn,
+          });
+          state.maintEditUse = cloneMaintEquipmentRows(state.maintMaterials.lstUse);
+          state.maintEditReturn = cloneMaintEquipmentRows(state.maintMaterials.lstReturn);
+          return;
+        }
+        await refreshMaintDetailInModal();
+      },
+    });
+  }
+
+  function handleMaintSaveRep() {
+    const contract = state.maintContract;
+    const accountModify = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'save_rep',
+      pendingText: 'Đang lưu thông tin đại diện…',
+      fallbackErr: 'Cập nhật thông tin đại diện thất bại.',
+      logAction: 'Cập nhật đại diện phiếu BT',
+      fn: (_, ticket) =>
+        updateMaintenanceTicketInfoAndStatus({
+          contract: (contract && contract.contract) || '',
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          accountModify,
+          finalStatus: ticket.finalStatus,
+          repreName: state.maintRepName,
+          repreRelation: state.maintRepRelation,
+          reprePhone: state.maintRepPhone,
+        }),
+      onOk: () => {
+        if (state.maintTicket) {
+          state.maintTicket.repreName = state.maintRepName.trim();
+          state.maintTicket.repreRelation = state.maintRepRelation.trim();
+          state.maintTicket.reprePhone = state.maintRepPhone.trim();
+        }
+      },
+    });
+  }
+
+  function handleMaintSaveErrors() {
+    const contract = state.maintContract;
+    const username = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'save_errors',
+      pendingText: 'Đang cập nhật ghi nhận ban đầu & nguyên nhân lỗi…',
+      fallbackErr: 'Cập nhật nguyên nhân lỗi thất bại.',
+      logAction: 'Cập nhật lỗi phiếu BT',
+      fn: async (_, ticket) => {
+        const initRows = state.maintEditErrors.filter((r) => r.ServiceCode && r.InitStatusCode);
+        if (initRows.length > 0) {
+          const r1 = await updateMaintenanceServiceInit({
+            supId: ticket.supId,
+            accountModify: username,
+            dataUpdates: initRows,
+          });
+          if (r1.status !== 'ok') return r1;
+        }
+        return updateMaintenanceErrorComplete({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy: username,
+          dataUpdates: state.maintEditErrors,
+        });
+      },
+      onOk: async (res) => {
+        if (res.mode !== 'demo') {
+          await refreshMaintDetailInModal();
+        }
+      },
+    });
+  }
+
+  function handleMaintAddNote() {
+    const contract = state.maintContract;
+    const logonUser = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const noteText = String(state.maintNoteDraft || '').trim();
+    const noteCode = state.maintNoteCode || MAINT_DISCUSSION_CODES.TICKET_NOTE;
+    return runMaintMutation({
+      busyKey: 'add_note',
+      pendingText: 'Đang gửi ghi chú lên phiếu…',
+      fallbackErr: 'Gửi ghi chú thất bại.',
+      logAction: 'Ghi chú phiếu BT',
+      fn: (_, ticket) =>
+        addMaintenanceDiscussion({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          logonUser,
+          newDescription: noteText,
+          code: noteCode,
+        }),
+      onOk: async (res) => {
+        state.maintNoteDraft = '';
+        if (res.mode === 'demo' && res.item) {
+          state.maintDiscussions = [res.item, ...(state.maintDiscussions || [])];
+        } else {
+          await refreshMaintDetailInModal();
+        }
+      },
+    });
+  }
+
+  function handleMaintSaveInfoOrStatus(isStatusUpdate) {
+    const contract = state.maintContract;
+    const accountModify = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    const statusOpts = parseMaintenanceComboOptions(
+      state.maintComboConfig,
+      MAINT_CATALOG_KEYS.TICKET_STATUS
+    );
+    const chosenStatusOpt = statusOpts.find(
+      (s) => String(s.value) === String(state.maintTargetStatus)
+    );
+    const nextFinalStatus = isStatusUpdate
+      ? Number(state.maintTargetStatus)
+      : Number((state.maintTicket && state.maintTicket.finalStatus) ?? 1);
+    const nextStatusCode = isStatusUpdate && chosenStatusOpt ? chosenStatusOpt.code : '';
+
+    return runMaintMutation({
+      busyKey: isStatusUpdate ? 'update_status' : 'save_info',
+      pendingText: isStatusUpdate
+        ? 'Đang cập nhật kết quả xử lý / đóng phiếu…'
+        : 'Đang lưu thông tin bảo trì…',
+      fallbackErr: isStatusUpdate
+        ? 'Cập nhật kết quả xử lý không thành công.'
+        : 'Lưu thông tin bảo trì thất bại.',
+      logAction: isStatusUpdate ? 'Đóng / Cập nhật kết quả BT' : 'Lưu thông tin BT',
+      fn: (_, ticket) =>
+        updateMaintenanceTicketInfoAndStatus({
+          contract: (contract && contract.contract) || '',
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          accountModify,
+          urgentType: state.maintUrgent || null,
+          nonSetHiFpt: state.maintNonSetHiFpt || null,
+          reasonInCable: state.maintReasonInCable || null,
+          reasonMyBao: state.maintReasonMyBao || null,
+          link1: state.maintLink1 || '',
+          link2: state.maintLink2 || '',
+          lengthLink: Number(state.maintLengthLink) || 0,
+          finalStatus: nextFinalStatus,
+          statusCode: nextStatusCode,
+          errorCompletes: state.maintEditErrors.filter(
+            (r) => r.ErrorElementCode || r.ErrorReasonCode
+          ),
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTicket.finalStatus = nextFinalStatus;
+          if (chosenStatusOpt && isStatusUpdate) {
+            state.maintTicket.statusName = chosenStatusOpt.title;
+            state.maintTicket.statusBucket = [1, 3, 5].includes(nextFinalStatus)
+              ? 'complete'
+              : 'backlog';
+            if (!state.maintTicket.finishDate && state.maintTicket.statusBucket === 'complete') {
+              state.maintTicket.finishDate = new Date().toISOString();
+            }
+          }
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
+      },
+    });
+  }
+
+  function handleMaintReturnStatus() {
+    const contract = state.maintContract;
+    const updateBy = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'return_status',
+      pendingText: 'Đang trả tình trạng phiếu về Đang xử lý…',
+      fallbackErr: 'Trả tình trạng phiếu thất bại.',
+      logAction: 'Trả tình trạng phiếu BT',
+      fn: (_, ticket) =>
+        returnMaintenanceTicketStatus({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTicket.finalStatus = 10;
+          state.maintTicket.statusName = 'Đang xử lý';
+          state.maintTicket.statusBucket = 'backlog';
+          state.maintTargetStatus = '10';
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
+      },
+    });
+  }
+
+  function handleMaintSwapLastTicket() {
+    const contract = state.maintContract;
+    const updateBy = (state.maintUserInfo && state.maintUserInfo.UserName) || '';
+    return runMaintMutation({
+      busyKey: 'swap_last',
+      pendingText: 'Đang đặt phiếu này làm phiếu cuối…',
+      fallbackErr: 'Đổi phiếu cuối không thành công.',
+      logAction: 'Đặt phiếu cuối BT',
+      fn: (_, ticket) =>
+        swapMaintenanceLastTicket({
+          objId: ticket.objId || (contract && contract.objId) || 0,
+          supId: ticket.supId,
+          updateBy,
+        }),
+      onOk: async (res) => {
+        if (res.mode === 'demo' && state.maintTicket) {
+          state.maintTickets = state.maintTickets.map((t) => ({
+            ...t,
+            flag: t.supId === state.maintTicket.supId ? 1 : 0,
+            isActive: t.supId === state.maintTicket.supId,
+          }));
+          state.maintTicket.flag = 1;
+          state.maintTicket.isActive = true;
+          return;
+        }
+        await loadMaintTicketModal(
+          (contract && contract.contract) || state.contractInput,
+          state.maintTicket ? state.maintTicket.supId : 0
+        );
       },
     });
   }
@@ -19001,6 +22020,8 @@ function mountRemoteInside({
         loadInsideByPassModal(state.contractInput);
       } else if (state.activePortalId === 'inside' && action.id === 'deploy_ticket') {
         loadDeployTicketModal(state.contractInput);
+      } else if (state.activePortalId === 'inside' && action.id === 'maint_ticket') {
+        loadMaintTicketModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'release_port') {
         loadPortReleaseModal(state.contractInput);
       } else if (state.activePortalId === 'port' && action.id === 'assign_port') {
@@ -21410,6 +24431,7 @@ function mountRemoteInside({
     const isInsideOlt = portal.id === 'inside' && act.id === 'clear_osp';
     const isInsideBypass = portal.id === 'inside' && act.id === 'bypass';
     const isInsideDeploy = portal.id === 'inside' && act.id === 'deploy_ticket';
+    const isInsideMaint = portal.id === 'inside' && act.id === 'maint_ticket';
     const isPortRelease = portal.id === 'port' && act.id === 'release_port';
     const isPortAssign = portal.id === 'port' && act.id === 'assign_port';
     const isRecallManage = portal.id === 'recall' && act.id === 'manage_recall';
@@ -21434,6 +24456,8 @@ function mountRemoteInside({
             ? 'Kill Session — Phiên đang chạy'
             : isInsideDeploy
             ? 'Phiếu triển khai FOX-ERP'
+            : isInsideMaint
+            ? 'Phiếu bảo trì & Chuyển Cloud'
             : isInsideBypass
             ? 'CheckList ByPass'
             : isRecallManage
@@ -21462,6 +24486,8 @@ function mountRemoteInside({
               ? 'Kiểm tra đúng IP đang chạy bên dưới rồi chạm nút Kill để ngắt phiên (2 bước xác nhận ngay trên dòng).'
               : isInsideDeploy
               ? 'Thao tác trực tiếp: thông số NET, Clear MAC vật tư, hoàn tất phiếu, SĐT User và Biên bản điện tử.'
+              : isInsideMaint
+              ? 'Điều chỉnh vật tư giao/thu hồi, mở Chuyển Cloud Camera (Partner 1 chạm), cập nhật lỗi/ghi chú và đóng phiếu.'
               : isRecallManage
               ? 'Xem danh sách vật tư, thêm thiết bị / TB phụ, bấm sửa trực tiếp, tạo phiếu mới (+) và gửi ghi chú.'
               : isEquipmentDebt
@@ -21499,6 +24525,7 @@ function mountRemoteInside({
         (isInsideBox && state.boxTab === 'history') ||
         isInsideKill ||
         isInsideDeploy ||
+        isInsideMaint ||
         isRecallManage ||
         isEquipmentDebt
           ? 'Đóng'
@@ -21516,6 +24543,65 @@ function mountRemoteInside({
     });
 
     let showConfirmBtn = true;
+
+    function buildSheetKvList(rows) {
+      const filtered = rows.filter(([, val]) => val !== '' && val !== undefined && val !== null);
+      return el(
+        'div',
+        { className: 'ri-kv-list' },
+        filtered.map(([k, val]) =>
+          el('div', { className: 'ri-kv-item' }, [
+            el('span', { className: 'ri-kv-key', text: k }),
+            el('span', { className: 'ri-kv-val', text: String(val) }),
+          ])
+        )
+      );
+    }
+
+    function buildSheetArmedConfirmRow({
+      armedField = 'deployArmedAction',
+      busyField = 'deployBusyAction',
+      armKey,
+      idleLabel,
+      idleClass = 'ri-danger-btn',
+      confirmLabel,
+      busyKey,
+      onConfirm,
+    }) {
+      const busyVal = String(state[busyField] || '');
+      const isRowBusy = Boolean(busyVal);
+      if (state[armedField] === armKey) {
+        return el('div', { className: 'ri-result-actions' }, [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            disabled: isRowBusy,
+            text: 'Hủy',
+            onClick: () => {
+              state[armedField] = '';
+              renderConfirm();
+            },
+          }),
+          el('button', {
+            type: 'button',
+            className: idleClass,
+            disabled: isRowBusy,
+            text: busyVal === busyKey ? 'Đang gửi…' : confirmLabel,
+            onClick: onConfirm,
+          }),
+        ]);
+      }
+      return el('button', {
+        type: 'button',
+        className: idleClass,
+        disabled: isRowBusy,
+        text: busyVal === busyKey ? 'Đang xử lý…' : idleLabel,
+        onClick: () => {
+          state[armedField] = armKey;
+          renderConfirm();
+        },
+      });
+    }
 
     function buildByPassStatusAndReasonFields({
       typeId,
@@ -22849,61 +25935,13 @@ function mountRemoteInside({
           );
         }
 
-        function buildDeployKvList(rows) {
-          const filtered = rows.filter(([, val]) => val !== '' && val !== undefined && val !== null);
-          return el(
-            'div',
-            { className: 'ri-kv-list' },
-            filtered.map(([k, val]) =>
-              el('div', { className: 'ri-kv-item' }, [
-                el('span', { className: 'ri-kv-key', text: k }),
-                el('span', { className: 'ri-kv-val', text: String(val) }),
-              ])
-            )
-          );
-        }
-
-        function buildArmedConfirmRow({
-          armKey,
-          idleLabel,
-          idleClass = 'ri-danger-btn',
-          confirmLabel,
-          busyKey,
-          onConfirm,
-        }) {
-          const isArmed = state.deployArmedAction === armKey;
-          if (isArmed) {
-            return el('div', { className: 'ri-result-actions' }, [
-              el('button', {
-                type: 'button',
-                className: 'ri-secondary-btn',
-                disabled: isBusy,
-                text: 'Hủy',
-                onClick: () => {
-                  state.deployArmedAction = '';
-                  renderConfirm();
-                },
-              }),
-              el('button', {
-                type: 'button',
-                className: idleClass,
-                disabled: isBusy,
-                text: state.deployBusyAction === busyKey ? 'Đang gửi…' : confirmLabel,
-                onClick: onConfirm,
-              }),
-            ]);
-          }
-          return el('button', {
-            type: 'button',
-            className: idleClass,
-            disabled: isBusy,
-            text: state.deployBusyAction === busyKey ? 'Đang xử lý…' : idleLabel,
-            onClick: () => {
-              state.deployArmedAction = armKey;
-              renderConfirm();
-            },
+        const buildDeployKvList = buildSheetKvList;
+        const buildArmedConfirmRow = (opts) =>
+          buildSheetArmedConfirmRow({
+            armedField: 'deployArmedAction',
+            busyField: 'deployBusyAction',
+            ...opts,
           });
-        }
 
         if (state.deployTab === 'overview') {
           const mainEmpText = ticket.mainEmp
@@ -23837,6 +26875,1125 @@ function mountRemoteInside({
                   busyKey: 'reassign_emp',
                   onConfirm: handleDeployReassignSubmit,
                 }),
+              ])
+            );
+          }
+        }
+      }
+    } else if (isInsideMaint) {
+      showConfirmBtn = false;
+      cancelBtn.textContent = 'Đóng';
+
+      if (state.maintLoading) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status is-loading', 'aria-live': 'polite' }, [
+            el('span', { className: 'ri-spinner' }),
+            el('span', {
+              text: contractId
+                ? `Đang tải phiếu bảo trì FOX-ERP cho ${contractId}…`
+                : 'Đang tải phiếu bảo trì từ FOX-ERP…',
+            }),
+          ])
+        );
+      } else if (state.maintError) {
+        const errActions = [
+          el('button', {
+            type: 'button',
+            className: 'ri-secondary-btn',
+            text: 'Thử tải lại',
+            onClick: () => loadMaintTicketModal(contractId),
+          }),
+        ];
+        if (state.maintLoginUrl) {
+          errActions.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-primary-btn',
+              text: state.maintLoginLabel || 'Đăng nhập IAM',
+              onClick: () => {
+                openPortalCleanLogin('inside', {
+                  fallbackUrl: state.maintLoginUrl,
+                  title: state.maintLoginLabel || 'Đăng nhập FOX-ERP / Partner',
+                  clearIamIdentity: false,
+                });
+              },
+            })
+          );
+        }
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status', 'data-tone': 'error' }, [
+            el('div', { text: state.maintError }),
+            el('div', { className: 'ri-result-actions' }, errActions),
+          ])
+        );
+      } else if (!state.maintTicket) {
+        sheetParts.push(
+          el('div', { className: 'ri-sheet-status' }, [
+            el('div', {
+              text: `Chưa có phiếu bảo trì trên hợp đồng ${(state.maintContract && state.maintContract.contract) || contractId || ''}.`,
+            }),
+            state.maintFoxUrl
+              ? el('div', { className: 'ri-result-actions' }, [
+                  el('button', {
+                    type: 'button',
+                    className: 'ri-secondary-btn',
+                    text: 'Mở FOX-ERP BT',
+                    onClick: () =>
+                      openExternalOrPortalUrl(state.maintFoxUrl, {
+                        mode: 'portal',
+                        title: 'Phiếu bảo trì FOX-ERP',
+                        pageWindow,
+                      }),
+                  }),
+                ])
+              : null,
+          ])
+        );
+      } else {
+        const contract = state.maintContract || {};
+        const ticket = state.maintTicket;
+        const isBusy = Boolean(state.maintBusyKey);
+        const cloudSummary = evaluateMaintenanceCameraCloud(
+          state.maintEditUse,
+          state.maintEditReturn
+        );
+        const buildMaintArmedRow = (opts) =>
+          buildSheetArmedConfirmRow({
+            armedField: 'maintArmedAction',
+            busyField: 'maintBusyKey',
+            ...opts,
+          });
+
+        if (state.maintTickets.length > 1) {
+          const tSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-maint-ticket-select' },
+            state.maintTickets.map((t) =>
+              el('option', {
+                value: String(t.supId),
+                text: `${t.no} — ${t.statusName}${t.flag === 1 ? ' ★Phiếu cuối' : ''}`,
+              })
+            )
+          );
+          tSel.value = String(ticket.supId);
+          tSel.addEventListener('change', (e) => switchMaintTicketSupId(e.target.value));
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-maint-ticket-select',
+                text: `Chọn phiếu bảo trì (${state.maintTickets.length} phiếu)`,
+              }),
+              tSel,
+            ])
+          );
+        }
+
+        const utilBtns = [];
+        if (state.maintPartnerUrl) {
+          utilBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Mở Chuyển Cloud (Partner)',
+              onClick: () =>
+                openExternalOrPortalUrl(state.maintPartnerUrl, {
+                  mode: 'portal',
+                  title: `Chuyển Cloud — ${ticket.no}`,
+                  pageWindow,
+                }),
+            })
+          );
+        }
+        if (state.maintFoxUrl) {
+          utilBtns.push(
+            el('button', {
+              type: 'button',
+              className: 'ri-text-btn',
+              text: 'Mở FOX-ERP',
+              onClick: () =>
+                openExternalOrPortalUrl(state.maintFoxUrl, {
+                  mode: 'portal',
+                  title: ticket.no || 'Phiếu bảo trì FOX-ERP',
+                  pageWindow,
+                }),
+            })
+          );
+        }
+        utilBtns.push(
+          el('button', {
+            type: 'button',
+            className: 'ri-text-btn',
+            text: 'Tải lại',
+            onClick: () => loadMaintTicketModal(contract.contract || contractId, ticket.supId),
+          })
+        );
+
+        sheetParts.push(
+          el('div', { className: 'ri-confirm-input-wrap' }, [
+            el('div', { className: 'ri-inline-head' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `${ticket.no} • ${ticket.statusName}${ticket.flag === 1 ? ' • Phiếu cuối' : ''}`,
+              }),
+              el('div', { className: 'ri-result-actions' }, utilBtns),
+            ]),
+            el('div', { className: 'ri-mode-row' }, [
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'overview' ? ' is-active' : ''}`,
+                text: 'Tổng quan',
+                onClick: () => {
+                  state.maintTab = 'overview';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'materials' ? ' is-active' : ''}`,
+                text: `Vật tư & Cloud (${state.maintEditUse.length + state.maintEditReturn.length})`,
+                onClick: () => {
+                  state.maintTab = 'materials';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                  loadMaintMaterialCatalogs();
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'service' ? ' is-active' : ''}`,
+                text: `Lỗi & Ghi chú (${state.maintEditErrors.length})`,
+                onClick: () => {
+                  state.maintTab = 'service';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                  if (state.maintErrServiceCode) {
+                    loadMaintErrorCatalogForService(state.maintErrServiceCode);
+                  }
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: `ri-mode-btn${state.maintTab === 'complete' ? ' is-active' : ''}`,
+                text: 'Thông tin & Đóng',
+                onClick: () => {
+                  state.maintTab = 'complete';
+                  state.maintArmedAction = '';
+                  renderConfirm();
+                },
+              }),
+            ]),
+          ])
+        );
+
+        if (state.maintNotice) {
+          sheetParts.push(
+            el('div', {
+              className: 'ri-sheet-status',
+              'data-tone': state.maintNoticeTone || 'info',
+            }, [el('div', { text: state.maintNotice })])
+          );
+        }
+
+        if (state.maintTab === 'overview') {
+          const empLine =
+            ticket.mainEmp && ticket.mainEmp.account
+              ? [ticket.mainEmp.account, ticket.mainEmp.code ? `(${ticket.mainEmp.code})` : '', ticket.mainEmp.phone]
+                  .filter(Boolean)
+                  .join(' ')
+              : 'Chưa phân công';
+          sheetParts.push(
+            buildSheetKvList([
+              ['Mã phiếu', ticket.no],
+              ['Tình trạng', `${ticket.statusName} (${ticket.finalStatus})`],
+              ['Khách hàng', contract.fullName],
+              ['Địa chỉ', ticket.addressUse || contract.address],
+              ['SĐT KH / Hỗ trợ', ticket.supportPhone || contract.phone],
+              ['Gói / Loại KN', contract.localTypeDesc],
+              ['Tập điểm / POP', ticket.odcCableType || ticket.groupPoints || ticket.popCode],
+              ['KTV chính', empLine],
+              ['Đối tác / Block', [ticket.mainEmp && ticket.mainEmp.partnerName, ticket.mainEmp && ticket.mainEmp.blockName].filter(Boolean).join(' • ')],
+              ['Lịch hẹn', ticket.appointmentSummary],
+              ['Tồn / Lặp 30N', `${ticket.backlogHours} giờ • Lặp: ${ticket.thirtyRepeat}`],
+              ['Ghi nhận C.L', ticket.initDesc || ticket.description],
+              ['Camera Cloud', cloudSummary.statusLabel],
+            ])
+          );
+
+          if (ticket.flag !== 1) {
+            sheetParts.push(
+              el('div', { className: 'ri-result-actions' }, [
+                buildMaintArmedRow({
+                  armKey: 'swap_last',
+                  idleLabel: 'Đặt làm phiếu cuối',
+                  idleClass: 'ri-secondary-btn',
+                  confirmLabel: 'Xác nhận đặt phiếu cuối',
+                  busyKey: 'swap_last',
+                  onConfirm: handleMaintSwapLastTicket,
+                }),
+              ])
+            );
+          }
+
+          const repNameIn = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-name',
+            placeholder: 'Họ tên người đại diện…',
+            value: state.maintRepName || '',
+          });
+          repNameIn.value = state.maintRepName || '';
+          repNameIn.addEventListener('input', (e) => {
+            state.maintRepName = e.target.value;
+          });
+
+          const repRelIn = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-rel',
+            placeholder: 'Quan hệ với chủ hợp đồng…',
+            value: state.maintRepRelation || '',
+          });
+          repRelIn.value = state.maintRepRelation || '';
+          repRelIn.addEventListener('input', (e) => {
+            state.maintRepRelation = e.target.value;
+          });
+
+          const repPhoneIn = el('input', {
+            type: 'tel',
+            inputmode: 'numeric',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-rep-phone',
+            placeholder: 'Số điện thoại người đại diện…',
+            value: state.maintRepPhone || '',
+          });
+          repPhoneIn.value = state.maintRepPhone || '';
+          repPhoneIn.addEventListener('input', (e) => {
+            state.maintRepPhone = e.target.value;
+          });
+
+          sheetParts.push(
+            el('details', { className: 'ri-confirm-input-wrap' }, [
+              el('summary', { className: 'ri-summary-toggle', text: 'Thông tin người đại diện & Biên bản NT' }),
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-name', text: 'Họ tên đại diện' }),
+                repNameIn,
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-rel', text: 'Quan hệ' }),
+                repRelIn,
+                el('label', { className: 'ri-confirm-label', for: 'ri-maint-rep-phone', text: 'SĐT đại diện' }),
+                repPhoneIn,
+                el('div', { className: 'ri-result-actions' }, [
+                  buildMaintArmedRow({
+                    armKey: 'save_rep',
+                    idleLabel: 'Lưu thông tin đại diện',
+                    idleClass: 'ri-primary-btn',
+                    confirmLabel: 'Xác nhận lưu đại diện',
+                    busyKey: 'save_rep',
+                    onConfirm: handleMaintSaveRep,
+                  }),
+                ]),
+              ]),
+              state.maintBbntRecords.length > 0
+                ? el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintBbntRecords.map((rec) =>
+                      el('div', { className: 'ri-history-card' }, [
+                        el('div', {
+                          className: 'ri-history-macs',
+                          text: `${rec.Code || 'BBNT'} • ${rec.Confirm ? 'Đã xác nhận' : rec.StatusRender === 1 ? 'Đã tạo' : 'Chưa tạo'}`,
+                        }),
+                        el('div', {
+                          className: 'ri-history-meta',
+                          text: [rec.Name || 'Biên bản nghiệm thu Bảo trì', rec.CreateDate || '']
+                            .filter(Boolean)
+                            .join(' • '),
+                        }),
+                      ])
+                    )
+                  )
+                : el('div', { className: 'ri-field-hint', text: 'Chưa có Biên bản nghiệm thu bảo trì.' }),
+            ])
+          );
+        } else if (state.maintTab === 'materials') {
+          const badgeTone =
+            cloudSummary.statusCode === 'transferred'
+              ? 'is-done'
+              : cloudSummary.statusCode === 'ready'
+              ? 'is-ready'
+              : 'is-pending';
+
+          sheetParts.push(
+            el('div', { className: 'ri-cloud-card' }, [
+              el('div', { className: 'ri-inline-head' }, [
+                el('span', { className: 'ri-confirm-label', text: 'Reset MAC Camera / Chuyển Cloud' }),
+                el('span', {
+                  className: `ri-cloud-badge ${badgeTone}`,
+                  text: cloudSummary.statusLabel,
+                }),
+              ]),
+              el('div', { className: 'ri-cloud-hint', text: cloudSummary.hint }),
+              el('div', { className: 'ri-result-actions' }, [
+                state.maintPartnerUrl
+                  ? el('button', {
+                      type: 'button',
+                      className: 'ri-primary-btn',
+                      disabled: isBusy,
+                      text: 'Mở Chuyển Cloud (Partner)',
+                      onClick: () =>
+                        openExternalOrPortalUrl(state.maintPartnerUrl, {
+                          mode: 'portal',
+                          title: `Chuyển Cloud — ${ticket.no}`,
+                          pageWindow,
+                        }),
+                    })
+                  : null,
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  disabled: isBusy || state.maintMatCatalogLoading,
+                  text: 'Tải lại vật tư',
+                  onClick: async () => {
+                    await refreshMaintDetailInModal();
+                    await loadMaintMaterialCatalogs({ forceReload: true });
+                  },
+                }),
+              ]),
+            ])
+          );
+
+          if (state.maintMatCatalogLoading) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status is-loading' }, [
+                el('span', { className: 'ri-spinner' }),
+                el('span', { text: 'Đang tải danh mục vật tư, kho MAC & lịch sử MAC Camera…' }),
+              ])
+            );
+          } else if (state.maintMatCatalogError) {
+            sheetParts.push(
+              el('div', { className: 'ri-sheet-status', 'data-tone': 'warn' }, [
+                el('div', { text: state.maintMatCatalogError }),
+              ])
+            );
+          }
+
+          const svcOpts = parseMaintenanceComboOptions(
+            state.maintComboConfig,
+            MAINT_CATALOG_KEYS.SERVICES
+          );
+          const causeOpts = parseMaintenanceComboOptions(
+            state.maintComboConfig,
+            MAINT_CATALOG_KEYS.EQUIP_RETURN_CAUSE
+          );
+
+          function buildMaintMatSection(isRetFlag) {
+            const isUse = isRetFlag === 2;
+            const rows = isUse ? state.maintEditUse : state.maintEditReturn;
+            const searchField = isUse ? 'maintEquipSearchUse' : 'maintEquipSearchRet';
+            const pickField = isUse ? 'maintEquipPickUse' : 'maintEquipPickRet';
+            const qtyField = isUse ? 'maintEquipQtyUse' : 'maintEquipQtyRet';
+            const pickerSel = el('select', {
+              className: 'ri-select',
+              id: isUse ? 'ri-maint-mat-use-sel' : 'ri-maint-mat-ret-sel',
+            });
+
+            function fillCatalogSelect(filterRaw) {
+              const needle = maintFoldText(filterRaw);
+              const matched = (state.maintEquipInfos || []).filter(
+                (item) =>
+                  !needle ||
+                  maintFoldText(item.Description || item.Name).includes(needle) ||
+                  maintFoldText(item.ParentName).includes(needle)
+              );
+              pickerSel.textContent = '';
+              if (matched.length === 0) {
+                pickerSel.appendChild(
+                  el('option', { value: '', text: '-- Không tìm thấy vật tư --' })
+                );
+                state[pickField] = '';
+                return;
+              }
+              for (const item of matched) {
+                pickerSel.appendChild(
+                  el('option', {
+                    value: String(item.IdCode),
+                    text: `${item.Description || item.Name}${item.IsMac === 1 ? ' [MAC]' : ''}`,
+                  })
+                );
+              }
+              if (!matched.some((m) => String(m.IdCode) === String(state[pickField]))) {
+                state[pickField] = String(matched[0].IdCode);
+              }
+              pickerSel.value = String(state[pickField]);
+            }
+
+            fillCatalogSelect(state[searchField] || '');
+            pickerSel.addEventListener('change', (e) => {
+              state[pickField] = e.target.value;
+            });
+
+            const searchIn = el('input', {
+              type: 'search',
+              className: 'ri-confirm-input',
+              placeholder: isUse
+                ? 'Tìm vật tư sử dụng (VD: FCAM, AX1800, Cáp)…'
+                : 'Tìm vật tư thu hồi (VD: FCAM, Modem)…',
+              value: state[searchField] || '',
+            });
+            searchIn.value = state[searchField] || '';
+            searchIn.addEventListener('input', (e) => {
+              state[searchField] = e.target.value;
+              fillCatalogSelect(e.target.value);
+            });
+
+            const qtyIn = el('input', {
+              type: 'number',
+              min: '1',
+              className: 'ri-confirm-input ri-mat-qty',
+              value: state[qtyField] || '1',
+            });
+            qtyIn.value = state[qtyField] || '1';
+            qtyIn.addEventListener('input', (e) => {
+              state[qtyField] = e.target.value;
+            });
+
+            return el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', {
+                className: 'ri-confirm-label',
+                text: `${isUse ? 'Vật tư sử dụng' : 'Vật tư thu hồi'} (${rows.length} dòng)`,
+              }),
+              searchIn,
+              el('div', { className: 'ri-mat-add-row' }, [
+                pickerSel,
+                qtyIn,
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn ri-mat-add-btn',
+                  disabled: isBusy || state.maintEquipInfos.length === 0,
+                  text: '+ Thêm',
+                  onClick: () => handleMaintAddMaterial(isRetFlag),
+                }),
+              ]),
+              rows.length === 0
+                ? el('div', { className: 'ri-field-hint', text: isUse ? 'Chưa có vật tư sử dụng.' : 'Chưa có vật tư thu hồi.' })
+                : el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    rows.map((row, idx) => {
+                      const isLockedCloud = Number(row.CheckReplace || 0) === 2;
+                      const macPool = isUse
+                        ? (state.maintMacPartners || [])
+                            .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                            .map((m) => String(m.mac || '').trim())
+                        : row.ParentName === 'FPT Camera'
+                        ? [
+                            ...new Set([
+                              ...(state.maintCamHistory || []),
+                              ...(state.maintMacUseds || [])
+                                .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                                .map((m) => String(m.mac || '').trim()),
+                            ]),
+                          ]
+                        : (state.maintMacUseds || [])
+                            .filter((m) => m && Number(m.id) === Number(row.CodeID))
+                            .map((m) => String(m.mac || '').trim());
+                      const cleanMacPool = [...new Set(macPool.filter(Boolean))];
+                      if (row.MacAddress && !cleanMacPool.includes(row.MacAddress)) {
+                        cleanMacPool.unshift(row.MacAddress);
+                      }
+
+                      const rowControls = [];
+                      if (isUse) {
+                        const fnSel = el('select', { className: 'ri-select' });
+                        const fnTitles = [...new Set([
+                          ...(svcOpts.map((s) => s.title)),
+                          row.FunctionName || '',
+                          row.ParentName || '',
+                        ].filter(Boolean))];
+                        fnSel.appendChild(el('option', { value: '', text: '-- Chức năng --' }));
+                        for (const ft of fnTitles) {
+                          fnSel.appendChild(el('option', { value: ft, text: ft }));
+                        }
+                        fnSel.value = row.FunctionName || '';
+                        fnSel.disabled = isLockedCloud;
+                        fnSel.addEventListener('change', (e) => {
+                          row.FunctionName = e.target.value;
+                          if (Number(row.IsMac) === 1 && e.target.value === 'Modem' && state.maintModemCallerId) {
+                            row.MacAddress = state.maintModemCallerId;
+                            renderConfirm();
+                          }
+                        });
+                        rowControls.push(fnSel);
+                      }
+
+                      if (Number(row.IsMac) === 1) {
+                        const macSel = el('select', { className: 'ri-select' });
+                        macSel.appendChild(
+                          el('option', {
+                            value: '',
+                            text: cleanMacPool.length
+                              ? `-- Chọn MAC (${cleanMacPool.length}) --`
+                              : '-- Nhập MAC bên dưới --',
+                          })
+                        );
+                        for (const m of cleanMacPool) {
+                          macSel.appendChild(el('option', { value: m, text: m }));
+                        }
+                        macSel.value = row.MacAddress || '';
+                        macSel.disabled = isLockedCloud;
+                        const macIn = el('input', {
+                          type: 'text',
+                          className: 'ri-confirm-input',
+                          placeholder: isUse ? 'MAC sử dụng…' : 'MAC thu hồi…',
+                          value: row.MacAddress || '',
+                        });
+                        macIn.value = row.MacAddress || '';
+                        macIn.disabled = isLockedCloud;
+                        macSel.addEventListener('change', (e) => {
+                          row.MacAddress = e.target.value;
+                          macIn.value = e.target.value;
+                        });
+                        macIn.addEventListener('input', (e) => {
+                          row.MacAddress = e.target.value.trim();
+                        });
+                        rowControls.push(macSel, macIn);
+                      } else {
+                        const qIn = el('input', {
+                          type: 'number',
+                          min: '0',
+                          className: 'ri-confirm-input',
+                          value: String(row.Quantity ?? 1),
+                        });
+                        qIn.value = String(row.Quantity ?? 1);
+                        qIn.addEventListener('input', (e) => {
+                          row.Quantity = Number(e.target.value) || 0;
+                        });
+                        rowControls.push(qIn);
+                      }
+
+                      if (!isUse) {
+                        const causeSel = el('select', { className: 'ri-select' });
+                        const hasZero = causeOpts.some((c) => Number(c.value ?? c.code) === 0);
+                        if (!hasZero) {
+                          causeSel.appendChild(
+                            el('option', { value: '0', text: 'Thu hồi bình thường (nhập MAC)' })
+                          );
+                        }
+                        for (const c of causeOpts) {
+                          const cVal = c.value !== null ? String(c.value) : String(c.code);
+                          causeSel.appendChild(el('option', { value: cVal, text: c.title }));
+                        }
+                        causeSel.value = String(row.CauseReturn ?? 0);
+                        causeSel.addEventListener('change', (e) => {
+                          row.CauseReturn = Number(e.target.value) || 0;
+                        });
+                        rowControls.push(causeSel);
+                      }
+
+                      return el('div', { className: 'ri-mat-card' }, [
+                        el('div', { className: 'ri-inline-head' }, [
+                          el('span', {
+                            className: 'ri-history-macs',
+                            text: `${row.EQuipmentName || row.DBName || 'Thiết bị'}${Number(row.IsMac) === 1 ? '' : ` (SL: ${row.Quantity})`}`,
+                          }),
+                          isLockedCloud
+                            ? el('span', {
+                                className: 'ri-cloud-badge is-done',
+                                text: 'Đã chuyển Cloud (Khóa)',
+                              })
+                            : el('button', {
+                                type: 'button',
+                                className: 'ri-text-btn',
+                                disabled: isBusy,
+                                text: 'Xóa',
+                                onClick: () => {
+                                  rows.splice(idx, 1);
+                                  renderConfirm();
+                                },
+                              }),
+                        ]),
+                        el('div', { className: 'ri-mat-row-grid' }, rowControls),
+                      ]);
+                    })
+                  ),
+            ]);
+          }
+
+          sheetParts.push(
+            buildMaintMatSection(2),
+            buildMaintMatSection(1),
+            el('div', { className: 'ri-result-actions' }, [
+              buildMaintArmedRow({
+                armKey: 'save_materials',
+                idleLabel: 'Lưu vật tư sử dụng & thu hồi',
+                idleClass: 'ri-primary-btn',
+                confirmLabel: 'Xác nhận lưu vật tư lên FOX-ERP',
+                busyKey: 'save_materials',
+                onConfirm: handleMaintSaveMaterials,
+              }),
+            ])
+          );
+        } else if (state.maintTab === 'service') {
+          const catInit = state.maintCatalogInit || {};
+          const svcList = (catInit.Service && catInit.Service.Infos) || [];
+          const initAll = (catInit.InitStatus && catInit.InitStatus.Infos) || [];
+          const curSvc = String(state.maintErrServiceCode || '');
+          const filteredInits = initAll.filter(
+            (i) =>
+              i &&
+              i.Enabled !== false &&
+              (!Array.isArray(i.InfoBases) ||
+                i.InfoBases.length === 0 ||
+                i.InfoBases.some((b) => Number(b.LevelId) === 1 && String(b.Code) === curSvc))
+          );
+
+          const errCat = (state.maintErrorCatalog && state.maintErrorCatalog[curSvc]) || {};
+          const elAll = (errCat.ErrorElement && errCat.ErrorElement.Infos) || [];
+          const filteredEls = elAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrInitCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 2 && String(b.Code) === String(state.maintErrInitCode)
+                ))
+          );
+
+          const rsAll = (errCat.ErrorReason && errCat.ErrorReason.Infos) || [];
+          const filteredReasons = rsAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrElementCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 3 && String(b.Code) === String(state.maintErrElementCode)
+                ))
+          );
+
+          const procAll = (errCat.ProcessingDiretions && errCat.ProcessingDiretions.Infos) || [];
+          const filteredProcs = procAll.filter(
+            (x) =>
+              x &&
+              x.Enabled !== false &&
+              (!state.maintErrReasonCode ||
+                !Array.isArray(x.InfoBases) ||
+                x.InfoBases.length === 0 ||
+                x.InfoBases.some(
+                  (b) => Number(b.LevelId) === 4 && String(b.Code) === String(state.maintErrReasonCode)
+                ))
+          );
+
+          const svcSel = el('select', { className: 'ri-select', id: 'ri-maint-err-svc' }, [
+            el('option', { value: '', text: '-- Chọn dịch vụ --' }),
+            ...svcList.map((s) => el('option', { value: String(s.Code), text: s.Desc || s.Code })),
+          ]);
+          svcSel.value = curSvc;
+          svcSel.addEventListener('change', (e) => {
+            state.maintErrServiceCode = e.target.value;
+            state.maintErrInitCode = '';
+            state.maintErrElementCode = '';
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+            if (e.target.value) loadMaintErrorCatalogForService(e.target.value);
+          });
+
+          const initSel = el('select', { className: 'ri-select', id: 'ri-maint-err-init' }, [
+            el('option', { value: '', text: '-- Chọn tình trạng ban đầu --' }),
+            ...filteredInits.map((i) => el('option', { value: String(i.Code), text: i.Desc || i.Code })),
+          ]);
+          initSel.value = state.maintErrInitCode || '';
+          initSel.addEventListener('change', (e) => {
+            state.maintErrInitCode = e.target.value;
+            state.maintErrElementCode = '';
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const elSel = el('select', { className: 'ri-select', id: 'ri-maint-err-el' }, [
+            el('option', { value: '', text: '-- Chọn phần tử lỗi --' }),
+            ...filteredEls.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          elSel.value = state.maintErrElementCode || '';
+          elSel.addEventListener('change', (e) => {
+            state.maintErrElementCode = e.target.value;
+            state.maintErrReasonCode = '';
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const rsSel = el('select', { className: 'ri-select', id: 'ri-maint-err-rs' }, [
+            el('option', { value: '', text: '-- Chọn nguyên nhân lỗi --' }),
+            ...filteredReasons.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          rsSel.value = state.maintErrReasonCode || '';
+          rsSel.addEventListener('change', (e) => {
+            state.maintErrReasonCode = e.target.value;
+            state.maintErrProcCode = '';
+            renderConfirm();
+          });
+
+          const procSel = el('select', { className: 'ri-select', id: 'ri-maint-err-proc' }, [
+            el('option', { value: '', text: '-- Chọn hướng xử lý --' }),
+            ...filteredProcs.map((x) => el('option', { value: String(x.Code), text: x.Desc || x.Code })),
+          ]);
+          procSel.value = state.maintErrProcCode || '';
+          procSel.addEventListener('change', (e) => {
+            state.maintErrProcCode = e.target.value;
+          });
+
+          const resolveDesc = (arr, code) => {
+            const hit = (arr || []).find((x) => String(x.Code) === String(code));
+            return (hit && (hit.Desc || hit.Tittle)) || String(code || '—');
+          };
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', { className: 'ri-confirm-label', text: 'Ghi nhận ban đầu & Nguyên nhân lỗi' }),
+              svcSel,
+              initSel,
+              state.maintErrorCatalogLoading
+                ? el('div', { className: 'ri-field-hint', text: 'Đang tải cây nguyên nhân lỗi…' })
+                : null,
+              elSel,
+              rsSel,
+              procSel,
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-secondary-btn',
+                  disabled: isBusy,
+                  text: '+ Thêm dòng lỗi',
+                  onClick: () => {
+                    if (!state.maintErrServiceCode || !state.maintErrInitCode) {
+                      state.maintNotice = 'Vui lòng chọn ít nhất Dịch vụ và Tình trạng ban đầu.';
+                      state.maintNoticeTone = 'error';
+                      renderConfirm();
+                      return;
+                    }
+                    const chosenProc = filteredProcs.find(
+                      (p) => String(p.Code) === String(state.maintErrProcCode)
+                    );
+                    state.maintEditErrors.push({
+                      ServiceCode: state.maintErrServiceCode,
+                      InitStatusCode: state.maintErrInitCode,
+                      ErrorElementCode: state.maintErrElementCode || '',
+                      ErrorReasonCode: state.maintErrReasonCode || '',
+                      ProcessingDiretions: state.maintErrProcCode
+                        ? [
+                            {
+                              ProcessingDiretionCode: state.maintErrProcCode,
+                              LevelId: Number((chosenProc && chosenProc.LevelId) || 4),
+                            },
+                          ]
+                        : [],
+                    });
+                    state.maintNotice = '';
+                    renderConfirm();
+                  },
+                }),
+                buildMaintArmedRow({
+                  armKey: 'save_errors',
+                  idleLabel: 'Lưu nguyên nhân lỗi',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận lưu nguyên nhân lỗi',
+                  busyKey: 'save_errors',
+                  onConfirm: handleMaintSaveErrors,
+                }),
+              ]),
+              state.maintEditErrors.length === 0
+                ? el('div', { className: 'ri-field-hint', text: 'Chưa có dòng nguyên nhân lỗi nào trên phiếu.' })
+                : el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintEditErrors.map((errRow, idx) => {
+                      const catForSvc =
+                        (state.maintErrorCatalog && state.maintErrorCatalog[errRow.ServiceCode]) || {};
+                      const elTxt = errRow.ErrorElementCode
+                        ? resolveDesc(catForSvc.ErrorElement && catForSvc.ErrorElement.Infos, errRow.ErrorElementCode)
+                        : '';
+                      const rsTxt = errRow.ErrorReasonCode
+                        ? resolveDesc(catForSvc.ErrorReason && catForSvc.ErrorReason.Infos, errRow.ErrorReasonCode)
+                        : '';
+                      const prTxt = (errRow.ProcessingDiretions || [])
+                        .map((d) =>
+                          resolveDesc(
+                            catForSvc.ProcessingDiretions && catForSvc.ProcessingDiretions.Infos,
+                            d.ProcessingDiretionCode
+                          )
+                        )
+                        .filter(Boolean)
+                        .join(', ');
+                      return el('div', { className: 'ri-history-card' }, [
+                        el('div', { className: 'ri-inline-head' }, [
+                          el('span', {
+                            className: 'ri-history-macs',
+                            text: `${resolveDesc(svcList, errRow.ServiceCode)} • ${resolveDesc(initAll, errRow.InitStatusCode)}`,
+                          }),
+                          el('button', {
+                            type: 'button',
+                            className: 'ri-text-btn',
+                            disabled: isBusy,
+                            text: 'Xóa',
+                            onClick: () => {
+                              state.maintEditErrors.splice(idx, 1);
+                              renderConfirm();
+                            },
+                          }),
+                        ]),
+                        el('div', {
+                          className: 'ri-history-meta',
+                          text: [elTxt && `Phần tử: ${elTxt}`, rsTxt && `Lỗi: ${rsTxt}`, prTxt && `Xử lý: ${prTxt}`]
+                            .filter(Boolean)
+                            .join(' • ') || 'Chưa chọn chi tiết phần tử / nguyên nhân.',
+                        }),
+                      ]);
+                    })
+                  ),
+            ])
+          );
+
+          const noteCodeSel = el('select', { className: 'ri-select', id: 'ri-maint-note-code' }, [
+            el('option', { value: MAINT_DISCUSSION_CODES.TICKET_NOTE, text: 'Ghi chú phiếu (TICKET_NOTE)' }),
+            el('option', { value: MAINT_DISCUSSION_CODES.ERROR_REASON_DESC, text: 'Ghi chú nguyên nhân (ERROR_REASON_DESC)' }),
+          ]);
+          noteCodeSel.value = state.maintNoteCode || MAINT_DISCUSSION_CODES.TICKET_NOTE;
+          noteCodeSel.addEventListener('change', (e) => {
+            state.maintNoteCode = e.target.value;
+          });
+
+          const noteArea = el('textarea', {
+            className: 'ri-textarea',
+            id: 'ri-maint-note-input',
+            placeholder: 'Nhập ghi chú xử lý / nguyên nhân lỗi…',
+          });
+          noteArea.value = state.maintNoteDraft || '';
+          noteArea.addEventListener('input', (e) => {
+            state.maintNoteDraft = e.target.value;
+          });
+
+          sheetParts.push(
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('span', { className: 'ri-confirm-label', text: `Ghi chú trên phiếu (${state.maintDiscussions.length})` }),
+              noteCodeSel,
+              noteArea,
+              el('div', { className: 'ri-result-actions' }, [
+                el('button', {
+                  type: 'button',
+                  className: 'ri-primary-btn',
+                  disabled: isBusy,
+                  text: state.maintBusyKey === 'add_note' ? 'Đang gửi…' : 'Gửi ghi chú',
+                  onClick: handleMaintAddNote,
+                }),
+              ]),
+              state.maintDiscussions.length > 0
+                ? el(
+                    'div',
+                    { className: 'ri-history-list' },
+                    state.maintDiscussions.map((d) =>
+                      el('div', { className: 'ri-history-card' }, [
+                        el('div', {
+                          className: 'ri-history-macs',
+                          text: `${d.Code || 'NOTE'} • ${d.CreateBy || 'Hệ thống'}${d.CreateAt ? ` • ${d.CreateAt}` : ''}`,
+                        }),
+                        el('div', { className: 'ri-history-meta', text: d.Note || d.Description || '' }),
+                      ])
+                    )
+                  )
+                : el('div', { className: 'ri-field-hint', text: 'Chưa có ghi chú nào.' }),
+            ])
+          );
+        } else if (state.maintTab === 'complete') {
+          function buildMaintComboSelect(id, label, key, curVal, onChange) {
+            const opts = parseMaintenanceComboOptions(state.maintComboConfig, key);
+            const sel = el('select', { className: 'ri-select', id }, [
+              el('option', { value: '', text: '-- Không chọn --' }),
+              ...opts.map((o) => el('option', { value: o.code, text: o.title || o.code })),
+            ]);
+            sel.value = String(curVal || '');
+            sel.addEventListener('change', (e) => onChange(e.target.value));
+            return el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: id, text: label }),
+              sel,
+            ]);
+          }
+
+          const l1In = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-link1',
+            placeholder: 'Mối nối 1…',
+            value: state.maintLink1 || '',
+          });
+          l1In.value = state.maintLink1 || '';
+          l1In.addEventListener('input', (e) => {
+            state.maintLink1 = e.target.value;
+          });
+
+          const l2In = el('input', {
+            type: 'text',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-link2',
+            placeholder: 'Mối nối 2…',
+            value: state.maintLink2 || '',
+          });
+          l2In.value = state.maintLink2 || '';
+          l2In.addEventListener('input', (e) => {
+            state.maintLink2 = e.target.value;
+          });
+
+          const lenIn = el('input', {
+            type: 'number',
+            min: '0',
+            className: 'ri-confirm-input',
+            id: 'ri-maint-len-link',
+            value: state.maintLengthLink || '0',
+          });
+          lenIn.value = state.maintLengthLink || '0';
+          lenIn.addEventListener('input', (e) => {
+            state.maintLengthLink = e.target.value;
+          });
+
+          const allowedStatuses = filterAllowedMaintenanceStatuses(
+            state.maintComboConfig,
+            ticket.finalStatus,
+            Boolean(state.maintPermissions && state.maintPermissions.IsUpdateCompleteAndFollowing)
+          );
+          const statusSel = el(
+            'select',
+            { className: 'ri-select', id: 'ri-maint-final-status' },
+            allowedStatuses.map((s) =>
+              el('option', { value: String(s.value ?? s.code), text: s.title })
+            )
+          );
+          if (allowedStatuses.some((s) => String(s.value ?? s.code) === String(state.maintTargetStatus))) {
+            statusSel.value = String(state.maintTargetStatus);
+          }
+          statusSel.addEventListener('change', (e) => {
+            state.maintTargetStatus = e.target.value;
+            renderConfirm();
+          });
+
+          const selectedStatusObj = allowedStatuses.find(
+            (s) => String(s.value ?? s.code) === String(state.maintTargetStatus)
+          );
+          const canReturn = canReturnMaintenanceTicketStatus({
+            ticket,
+            permissions: state.maintPermissions,
+            reimbursementStatus: state.maintReimbursementStatus,
+          });
+
+          sheetParts.push(
+            buildMaintComboSelect(
+              'ri-maint-urgent',
+              'Độ ưu tiên',
+              MAINT_CATALOG_KEYS.URGENT,
+              state.maintUrgent,
+              (v) => {
+                state.maintUrgent = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-hifpt',
+              'Nguyên nhân chưa cài đặt HiFPT',
+              MAINT_CATALOG_KEYS.NON_SET_HIFPT,
+              state.maintNonSetHiFpt,
+              (v) => {
+                state.maintNonSetHiFpt = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-incable',
+              'Nguyên nhân sử dụng măng xông',
+              MAINT_CATALOG_KEYS.REASON_IN_CABLE,
+              state.maintReasonInCable,
+              (v) => {
+                state.maintReasonInCable = v;
+              }
+            ),
+            buildMaintComboSelect(
+              'ri-maint-mybao',
+              'Nguyên nhân chưa nghiệm thu Mỹ Báo',
+              MAINT_CATALOG_KEYS.REASON_MY_BAO,
+              state.maintReasonMyBao,
+              (v) => {
+                state.maintReasonMyBao = v;
+              }
+            ),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', { className: 'ri-confirm-label', for: 'ri-maint-link1', text: 'Mối nối 1 / Mối nối 2 / Chiều dài (m)' }),
+              el('div', { className: 'ri-mat-row-grid' }, [l1In, l2In, lenIn]),
+            ]),
+            el('div', { className: 'ri-result-actions' }, [
+              buildMaintArmedRow({
+                armKey: 'save_info',
+                idleLabel: 'Lưu thông tin bảo trì',
+                idleClass: 'ri-secondary-btn',
+                confirmLabel: 'Xác nhận lưu thông tin',
+                busyKey: 'save_info',
+                onConfirm: () => handleMaintSaveInfoOrStatus(false),
+              }),
+            ]),
+            el('div', { className: 'ri-confirm-input-wrap' }, [
+              el('label', {
+                className: 'ri-confirm-label',
+                for: 'ri-maint-final-status',
+                text: 'Kết quả xử lý / Đóng phiếu bảo trì',
+              }),
+              statusSel,
+              selectedStatusObj && selectedStatusObj.code === 'Complete'
+                ? el('div', {
+                    className: 'ri-field-hint',
+                    text: `Khi chọn Hoàn tất, hệ thống sẽ gửi kèm ${state.maintEditErrors.filter((r) => r.ErrorElementCode || r.ErrorReasonCode).length} dòng Nguyên nhân lỗi đã khai báo.`,
+                  })
+                : null,
+              el('div', { className: 'ri-result-actions' }, [
+                buildMaintArmedRow({
+                  armKey: 'update_status',
+                  idleLabel: 'Cập nhật kết quả xử lý',
+                  idleClass: 'ri-primary-btn',
+                  confirmLabel: 'Xác nhận cập nhật / đóng phiếu',
+                  busyKey: 'update_status',
+                  onConfirm: () => handleMaintSaveInfoOrStatus(true),
+                }),
+              ]),
+            ])
+          );
+
+          if (ticket.statusBucket === 'complete' || ticket.statusBucket === 'close') {
+            sheetParts.push(
+              el('div', { className: 'ri-confirm-input-wrap' }, [
+                state.maintReimbursementStatus === 1
+                  ? el('div', {
+                      className: 'ri-sheet-status',
+                      'data-tone': 'info',
+                      text: 'Vật tư đã đề nghị hoàn ứng — không thể trả tình trạng trực tiếp.',
+                    })
+                  : state.maintReimbursementStatus > 1
+                  ? el('div', {
+                      className: 'ri-sheet-status',
+                      'data-tone': 'ok',
+                      text: 'Vật tư đã hoàn ứng.',
+                    })
+                  : canReturn
+                  ? buildMaintArmedRow({
+                      armKey: 'return_status',
+                      idleLabel: 'Trả tình trạng phiếu',
+                      idleClass: 'ri-danger-btn',
+                      confirmLabel: 'Xác nhận trả tình trạng về Đang xử lý',
+                      busyKey: 'return_status',
+                      onConfirm: handleMaintReturnStatus,
+                    })
+                  : el('div', {
+                      className: 'ri-field-hint',
+                      text: 'Phiếu đã kết thúc ngoài tháng hiện tại hoặc không phải phiếu cuối — không mở Trả tình trạng.',
+                    }),
               ])
             );
           }

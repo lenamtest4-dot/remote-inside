@@ -151,6 +151,38 @@ import {
   validateConstructionUpdate,
 } from '../src/adapters/deployment.js';
 import {
+  MAINT_CATALOG_KEYS,
+  MAINT_DISCUSSION_CODES,
+  MAINT_ENDPOINTS,
+  MAINT_STATUS,
+  addMaintenanceDiscussion,
+  buildMaintenanceTicketNo,
+  buildMaintenanceTicketUrls,
+  buildMaintenanceUpdateAndCompletePayload,
+  canReturnMaintenanceTicketStatus,
+  evaluateMaintenanceCameraCloud,
+  extractMaintenanceHashFromLocation,
+  extractMaintenanceTicketLink,
+  fetchMaintenanceErrorCatalog,
+  fetchMaintenanceMaterialCatalogs,
+  fetchMaintenanceTicket,
+  fetchMaintenanceTicketDetail,
+  filterAllowedMaintenanceStatuses,
+  normalizeMaintenanceContract,
+  normalizeMaintenanceMaterials,
+  normalizeMaintenanceTicketList,
+  parseMaintenanceComboOptions,
+  returnMaintenanceTicketStatus,
+  selectActiveMaintenanceTicket,
+  swapMaintenanceLastTicket,
+  updateMaintenanceEquipments,
+  updateMaintenanceErrorComplete,
+  updateMaintenanceServiceInit,
+  updateMaintenanceTicketInfoAndStatus,
+  validateMaintenanceMaterials,
+  validateMaintenanceRepPhone,
+} from '../src/adapters/maintenance.js';
+import {
   PORT_ENDPOINTS,
   bootstrapMvcPortSession,
   buildPortUrl,
@@ -2611,7 +2643,7 @@ async function runTests() {
   assert.ok(deployActionCfg, 'PORTALS.inside.actions must contain deploy_ticket');
   assert.equal(deployActionCfg.label, 'Phiếu triển khai');
   assert.equal(deployActionCfg.requiresContract, false);
-  assert.equal(PORTALS.inside.statusLabel, 'Đủ 7 lệnh');
+  assert.equal(PORTALS.inside.statusLabel, 'Đủ 8 lệnh');
 
   const validLink = extractDeploymentTicketLink([
     { type: 'bt', url: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=btHash', isBackLog: false },
@@ -6714,6 +6746,684 @@ async function runTests() {
     'iOS Safari setup pages & .mobileconfig must pass forbiddenDemoDataRe with 0 matches'
   );
   console.log('   OK: iOS Native App & Safari Userscript compatibility tests passed.');
+
+  console.log('26. Testing FOX-ERP Phiếu bảo trì & Chuyển Cloud Camera workflow...');
+  assert.equal(PORTALS.inside.actions[0].id, 'lookup');
+  assert.equal(PORTALS.inside.actions[1].id, 'deploy_ticket');
+  assert.equal(PORTALS.inside.actions[2].id, 'maint_ticket');
+  assert.equal(PORTALS.inside.actions[2].label, 'Phiếu bảo trì');
+  assert.equal(PORTALS.inside.actions[2].requiresContract, false);
+  assert.equal(PORTALS.inside.statusLabel, 'Đủ 8 lệnh');
+  assert.equal(IAM_SSO_TARGETS.length, 6);
+  assert.equal(isPortalLocked('camera'), true);
+
+  // URL / Hash extraction across both FOX-ERP and Partner
+  const maintUrls = buildMaintenanceTicketUrls('abc+123/xy');
+  assert.equal(
+    maintUrls.foxUrl,
+    'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=abc%2B123%2Fxy'
+  );
+  assert.equal(
+    maintUrls.partnerUrl,
+    'http://partner.fpt.net/tkbt/bt/ticket?q=abc%2B123%2Fxy'
+  );
+  const btLinkFox = extractMaintenanceTicketLink([
+    { type: 'bt', url: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=btHash+1', isBackLog: true },
+  ]);
+  assert.equal(btLinkFox.found, true);
+  assert.equal(btLinkFox.hash, 'btHash+1');
+  assert.equal(btLinkFox.partnerUrl, 'http://partner.fpt.net/tkbt/bt/ticket?q=btHash%2B1');
+
+  const btLinkPartner = extractMaintenanceTicketLink([
+    { type: 'bt', url: 'http://partner.fpt.net/tkbt/bt/ticket?q=partnerHash%2F2', isBackLog: true },
+  ]);
+  assert.equal(btLinkPartner.found, true);
+  assert.equal(btLinkPartner.hash, 'partnerHash/2');
+  assert.equal(btLinkPartner.url, 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=partnerHash%2F2');
+  assert.equal(extractMaintenanceTicketLink([]).found, false);
+
+  assert.equal(
+    extractMaintenanceHashFromLocation({
+      hostname: 'fox-erp.fpt.net',
+      pathname: '/app/tkbt/bt/ticket',
+      search: '?q=qFox123',
+    }),
+    'qFox123'
+  );
+  assert.equal(
+    extractMaintenanceHashFromLocation({
+      hostname: 'partner.fpt.net',
+      pathname: '/tkbt/bt/ticket',
+      search: '?q=qPartner456',
+    }),
+    'qPartner456'
+  );
+  assert.equal(
+    extractMaintenanceHashFromLocation({
+      hostname: 'fox-erp.fpt.net',
+      pathname: '/app/tkbt/tk/ticket',
+      search: '?q=wrongRoute',
+    }),
+    ''
+  );
+
+  // Ticket numbering, filtering lladdressid, sorting & active selection
+  assert.equal(
+    buildMaintenanceTicketNo('SGN123456', '2026-11-26T08:15:00', 2),
+    'BT.SGN123456.2611260815-2'
+  );
+  const sampleComboCfg = [
+    {
+      ParentName: MAINT_CATALOG_KEYS.TICKET_STATUS,
+      Datas: [
+        { Code: 'Backlog', Value: 2, Tittle: 'Chưa phân công', Position: 1, Enabled: true },
+        { Code: 'Backlog', Value: 6, Tittle: 'Đã nhận ca', Position: 2, Enabled: true },
+        { Code: 'Backlog', Value: 10, Tittle: 'Đang xử lý', Position: 3, Enabled: true },
+        { Code: 'Complete', Value: 1, Tittle: 'Đã xử lý', Position: 4, Enabled: true },
+        {
+          Code: 'Complete',
+          Value: 5,
+          Tittle: 'Đã xử lý và đang theo dõi',
+          Position: 5,
+          Enabled: true,
+        },
+        { Code: 'Complete', Value: 99, Tittle: 'Ẩn disabled', Position: 6, Enabled: false },
+      ],
+    },
+  ];
+  const sampleTicketList = normalizeMaintenanceTicketList(
+    {
+      splist: [
+        {
+          id: 901,
+          objid: 20001,
+          createdate: '2026-06-01T09:00:00',
+          finishdate: '2026-06-01T12:00:00',
+          finalstatus: 1,
+          flag: 0,
+          lladdressid: 0,
+        },
+        {
+          id: 902,
+          objid: 20001,
+          createdate: '2026-11-26T08:15:00',
+          finalstatus: 10,
+          flag: 1,
+          lladdressid: null,
+        },
+        {
+          id: 999,
+          objid: 20001,
+          createdate: '2026-11-26T09:00:00',
+          finalstatus: 10,
+          flag: 0,
+          lladdressid: 55,
+        },
+      ],
+      splistdetail: [{ supportlistid: 902, locationid: 4, reprename: 'KH Mẫu' }],
+      maintenance_appointment: [],
+      maintenance_assignment: [{ supid: 902, empstatus: 1, accountemp: 'demo.ktv' }],
+    },
+    'SGN123456',
+    sampleComboCfg
+  );
+  assert.equal(sampleTicketList.length, 2, 'must exclude rows with lladdressid > 0');
+  assert.equal(sampleTicketList[0].supId, 902, 'newest ticket must sort first');
+  assert.equal(sampleTicketList[0].no, 'BT.SGN123456.2611260815-2');
+  assert.equal(sampleTicketList[1].no, 'BT.SGN123456.2606010900-1');
+  assert.equal(selectActiveMaintenanceTicket(sampleTicketList).supId, 902);
+  assert.equal(selectActiveMaintenanceTicket(sampleTicketList, 901).supId, 901);
+
+  // Camera Cloud readiness states (none / incomplete / ready / transferred)
+  assert.equal(evaluateMaintenanceCameraCloud([], []).statusCode, 'none');
+  assert.equal(
+    evaluateMaintenanceCameraCloud(
+      [{ ParentName: 'FPT Camera', MacAddress: 'CAM-NEW-1', CheckReplace: 0 }],
+      []
+    ).statusCode,
+    'incomplete'
+  );
+  const cloudReady = evaluateMaintenanceCameraCloud(
+    [{ ParentName: 'FPT Camera', MacAddress: 'CAM-NEW-1', CheckReplace: 0 }],
+    [{ ParentName: 'FPT Camera', MacAddress: 'CAM-OLD-1', CheckReplace: 0, CauseReturn: 0 }]
+  );
+  assert.equal(cloudReady.statusCode, 'ready');
+  assert.equal(cloudReady.readyForPartnerCloud, true);
+  const cloudDone = evaluateMaintenanceCameraCloud(
+    [{ ParentName: 'FPT Camera', MacAddress: 'CAM-NEW-1', CheckReplace: 2 }],
+    [{ ParentName: 'FPT Camera', MacAddress: 'CAM-OLD-1', CheckReplace: 2, CauseReturn: 0 }]
+  );
+  assert.equal(cloudDone.statusCode, 'transferred');
+  assert.equal(cloudDone.allTransferred, true);
+  assert.equal(cloudDone.readyForPartnerCloud, false);
+
+  // Material validation rules matching FOX-ERP BktM5k3v.js
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [{ FunctionName: 'Modem', IsMac: 0, MacAddress: 'X'.repeat(51) }],
+      lstReturn: [],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [{ FunctionName: '', IsMac: 0, MacAddress: '' }],
+      lstReturn: [],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [{ FunctionName: 'FPT Camera', IsMac: 1, MacAddress: '', ParentName: 'FPT Camera' }],
+      lstReturn: [{ IsMac: 1, CauseReturn: 0, MacAddress: 'CAM-OLD-1', ParentName: 'FPT Camera' }],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [{ FunctionName: 'FPT Camera', IsMac: 1, MacAddress: 'SAME-MAC', ParentName: 'FPT Camera' }],
+      lstReturn: [{ IsMac: 1, CauseReturn: 0, MacAddress: 'same-mac', ParentName: 'FPT Camera' }],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [{ FunctionName: 'Modem', IsMac: 0, MacAddress: '' }],
+      lstReturn: [{ IsMac: 1, CauseReturn: 0, MacAddress: '', ParentName: 'Modem' }],
+    }).valid,
+    false
+  );
+  assert.equal(
+    validateMaintenanceMaterials({
+      lstUse: [
+        { CodeID: 4906, FunctionName: 'FPT Camera', IsMac: 1, MacAddress: 'CAM-NEW-1', ParentName: 'FPT Camera' },
+      ],
+      lstReturn: [],
+    }).valid,
+    false
+  );
+  const validMatCheck = validateMaintenanceMaterials({
+    objId: 20001,
+    supId: 902,
+    locationId: 4,
+    logonUser: 'demo.ktv',
+    lstUse: [
+      {
+        ID: 0,
+        CodeID: 4906,
+        EQuipmentName: 'FCAM-IQ 3S [1]',
+        FunctionName: 'FPT Camera',
+        Quantity: 1,
+        MacAddress: 'CAM-NEW-1',
+        Type: 96,
+        ParentName: 'FPT Camera',
+        IsMac: 1,
+      },
+    ],
+    lstReturn: [
+      {
+        ID: 0,
+        CodeID: 4907,
+        EQuipmentName: 'FCAM-IQ 4S [1]',
+        FunctionName: '',
+        Quantity: 1,
+        MacAddress: 'CAM-OLD-1',
+        Type: 96,
+        ParentName: 'FPT Camera',
+        IsMac: 1,
+        CauseReturn: 0,
+      },
+    ],
+  });
+  assert.equal(validMatCheck.valid, true);
+  assert.equal(validMatCheck.payload.Equipment.length, 2);
+  assert.equal(validMatCheck.payload.Equipment[0].IsReturn, 2);
+  assert.equal(validMatCheck.payload.Equipment[0].ParentOrder, 1);
+  assert.equal(validMatCheck.payload.Equipment[0].EQType, 96);
+  assert.equal(validMatCheck.payload.Equipment[1].IsReturn, 1);
+  assert.equal(validMatCheck.payload.Equipment[1].ParentOrder, 1);
+
+  // Status filter, phone validation, UpdateAndComplete payload & ReturnFinalStatus gate
+  assert.deepEqual(
+    filterAllowedMaintenanceStatuses(sampleComboCfg, MAINT_STATUS.ChuaPhanCong).map((s) => s.value),
+    [2]
+  );
+  assert.deepEqual(
+    filterAllowedMaintenanceStatuses(sampleComboCfg, MAINT_STATUS.DangXuLy, false).map((s) => s.value),
+    [10, 1]
+  );
+  assert.deepEqual(
+    filterAllowedMaintenanceStatuses(sampleComboCfg, MAINT_STATUS.DangXuLy, true).map((s) => s.value),
+    [10, 1, 5]
+  );
+
+  assert.equal(validateMaintenanceRepPhone('').valid, true);
+  assert.equal(validateMaintenanceRepPhone('0901234567').valid, true);
+  assert.equal(validateMaintenanceRepPhone('090.123.4567').cleaned, '0901234567');
+  assert.equal(validateMaintenanceRepPhone('12345').valid, false);
+
+  const nonCompletePayload = buildMaintenanceUpdateAndCompletePayload({
+    contract: 'SGN123456',
+    objId: 20001,
+    supId: 902,
+    accountModify: 'demo.ktv',
+    finalStatus: 10,
+    statusCode: 'Backlog',
+    errorCompletes: [{ ServiceCode: '96', ErrorElementCode: 'EL_CAM' }],
+  });
+  assert.equal('ErrrorCompletes' in nonCompletePayload, false);
+
+  const completePayload = buildMaintenanceUpdateAndCompletePayload({
+    contract: 'SGN123456',
+    objId: 20001,
+    supId: 902,
+    accountModify: 'demo.ktv',
+    finalStatus: 1,
+    statusCode: 'Complete',
+    errorCompletes: [{ ServiceCode: '96', ErrorElementCode: 'EL_CAM' }],
+  });
+  assert.equal(completePayload.ErrrorCompletes.length, 1);
+  assert.equal(completePayload.Request, 5);
+
+  const nowSample = new Date('2026-11-26T09:00:00Z');
+  assert.equal(
+    canReturnMaintenanceTicketStatus({
+      ticket: { statusBucket: 'complete', flag: 1, finishDate: '2026-11-05T10:00:00Z' },
+      permissions: { IsReturnStatus: 1 },
+      reimbursementStatus: 0,
+      nowDate: nowSample,
+    }),
+    true
+  );
+  assert.equal(
+    canReturnMaintenanceTicketStatus({
+      ticket: { statusBucket: 'complete', flag: 1, finishDate: '2026-11-05T10:00:00Z' },
+      permissions: { IsReturnStatus: 1 },
+      reimbursementStatus: 1,
+      nowDate: nowSample,
+    }),
+    false
+  );
+  assert.equal(
+    canReturnMaintenanceTicketStatus({
+      ticket: { statusBucket: 'complete', flag: 1, finishDate: '2026-10-05T10:00:00Z' },
+      permissions: { IsReturnStatus: 1 },
+      reimbursementStatus: 0,
+      nowDate: nowSample,
+    }),
+    false
+  );
+
+  // Demo mode end-to-end
+  const demoMaint = await fetchMaintenanceTicket('SGN123456', { forceDemo: true });
+  assert.equal(demoMaint.status, 'ok');
+  assert.equal(demoMaint.mode, 'demo');
+  assert.equal(demoMaint.contract.contract, 'SGN123456');
+  assert.equal(demoMaint.tickets.length, 2);
+  assert.equal(demoMaint.materials.cameraCloudSummary.statusCode, 'ready');
+  const demoCat = await fetchMaintenanceMaterialCatalogs({ forceDemo: true });
+  assert.equal(demoCat.status, 'ok');
+  assert.ok(demoCat.equipInfos.length >= 4);
+  assert.equal((await fetchMaintenanceErrorCatalog({ forceDemo: true })).status, 'ok');
+  assert.equal(
+    (
+      await updateMaintenanceEquipments({
+        objId: 20001,
+        supId: 902,
+        lstUse: demoMaint.materials.lstUse,
+        lstReturn: demoMaint.materials.lstReturn,
+        forceDemo: true,
+      })
+    ).status,
+    'ok'
+  );
+  assert.equal(
+    (
+      await updateMaintenanceServiceInit({
+        supId: 902,
+        dataUpdates: [{ ServiceCode: '96', InitStatusCode: '9601' }],
+        forceDemo: true,
+      })
+    ).status,
+    'ok'
+  );
+  assert.equal(
+    (
+      await updateMaintenanceErrorComplete({
+        objId: 20001,
+        supId: 902,
+        dataUpdates: [{ ServiceCode: '96', InitStatusCode: '9601', ErrorElementCode: 'EL_CAM' }],
+        forceDemo: true,
+      })
+    ).status,
+    'ok'
+  );
+  assert.equal(
+    (
+      await addMaintenanceDiscussion({
+        objId: 20001,
+        supId: 902,
+        newDescription: 'Kiểm tra mẫu',
+        forceDemo: true,
+      })
+    ).status,
+    'ok'
+  );
+  assert.equal(
+    (
+      await updateMaintenanceTicketInfoAndStatus({
+        contract: 'SGN123456',
+        objId: 20001,
+        supId: 902,
+        finalStatus: 1,
+        statusCode: 'Complete',
+        forceDemo: true,
+      })
+    ).status,
+    'ok'
+  );
+  assert.equal(
+    (await returnMaintenanceTicketStatus({ objId: 20001, supId: 902, forceDemo: true })).status,
+    'ok'
+  );
+  assert.equal(
+    (await swapMaintenanceLastTicket({ objId: 20001, supId: 902, forceDemo: true })).status,
+    'ok'
+  );
+
+  // Mocked live HTTP mode (Path A: Partner hit + Path B: Micro/Encrypt fallback)
+  const hadGmXhr26 = Object.prototype.hasOwnProperty.call(globalThis, 'GM_xmlhttpRequest');
+  const prevGmXhr26 = globalThis.GM_xmlhttpRequest;
+  const maintLiveCalls = [];
+  let partnerReturnsBt = true;
+  let camOttGetShouldFail = false;
+
+  globalThis.GM_xmlhttpRequest = (opts) => {
+    maintLiveCalls.push({
+      url: opts.url,
+      method: opts.method || 'GET',
+      headers: opts.headers || {},
+      body: opts.data ? JSON.parse(opts.data) : null,
+    });
+    const emit = (status, jsonObj) =>
+      opts.onload({
+        status,
+        finalUrl: opts.url,
+        responseText: JSON.stringify(jsonObj),
+        responseHeaders: '',
+      });
+
+    if (opts.url === MAINT_ENDPOINTS.partnerGetContract) {
+      return emit(200, {
+        Succeeded: true,
+        Data: partnerReturnsBt
+          ? [{ type: 'bt', url: 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=LIVE_BT_Q', isBackLog: true }]
+          : [],
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.decryptRequest) {
+      return emit(200, { Data: JSON.stringify({ Contract: 'SGN777888', ObjId: 777888 }) });
+    }
+    if (opts.url === MAINT_ENDPOINTS.encryptGeneral) {
+      return emit(200, { Data: 'MINTED_BT_Q_777888' });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getContractFromMicro) {
+      return emit(200, {
+        Data: {
+          maintenancecontract: [
+            {
+              objid: 777888,
+              contract: 'SGN777888',
+              fullnamevn: 'KH Live Mẫu',
+              location: '200 Đường Mẫu',
+              status: 1,
+              locationid: 4,
+              localtypedesc: 'Camera Cloud',
+            },
+          ],
+        },
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.userInfo) {
+      return emit(200, {
+        Info: { UserName: 'demo.ktv', LocationId: 4 },
+        Permissions: { Permission: { Maintenance: { IsUpdateTicket: 1, IsReturnStatus: 1, IsUpdateCompleteAndFollowing: true } } },
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.loadComboConfig) {
+      return emit(200, { Data: sampleComboCfg });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getTicketStatus) {
+      return emit(200, { Data: { Backlogs: [10], Completes: [1, 3, 5], Closes: [97], Others: [] } });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getListContractInfo) {
+      return emit(200, {
+        Data: {
+          splist: [
+            {
+              id: 5501,
+              objid: 777888,
+              createdate: '2026-11-26T08:00:00',
+              finalstatus: 10,
+              flag: 1,
+              description: 'Phiếu bảo trì Camera Live Mẫu',
+            },
+          ],
+          splistdetail: [{ supportlistid: 5501, locationid: 4 }],
+          maintenance_appointment: [],
+          maintenance_assignment: [{ supid: 5501, empstatus: 1, accountemp: 'demo.ktv' }],
+        },
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.catalogGetInfoInit) {
+      return emit(200, { Data: { Service: { Infos: [] }, InitStatus: { Infos: [] } } });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getContractProduct) {
+      return emit(200, { data: { contractProducts: [{ contractId: 777888, productId: 96, productName: 'FPT Camera' }] } });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getTicketEquipments) {
+      return emit(200, {
+        Data: {
+          lstUse: [
+            {
+              ID: 1,
+              CodeID: 4906,
+              EQuipmentName: 'FCAM-IQ 3S [1]',
+              FunctionName: 'FPT Camera',
+              Quantity: 1,
+              MacAddress: 'DEMO-NEW-CAM-99',
+              Type: 96,
+              ParentName: 'FPT Camera',
+              IsMac: 1,
+              CheckReplace: 0,
+            },
+          ],
+          lstReturn: [
+            {
+              ID: 2,
+              CodeID: 4907,
+              EQuipmentName: 'FCAM-IQ 4S [1]',
+              FunctionName: '',
+              Quantity: 1,
+              MacAddress: 'DEMO-OLD-CAM-88',
+              Type: 96,
+              ParentName: 'FPT Camera',
+              IsMac: 1,
+              CauseReturn: 0,
+              CheckReplace: 0,
+            },
+          ],
+        },
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getInitAndErrorByTicket) return emit(200, { Data: [] });
+    if (opts.url === MAINT_ENDPOINTS.getDiscussionByCode) return emit(200, { Data: [] });
+    if (opts.url === MAINT_ENDPOINTS.getReimbursementStatusNextGen) return emit(200, { data: 0 });
+    if (opts.url === MAINT_ENDPOINTS.getListRecordTicket) return emit(200, { Data: [] });
+    if (opts.url === MAINT_ENDPOINTS.getEquipmentInfos) {
+      return emit(200, {
+        data: [
+          {
+            id: 4906,
+            name: 'FCAM-IQ 3S',
+            description: 'FCAM-IQ 3S [1]',
+            type: 96,
+            parentName: 'FPT Camera',
+            isMac: 1,
+            enabled: 1,
+          },
+        ],
+      });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getEquipmentExport) {
+      return emit(200, { data: { macPartners: [], macUseds: [] } });
+    }
+    if (opts.url === MAINT_ENDPOINTS.getEquipmentMac) {
+      return emit(200, {
+        data: {
+          macPartners: [{ id: 4906, mac: 'DEMO-NEW-CAM-99' }],
+          macUseds: [{ id: 4907, mac: 'DEMO-OLD-CAM-88' }],
+        },
+      });
+    }
+    if (opts.url.startsWith(MAINT_ENDPOINTS.getMacHistoryCameraOtt)) {
+      if (camOttGetShouldFail && (opts.method || 'GET') === 'GET') {
+        return emit(405, { message: 'Method Not Allowed' });
+      }
+      return emit(200, { data: ['DEMO-HIST-OTT-1'] });
+    }
+    if (opts.url.startsWith(MAINT_ENDPOINTS.getMacHistoryCameraCombo)) {
+      return emit(200, { data: [{ SerialNumber: 'DEMO-HIST-COMBO-1' }] });
+    }
+    if (opts.url === MAINT_ENDPOINTS.checkOnlineSession) {
+      return emit(200, { Data: [{ CallerID: 'AA:BB:CC:DD:EE:FF' }] });
+    }
+    if (
+      opts.url === MAINT_ENDPOINTS.updateEquipment ||
+      opts.url === MAINT_ENDPOINTS.ticketUpdateAndComplete ||
+      opts.url === MAINT_ENDPOINTS.returnFinalStatus ||
+      opts.url === MAINT_ENDPOINTS.updateDiscussion
+    ) {
+      return emit(200, { Succeeded: true, Data: 1, Message: 'OK' });
+    }
+    return emit(404, {});
+  };
+
+  try {
+    // Path A: Partner returns BT ticket URL
+    const liveA = await fetchMaintenanceTicket('SGN777888');
+    assert.equal(liveA.status, 'ok');
+    assert.equal(liveA.mode, 'live');
+    assert.equal(liveA.hash, 'LIVE_BT_Q');
+    assert.equal(liveA.foxTicketUrl, 'https://fox-erp.fpt.net/app/tkbt/bt/ticket?q=LIVE_BT_Q');
+    assert.equal(liveA.partnerTicketUrl, 'http://partner.fpt.net/tkbt/bt/ticket?q=LIVE_BT_Q');
+    assert.equal(liveA.ticket.supId, 5501);
+    assert.equal(liveA.materials.cameraCloudSummary.readyForPartnerCloud, true);
+
+    // Path B: Partner has no /bt/ticket -> fallback Micro + generals/encrypt
+    partnerReturnsBt = false;
+    maintLiveCalls.length = 0;
+    const liveB = await fetchMaintenanceTicket('SGN777888');
+    assert.equal(liveB.status, 'ok');
+    assert.equal(liveB.hash, 'MINTED_BT_Q_777888');
+    assert.equal(liveB.partnerTicketUrl, 'http://partner.fpt.net/tkbt/bt/ticket?q=MINTED_BT_Q_777888');
+    assert.ok(maintLiveCalls.some((c) => c.url === MAINT_ENDPOINTS.encryptGeneral));
+
+    // Zero x-resource-grant header across all FOX-ERP BT calls
+    assert.equal(
+      maintLiveCalls.some((c) => Object.keys(c.headers || {}).some((h) => h.toLowerCase() === 'x-resource-grant')),
+      false,
+      'FOX-ERP BT API must not attach x-resource-grant header'
+    );
+
+    // Catalog load with GetEquipmentMac fallback + GetMacHistoryCameraOTT GET/POST fallback
+    camOttGetShouldFail = true;
+    const liveCats = await fetchMaintenanceMaterialCatalogs({
+      objId: 777888,
+      supId: 5501,
+      locationId: 4,
+      accountEmp: 'demo.ktv',
+    });
+    assert.equal(liveCats.status, 'ok');
+    assert.ok(liveCats.camHistoryMacs.includes('DEMO-HIST-OTT-1'));
+    assert.ok(liveCats.camHistoryMacs.includes('DEMO-HIST-COMBO-1'));
+    assert.equal(liveCats.macPartners[0].mac, 'DEMO-NEW-CAM-99');
+    assert.equal(liveCats.modemCallerId, 'AA:BB:CC:DD:EE:FF');
+
+    // Live mutations
+    assert.equal(
+      (
+        await updateMaintenanceEquipments({
+          objId: 777888,
+          supId: 5501,
+          locationId: 4,
+          logonUser: 'demo.ktv',
+          lstUse: liveA.materials.lstUse,
+          lstReturn: liveA.materials.lstReturn,
+        })
+      ).status,
+      'ok'
+    );
+    assert.equal(
+      (
+        await updateMaintenanceTicketInfoAndStatus({
+          contract: 'SGN777888',
+          objId: 777888,
+          supId: 5501,
+          accountModify: 'demo.ktv',
+          finalStatus: 1,
+          statusCode: 'Complete',
+          errorCompletes: [{ ServiceCode: '96', InitStatusCode: '9601', ErrorElementCode: 'EL_CAM' }],
+        })
+      ).status,
+      'ok'
+    );
+    assert.equal(
+      (await returnMaintenanceTicketStatus({ objId: 777888, supId: 5501, updateBy: 'demo.ktv' })).status,
+      'ok'
+    );
+    assert.equal(
+      (
+        await addMaintenanceDiscussion({
+          objId: 777888,
+          supId: 5501,
+          logonUser: 'demo.ktv',
+          newDescription: 'Đã đổi Camera & chuyển Cloud',
+        })
+      ).status,
+      'ok'
+    );
+  } finally {
+    if (hadGmXhr26) {
+      globalThis.GM_xmlhttpRequest = prevGmXhr26;
+    } else {
+      delete globalThis.GM_xmlhttpRequest;
+    }
+  }
+
+  // Verify built bundles include Phiếu bảo trì & v0.18.0 with 0 PII hits
+  for (const token of [
+    'maint_ticket',
+    'Phiếu bảo trì & Chuyển Cloud',
+    'Mở Chuyển Cloud (Partner)',
+    'evaluateMaintenanceCameraCloud',
+    MAINT_ENDPOINTS.updateEquipment,
+    MAINT_ENDPOINTS.ticketUpdateAndComplete,
+    MAINT_ENDPOINTS.returnFinalStatus,
+    'get-info-errror-complete',
+  ]) {
+    assert.ok(userscriptContent.includes(token), `Userscript must include ${token}`);
+    assert.ok(androidAssetContent.includes(token), `Android bundle must include ${token}`);
+    assert.ok(iosAssetContent.includes(token), `iOS bundle must include ${token}`);
+  }
+  assert.equal(
+    forbiddenDemoDataRe.test(userscriptContent) ||
+      forbiddenDemoDataRe.test(androidAssetContent) ||
+      forbiddenDemoDataRe.test(iosAssetContent),
+    false,
+    'Built v0.18.0 maintenance bundles must pass forbiddenDemoDataRe with 0 matches'
+  );
+  console.log('   OK: FOX-ERP Phiếu bảo trì & Chuyển Cloud Camera tests passed.');
 
   console.log('\nALL VERIFICATION CHECKS PASSED!');
 }

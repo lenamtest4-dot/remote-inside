@@ -36,8 +36,9 @@ export const PORTALS = {
     },
     iamSso: true,
     status: 'priority',
-    statusLabel: 'Đủ 7 lệnh',
-    description: 'Tra thông tin HĐ, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass, Phiếu triển khai.',
+    statusLabel: 'Đủ 8 lệnh',
+    description:
+      'Tra thông tin HĐ, Phiếu triển khai, Phiếu bảo trì & Chuyển Cloud Camera, Reset MAC Modem/Box, Kill Session, Clear OSP, ByPass.',
     actions: [
       {
         id: 'lookup',
@@ -56,6 +57,17 @@ export const PORTALS = {
         requiresContract: false,
         confirmNote:
           'Tra cứu và thao tác trực tiếp trên phiếu triển khai FOX-ERP của hợp đồng.',
+      },
+      {
+        id: 'maint_ticket',
+        label: 'Phiếu bảo trì',
+        description:
+          'Mở phiếu bảo trì FOX-ERP: Điều chỉnh vật tư, Chuyển Cloud Camera (Partner 1 chạm), Nguyên nhân lỗi, Ghi chú và Đóng phiếu.',
+        kind: 'primary',
+        requiresConfirm: true,
+        requiresContract: false,
+        confirmNote:
+          'Tra cứu và thao tác trực tiếp trên phiếu bảo trì FOX-ERP (kèm nút mở nhanh Chuyển Cloud trên Partner).',
       },
       {
         id: 'bypass',

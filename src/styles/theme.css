@@ -2049,6 +2049,89 @@
   gap: 8px;
 }
 
+/* Phieu bao tri & Chuyen Cloud Camera */
+.ri-cloud-card {
+  padding: 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-cloud-hint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+.ri-cloud-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.ri-cloud-badge.is-done {
+  background: var(--state-ok-soft);
+  color: var(--state-ok);
+}
+
+.ri-cloud-badge.is-ready {
+  background: var(--accent-signal-soft);
+  color: var(--accent-signal-hover);
+}
+
+.ri-cloud-badge.is-pending {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+
+.ri-mat-add-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.ri-mat-add-row .ri-select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ri-mat-qty {
+  width: 68px !important;
+  flex: 0 0 68px;
+  text-align: center;
+}
+
+.ri-mat-add-btn {
+  flex: 0 0 auto;
+  width: auto !important;
+  white-space: nowrap;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.ri-mat-card {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border-crisp);
+  background: var(--bg-canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ri-mat-row-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ri-spinner {
     animation: none;

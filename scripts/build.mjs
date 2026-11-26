@@ -40,6 +40,7 @@ const MODULE_ORDER = [
   'core/inspector.js',
   'adapters/inside.js',
   'adapters/deployment.js',
+  'adapters/maintenance.js',
   'adapters/port.js',
   'adapters/recall.js',
   'adapters/equipment.js',
